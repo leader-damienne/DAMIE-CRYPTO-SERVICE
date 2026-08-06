@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <script src="js/gate.js"></script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Connexion — Damie Crypto Service | DCS</title>
   <link rel="icon" href="assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" /><noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" /></noscript>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -43,6 +45,7 @@
 
     <div class="panel auth-panel">
       <h3>Se connecter</h3>
+      <p id="auth-setup-banner" class="auth-error" hidden></p>
       <form id="signin-form" autocomplete="on">
         <div class="form-group">
           <label for="si-login">E-mail</label>
@@ -55,7 +58,6 @@
         <p id="signin-error" class="auth-error" hidden></p>
         <button class="btn btn-gold" type="submit" style="width:100%;margin-top:0.5rem">Connexion</button>
       </form>
-      <p class="auth-demo">Démo : <code>demo@damiecrypto.service</code> / <code>DemoDCS2026</code></p>
       <p class="auth-switch">Pas encore de compte ? <a href="signup.html">S'inscrire</a></p>
     </div>
   </main>
@@ -66,7 +68,10 @@
       <span><a href="signup.html">Créer un compte →</a></span>
     </div>
   </footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/backend.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

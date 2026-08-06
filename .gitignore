@@ -24,3 +24,7 @@ assets/_logo-crop-check.png
 
 # Local deploy pack
 _netlify_deploy/
+
+# Full-size image backups
+*.full.png
+

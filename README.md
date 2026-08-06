@@ -1,46 +1,41 @@
 # Damie Crypto Service (DCS)
 
-Site statique (HTML / CSS / JS) — wallet PI COIN, swap, transferts, marketplace, academy et parrainage.
+Plateforme web — wallet PI COIN, swap, transferts, marketplace, academy et parrainage.
 
-## Lien officiel
+## Lien
 
-**https://damie-crypto-service.netlify.app/**
-
+**https://damie-crypto-service.netlify.app/**  
 Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE
 
-## Compte & OTP
+## Mode production
 
-- **Inscription** : `/signup.html` (e-mail + mot de passe → code OTP → compte créé)
-- **Connexion** : `/signin.html` (e-mail + mot de passe)
-- Contenu réservé aux membres : wallet, swap, transfer, marketplace, academy, learning, community, parrainage, profil
+DCS utilise **Supabase** (auth e-mail + base de données) :
 
-Compte démo : `demo@damiecrypto.service` / `DemoDCS2026`
+- Comptes réels (inscription + OTP e-mail + connexion)
+- Soldes wallet persistés
+- Swap / transfert enregistrés en base
+- Tickets support en base
 
-### Envoi OTP par e-mail (EmailJS)
+**Configuration obligatoire** : suivez [`SETUP-SUPABASE.md`](SETUP-SUPABASE.md)  
+Puis renseignez `js/config.js` avec l’URL et la clé anon du projet.
 
-Par défaut le code s’affiche en mode démo. Pour un **vrai e-mail** :
+Sans cette config, les pages Connexion / Inscription affichent un message d’installation (plus de compte démo).
 
-1. Créez un compte sur [https://www.emailjs.com](https://www.emailjs.com)
-2. Ajoutez un service e-mail (Gmail, etc.)
-3. Créez un template avec les variables : `{{to_email}}`, `{{to_name}}`, `{{otp_code}}`, `{{app_name}}`
-4. Dans `js/data.js`, section `DCS.emailConfig` :
-   - `enabled: true`
-   - `publicKey`, `serviceId`, `templateId` (vos clés EmailJS)
+## Pages
 
-## Republier sur Netlify
+| Public | Membres |
+|--------|---------|
+| `signup.html`, `signin.html`, `join.html`, `contact.html` | wallet, swap, transfer, marketplace, academy, learning, community, parrainage, profil, accueil |
 
-1. [https://app.netlify.com/drop](https://app.netlify.com/drop)
-2. Glissez-déposez le dossier du projet (fichiers à la **racine** : `index.html`, `js/`, `css/`, …)
-3. Site : `https://damie-crypto-service.netlify.app/`
+## Republier (Netlify)
 
-Ou connectez le dépôt GitHub au site Netlify pour un déploiement auto à chaque push.
+Connectez le dépôt GitHub au site Netlify : chaque push redéploie.
+
+Ou : [Netlify Drop](https://app.netlify.com/drop) — déposer le dossier **racine** (`index.html`, `js/`, `css/`, …).
 
 ## Parrainage
 
-1. Ouvrez **Parrainage** (connecté)
-2. Copiez **Lien du site DCS** ou **Lien d'invitation**
-3. Invitation :  
-   `https://damie-crypto-service.netlify.app/join.html?ref=VOTRE_CODE&u=pseudo`
+`https://damie-crypto-service.netlify.app/join.html?ref=VOTRE_CODE&u=pseudo`
 
 ## En local
 
@@ -48,4 +43,4 @@ Ou connectez le dépôt GitHub au site Netlify pour un déploiement auto à chaq
 npx --yes serve .
 ```
 
-Puis ouvrez `http://localhost:3000` (ou le port indiqué).
+Ouvrez l’URL indiquée, après avoir rempli `js/config.js`.

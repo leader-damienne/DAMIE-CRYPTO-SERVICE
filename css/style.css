@@ -43,10 +43,8 @@ body {
   font-family: var(--font-ui);
   background-color: #1a1a1a;
   background-image:
-    linear-gradient(180deg, rgba(22, 22, 22, 0.82), rgba(18, 18, 18, 0.88)),
-    url("../assets/bg-texture.png");
-  background-size: auto, cover;
-  background-position: center, center;
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(212, 175, 55, 0.08), transparent 55%),
+    linear-gradient(180deg, #1c1c1c 0%, #161616 45%, #121212 100%);
   background-attachment: scroll;
   background-repeat: no-repeat;
   color: var(--white);
@@ -88,13 +86,12 @@ ul {
 
 /* ——— Top ticker ——— */
 .ticker {
-  background: rgba(20, 20, 20, 0.72);
+  background: rgba(18, 18, 18, 0.92);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
   height: 36px;
   display: flex;
   align-items: center;
-  backdrop-filter: blur(8px);
 }
 
 .ticker-track {
@@ -103,8 +100,6 @@ ul {
   white-space: nowrap;
   animation: ticker 35s linear infinite;
   width: max-content;
-  will-change: transform;
-  backface-visibility: hidden;
 }
 
 .ticker-item {
