@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DCS Wallet — Damie Crypto Service</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" data-brand-name translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Sécuriser · Échanger · Apprendre · Prospérer</span>
+        </div>
+      </a>
+      <nav class="nav" id="main-nav">
+        <a href="index.html">Accueil</a>
+        <a href="index.html#markets">Marchés</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="swap.html">Swap</a>
+        <a href="transfer.html">Transfer</a>
+        <a href="marketplace.html">Marketplace</a>
+        <a href="parrainage.html">Parrainage</a>
+        <a href="profil.html">Profil</a>
+        <a href="academy.html">Academy</a>
+        <a href="learning.html">Learning</a>
+        <a href="community.html">Community</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-gold" href="swap.html">Trader PI COIN</a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>DCS <span>Wallet</span></h1>
+      <p>Solde PI COIN, XOF, XAF et cryptos — dépôts, historique et notifications.</p>
+    </div>
+
+    <div class="grid-2" style="padding-bottom:3rem">
+      <div>
+        <div class="panel">
+          <h3>Solde PI COIN</h3>
+          <div class="balance-big" id="wallet-pi-balance">0 PI</div>
+          <div class="balance-usd" id="wallet-pi-usd">≈ $0.00</div>
+          <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem">1 PI = $314,159 · équivalence USD affichée ci-dessus</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <a class="btn btn-gold" href="#wallet-deposit">Dépôt</a>
+            <a class="btn btn-outline" href="swap.html">Swap</a>
+            <a class="btn btn-outline" href="transfer.html">Transfer</a>
+          </div>
+        </div>
+
+        <div class="panel" id="wallet-deposit">
+          <h3>Dépôt PI COIN</h3>
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Copiez votre adresse de dépôt PI COIN et envoyez uniquement des PI COIN vers cette adresse.</p>
+          <div class="panel" style="padding:0.9rem;margin-bottom:0;background:rgba(20,20,20,0.45)">
+            <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">Adresse de dépôt PI COIN</div>
+            <div class="ref-code-box">
+              <input id="deposit-address" class="form-control" type="text" readonly value="DCS-PI-WALLET-7X9K2M" />
+              <button type="button" class="btn btn-gold" id="copy-deposit-address">Copier</button>
+            </div>
+            <p id="deposit-hint" style="font-size:0.78rem;color:var(--gold-muted);margin-top:0.6rem">Envoyez uniquement PI COIN vers cette adresse. Tout autre actif sera perdu.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Mes actifs <span id="wallet-assets-count" style="font-size:0.75rem;color:var(--muted);font-weight:500;letter-spacing:0;text-transform:none"></span></h3>
+          <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">Soldes de tous vos jetons (quantité + équivalent $).</p>
+          <div id="wallet-assets"></div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3>Historique</h3>
+          <div class="markets-table-wrap" style="border:none;background:transparent">
+            <table class="markets-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Détail</th>
+                  <th>Montant</th>
+                  <th>Statut</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="history-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Notifications</h3>
+          <div id="wallet-notifications">
+            <div class="feed-post"><div class="meta">Maintenant</div><p>PI COIN : <strong style="color:var(--gold-bright)">$314,159</strong> (0,00 % 24h)</p></div>
+            <div class="feed-post" style="margin-top:0.75rem"><div class="meta">Aujourd'hui</div><p>Copiez votre adresse <strong>PI COIN</strong> pour déposer sur le wallet.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-bottom" style="border:none;padding-top:0">
+      <span>© 2026 Damie Crypto Service (DCS)</span>
+      <span><a href="contact.html">Contact</a></span>
+    </div>
+  </footer>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

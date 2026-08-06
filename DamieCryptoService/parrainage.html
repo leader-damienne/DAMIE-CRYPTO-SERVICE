@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parrainage — Damie Crypto Service</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" data-brand-name translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Sécuriser · Échanger · Apprendre · Prospérer</span>
+        </div>
+      </a>
+      <nav class="nav" id="main-nav">
+        <a href="index.html">Accueil</a>
+        <a href="index.html#markets">Marchés</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="swap.html">Swap</a>
+        <a href="transfer.html">Transfer</a>
+        <a href="marketplace.html">Marketplace</a>
+        <a href="parrainage.html">Parrainage</a>
+        <a href="profil.html">Profil</a>
+        <a href="academy.html">Academy</a>
+        <a href="learning.html">Learning</a>
+        <a href="community.html">Community</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-outline" href="profil.html">Mon profil</a>
+        <a class="btn btn-gold" href="parrainage.html">Parrainer</a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>Parrainage <span>3 niveaux</span></h1>
+      <p>Invitez votre réseau et gagnez <strong>5 %</strong> (N1), <strong>3 %</strong> (N2) et <strong>1 %</strong> (N3) prélevés sur les <strong>frais de swap et de transfert</strong> de vos filleuls — en PI COIN uniquement.</p>
+    </div>
+
+    <div class="ref-levels" id="ref-rates"></div>
+
+    <div class="stats-strip" id="ref-stats" style="margin:0 0 1.5rem;width:100%"></div>
+
+    <div class="grid-2" style="padding-bottom:3rem">
+      <div>
+        <div class="panel">
+          <h3>Mon identité parrain</h3>
+          <div class="asset-row">
+            <span>Nom d'utilisateur</span>
+            <strong id="ref-username">@—</strong>
+          </div>
+          <div class="filleuls-summary" id="ref-filleuls-summary">
+            <div class="filleuls-total">
+              <span>Total filleuls</span>
+              <strong id="ref-filleuls-total">0</strong>
+            </div>
+            <div class="filleuls-breakdown">
+              <div><span>N1 (directs)</span><strong id="ref-count-l1">0</strong></div>
+              <div><span>N2</span><strong id="ref-count-l2">0</strong></div>
+              <div><span>N3</span><strong id="ref-count-l3">0</strong></div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:1rem">
+            <label for="ref-code">Code d'invitation</label>
+            <div class="ref-code-box">
+              <input id="ref-code" class="form-control" type="text" readonly />
+              <button type="button" class="btn btn-gold" id="copy-ref-code">Copier</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="ref-link">Lien d'invitation (pour vos amis)</label>
+            <div class="ref-code-box">
+              <input id="ref-link" class="form-control" type="text" readonly />
+              <button type="button" class="btn btn-outline" id="copy-ref-link">Copier le lien</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="share-site-link">Lien du site DCS (vérification)</label>
+            <div class="ref-code-box">
+              <input id="share-site-link" class="form-control" type="text" readonly />
+              <button type="button" class="btn btn-gold" id="copy-share-site">Copier</button>
+            </div>
+          </div>
+          <p style="font-size:0.8rem;color:var(--muted)">Envoyez le <strong>lien du site</strong> pour que vos amis vérifient DCS, ou le <strong>lien d'invitation</strong> pour les rattacher à votre parrainage.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Commissions sur frais</h3>
+          <div class="asset-row">
+            <span>Total gagné (frais filleuls)</span>
+            <strong id="ref-earnings-total" style="color:var(--gold-bright)">—</strong>
+          </div>
+          <p style="font-size:0.78rem;color:var(--muted);margin:0.75rem 0 0.5rem">Sur chaque frais payé par un filleul : N1 5 % · N2 3 % · N3 1 % (en PI).</p>
+          <div id="ref-earnings-list"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel ref-tree">
+          <h3 id="ref-title-l1">Niveau 1 — 5 % <span class="ref-count-pill" id="ref-pill-l1">0 filleul</span></h3>
+          <div id="ref-l1"></div>
+        </div>
+        <div class="panel ref-tree">
+          <h3 id="ref-title-l2">Niveau 2 — 3 % <span class="ref-count-pill" id="ref-pill-l2">0 filleul</span></h3>
+          <div id="ref-l2"></div>
+        </div>
+        <div class="panel ref-tree">
+          <h3 id="ref-title-l3">Niveau 3 — 1 % <span class="ref-count-pill" id="ref-pill-l3">0 filleul</span></h3>
+          <div id="ref-l3"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-bottom" style="border:none;padding-top:0">
+      <span>© 2026 Damie Crypto Service (DCS)</span>
+      <span><a href="profil.html">Profil & KYC →</a></span>
+    </div>
+  </footer>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
