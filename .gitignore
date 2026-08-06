@@ -21,3 +21,6 @@ assets/_logo-crop-check.png
 
 # Cloudflare / tunnel
 .cloudflared/
+
+# Local deploy pack
+_netlify_deploy/
