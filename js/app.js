@@ -1761,7 +1761,6 @@
     const err = document.getElementById("signup-error");
     const otpErr = document.getElementById("otp-error");
     const otpHint = document.getElementById("otp-sent-hint");
-    const otpDemo = document.getElementById("otp-demo-code");
     const setupBanner = document.getElementById("auth-setup-banner");
     const dot1 = document.getElementById("step-dot-1");
     const dot2 = document.getElementById("step-dot-2");
@@ -1815,25 +1814,16 @@
       };
     }
 
-    function showOtpUi(email) {
+    function showConfirmEmailUi(email) {
       if (otpHint) {
         otpHint.textContent =
-          "Un code à 6 chiffres a été envoyé à " +
+          "Un e-mail de confirmation a été envoyé à " +
           email +
-          ". Vérifiez votre boîte mail (et les spams).";
-      }
-      if (otpDemo) {
-        otpDemo.hidden = true;
-        otpDemo.textContent = "";
+          ". Ouvrez-le et cliquez sur le lien, puis connectez-vous.";
       }
       showError(err, "");
       showError(otpErr, "");
       setStep(2);
-      const otpInput = document.getElementById("su-otp");
-      if (otpInput) {
-        otpInput.value = "";
-        otpInput.focus();
-      }
     }
 
     form.addEventListener("submit", async (e) => {
@@ -1862,7 +1852,7 @@
       const result = await DCS.auth.register(payload);
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Recevoir le code OTP";
+        submitBtn.textContent = "Créer mon compte";
       }
       if (!result.ok) {
         showError(err, result.error || "Inscription impossible.");
@@ -1870,37 +1860,12 @@
       }
       DCS.auth.savePendingSignup(payload);
       if (result.needsOtp) {
-        showOtpUi(payload.email);
+        showConfirmEmailUi(payload.email);
         return;
       }
       alert("Compte créé. Bienvenue sur DCS !");
       window.location.href = authNextUrl();
     });
-
-    if (otpForm) {
-      otpForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        showError(otpErr, "");
-        const code = document.getElementById("su-otp").value.trim();
-        if (!/^\d{6}$/.test(code)) {
-          showError(otpErr, "Entrez le code à 6 chiffres.");
-          return;
-        }
-        const pending = DCS.auth.getPendingSignup();
-        const email = (pending && pending.email) || collectPayload().email;
-        const btn = otpForm.querySelector('button[type="submit"]');
-        if (btn) btn.disabled = true;
-        const result = await DCS.auth.verifySignupOtp(email, code);
-        if (btn) btn.disabled = false;
-        if (!result.ok) {
-          showError(otpErr, result.error || "Vérification impossible.");
-          return;
-        }
-        DCS.auth.clearPendingSignup();
-        alert("Compte vérifié. Bienvenue sur DCS !");
-        window.location.href = authNextUrl();
-      });
-    }
 
     const resend = document.getElementById("otp-resend");
     if (resend) {
@@ -1919,7 +1884,9 @@
           return;
         }
         showError(otpErr, "");
-        if (otpHint) otpHint.textContent = "Nouveau code envoyé à " + email + ".";
+        if (otpHint) {
+          otpHint.textContent = "Nouvel e-mail de confirmation envoyé à " + email + ".";
+        }
       });
     }
 
@@ -1933,7 +1900,7 @@
 
     const pending = DCS.auth.getPendingSignup();
     if (pending && pending.email) {
-      showOtpUi(pending.email);
+      showConfirmEmailUi(pending.email);
     } else {
       setStep(1);
     }
@@ -1948,6 +1915,13 @@
     }
     const err = document.getElementById("signin-error");
     const setupBanner = document.getElementById("auth-setup-banner");
+    const params = new URLSearchParams(location.search);
+    if (params.get("confirmed") === "1" && err) {
+      err.hidden = false;
+      err.style.color = "var(--gold-bright)";
+      err.textContent =
+        "E-mail confirmé. Connectez-vous avec votre mot de passe.";
+    }
     if (!DCS.auth.isConfigured()) {
       if (setupBanner) {
         setupBanner.hidden = false;

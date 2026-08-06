@@ -336,7 +336,7 @@
               invite_code: inviteCode,
               referred_by: referredBy
             },
-            emailRedirectTo: location.origin + "/signin.html"
+            emailRedirectTo: location.origin + "/signin.html?confirmed=1"
           }
         })
         .then(function (res) {
