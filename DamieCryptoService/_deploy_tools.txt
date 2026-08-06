@@ -1,0 +1,4 @@
+Informationÿ: impossible de trouver des fichiers pour le(s) modŠle(s) sp‚cifi‚(s).
+Informationÿ: impossible de trouver des fichiers pour le(s) modŠle(s) sp‚cifi‚(s).
+C:\Users\ADMIN\AppData\Local\Microsoft\WindowsApps\python.exe
+DONE 
