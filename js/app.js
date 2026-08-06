@@ -1657,6 +1657,9 @@
     return !!(window.DCS && DCS.user && DCS.user.loggedIn && DCS.user.username);
   }
 
+  /* Pages accessibles sans compte */
+  const PUBLIC_PAGES = ["signup.html", "signin.html", "join.html", "contact.html"];
+
   function updateAuthNav() {
     const actions = document.querySelector(".header-actions");
     if (!actions) return;
@@ -1692,25 +1695,31 @@
     });
     if (toggle) actions.insertBefore(frag, toggle);
     else actions.appendChild(frag);
+
+    /* CTAs hero / modules : orienter les invités vers l'inscription */
+    if (!logged) {
+      document.querySelectorAll(".hero-ctas a.btn-gold, a.module-card").forEach((a) => {
+        const href = a.getAttribute("href") || "";
+        if (/wallet|swap|transfer|marketplace|parrainage|profil|academy|learning|community/i.test(href)) {
+          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(href.split("#")[0] || "index.html"));
+        }
+      });
+      document.querySelectorAll("#main-nav a").forEach((a) => {
+        const href = (a.getAttribute("href") || "").split("#")[0];
+        if (!href || PUBLIC_PAGES.includes(href) || href === "index.html") return;
+        if (/\.html$/i.test(href)) {
+          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(href));
+        }
+      });
+    }
   }
 
-  const PROTECTED_PAGES = [
-    "wallet.html",
-    "swap.html",
-    "transfer.html",
-    "marketplace.html",
-    "parrainage.html",
-    "profil.html",
-    "academy.html",
-    "learning.html",
-    "community.html"
-  ];
-
   function requireAuth(page) {
-    if (!PROTECTED_PAGES.includes(page)) return true;
+    const p = page || "index.html";
+    if (PUBLIC_PAGES.includes(p)) return true;
     if (isLoggedIn()) return true;
-    const next = encodeURIComponent(page);
-    window.location.replace("signin.html?next=" + next);
+    const next = encodeURIComponent(p === "" || p === "/" ? "index.html" : p);
+    window.location.replace("signup.html?next=" + next);
     return false;
   }
 
@@ -1718,7 +1727,7 @@
     const params = new URLSearchParams(location.search);
     const next = params.get("next") || "";
     if (next && /^[a-z0-9._-]+\.html$/i.test(next)) return next;
-    return "profil.html";
+    return "index.html";
   }
 
   function setupSignup() {
