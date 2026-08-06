@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion — Damie Crypto Service | DCS</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" data-brand-name translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Sécuriser · Échanger · Apprendre · Prospérer</span>
+        </div>
+      </a>
+      <nav class="nav" id="main-nav">
+        <a href="index.html">Accueil</a>
+        <a href="contact.html">Contact</a>
+        <a href="signin.html">Connexion</a>
+        <a href="signup.html">Inscription</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-outline" href="signin.html">Connexion</a>
+        <a class="btn btn-gold" href="signup.html">Inscription</a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>Connexion <span>DCS</span></h1>
+      <p>Accédez à votre wallet, vos swaps et vos contenus réservés aux membres.</p>
+    </div>
+
+    <div class="panel auth-panel">
+      <h3>Se connecter</h3>
+      <form id="signin-form" autocomplete="on">
+        <div class="form-group">
+          <label for="si-login">E-mail</label>
+          <input id="si-login" class="form-control" name="login" type="email" required placeholder="vous@email.com" autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="si-password">Mot de passe</label>
+          <input id="si-password" class="form-control" name="password" type="password" required minlength="6" autocomplete="current-password" />
+        </div>
+        <p id="signin-error" class="auth-error" hidden></p>
+        <button class="btn btn-gold" type="submit" style="width:100%;margin-top:0.5rem">Connexion</button>
+      </form>
+      <p class="auth-demo">Démo : <code>demo@damiecrypto.service</code> / <code>DemoDCS2026</code></p>
+      <p class="auth-switch">Pas encore de compte ? <a href="signup.html">S'inscrire</a></p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-bottom" style="border:none;padding-top:0">
+      <span>© 2026 Damie Crypto Service (DCS)</span>
+      <span><a href="signup.html">Créer un compte →</a></span>
+    </div>
+  </footer>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,33 +1,51 @@
 # Damie Crypto Service (DCS)
 
-Site statique (HTML / CSS / JS). Pour que vos amis puissent **vérifier** la plateforme, publiez le dossier en ligne et partagez l’URL.
+Site statique (HTML / CSS / JS) — wallet PI COIN, swap, transferts, marketplace, academy et parrainage.
 
-## Lien rapide (après mise en ligne)
+## Lien officiel
 
-1. Ouvrez **Parrainage**
-2. Copiez **Lien du site DCS** → à envoyer aux amis pour vérifier
-3. Copiez **Lien d'invitation** → pour les rattacher à votre code parrain
+**https://damie-crypto-service.netlify.app/**
 
-Page d’accueil d’invitation : `join.html?ref=VOTRE_CODE&u=votre.pseudo`
+Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE
 
-## Publier gratuitement (Netlify Drop) — le plus simple
+## Compte & OTP
 
-1. Allez sur [https://app.netlify.com/drop](https://app.netlify.com/drop)
-2. Glissez-déposez le dossier `DamieCryptoService`
-3. Netlify vous donne un lien du type :  
-   `https://xxxxx.netlify.app`
-4. Envoyez ce lien à vos amis
+- **Inscription** : `/signup.html` (e-mail + mot de passe → code OTP → compte créé)
+- **Connexion** : `/signin.html` (e-mail + mot de passe)
+- Contenu réservé aux membres : wallet, swap, transfer, marketplace, academy, learning, community, parrainage, profil
 
-## Publier avec GitHub Pages
+Compte démo : `demo@damiecrypto.service` / `DemoDCS2026`
 
-1. Créez un dépôt GitHub et poussez ce projet
-2. Settings → Pages → Source : branche `main` / dossier `/` (racine)
-3. Lien : `https://VOTRE_USER.github.io/NOM_DU_REPO/`
+### Envoi OTP par e-mail (EmailJS)
 
-## En local (vous seulement)
+Par défaut le code s’affiche en mode démo. Pour un **vrai e-mail** :
 
-Ouvrez `index.html` dans le navigateur, ou lancez un serveur dans le dossier :
+1. Créez un compte sur [https://www.emailjs.com](https://www.emailjs.com)
+2. Ajoutez un service e-mail (Gmail, etc.)
+3. Créez un template avec les variables : `{{to_email}}`, `{{to_name}}`, `{{otp_code}}`, `{{app_name}}`
+4. Dans `js/data.js`, section `DCS.emailConfig` :
+   - `enabled: true`
+   - `publicKey`, `serviceId`, `templateId` (vos clés EmailJS)
+
+## Republier sur Netlify
+
+1. [https://app.netlify.com/drop](https://app.netlify.com/drop)
+2. Glissez-déposez le dossier du projet (fichiers à la **racine** : `index.html`, `js/`, `css/`, …)
+3. Site : `https://damie-crypto-service.netlify.app/`
+
+Ou connectez le dépôt GitHub au site Netlify pour un déploiement auto à chaque push.
+
+## Parrainage
+
+1. Ouvrez **Parrainage** (connecté)
+2. Copiez **Lien du site DCS** ou **Lien d'invitation**
+3. Invitation :  
+   `https://damie-crypto-service.netlify.app/join.html?ref=VOTRE_CODE&u=pseudo`
+
+## En local
 
 ```bash
 npx --yes serve .
 ```
+
+Puis ouvrez `http://localhost:3000` (ou le port indiqué).

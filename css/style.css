@@ -2222,6 +2222,114 @@ html.is-navigating body {
   transition: opacity 0.12s linear;
 }
 
+/* ——— Auth (signup / signin) ——— */
+.auth-panel {
+  max-width: 480px;
+  margin: 0 auto 3rem;
+}
+
+.auth-hint {
+  font-size: 0.85rem;
+  color: var(--gold-muted);
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(212, 175, 55, 0.06);
+}
+
+.auth-error {
+  color: var(--red);
+  font-size: 0.85rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.auth-switch {
+  margin-top: 1.1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-switch a {
+  color: var(--gold-bright);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-demo {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted-2);
+  text-align: center;
+}
+
+.auth-demo code {
+  color: var(--gold-muted);
+  font-family: var(--font-ui);
+}
+
+.auth-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-bottom: 1.15rem;
+}
+
+.auth-step {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--border-soft);
+  color: var(--muted);
+  background: rgba(20, 20, 20, 0.5);
+}
+
+.auth-step.active {
+  border-color: var(--gold);
+  color: #141414;
+  background: var(--gold-grad);
+}
+
+.auth-step-line {
+  width: 2.5rem;
+  height: 1px;
+  background: var(--border-soft);
+}
+
+.auth-step-label {
+  font-size: 0.82rem;
+  color: var(--gold-muted);
+  margin-bottom: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.otp-input {
+  letter-spacing: 0.35em;
+  font-size: 1.25rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.otp-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.otp-actions .btn {
+  flex: 1;
+  min-width: 140px;
+}
+
 @media (max-width: 900px) {
   body {
     background-image: none;

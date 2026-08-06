@@ -818,6 +818,8 @@
       toggle.addEventListener("click", () => nav.classList.toggle("open"));
     }
 
+    updateAuthNav();
+
     /* Prefetch + feedback immédiat au clic (évite l'impression de latence) */
     const prefetched = new Set();
     function prefetch(url) {
@@ -1407,17 +1409,19 @@
       const el = document.getElementById(id);
       if (el) el.value = val || "";
     };
-    set("profile-username", "@" + u.username);
+    set("profile-username", u.email || u.displayName || "—");
     set("profile-displayname", u.displayName);
     set("profile-joined", "Membre depuis " + u.joined);
     set("profile-invite", u.inviteCode);
+    const session = document.getElementById("session-label");
+    if (session) session.textContent = u.loggedIn ? "Connecté · " + (u.email || u.displayName) : "Déconnecté";
     const loc = [u.city, u.country].filter(Boolean).join(", ");
     set("profile-location", loc || "Localisation non renseignée");
 
     setVal("edit-firstname", u.firstName);
     setVal("edit-lastname", u.lastName);
     setVal("edit-displayname", u.displayName);
-    setVal("edit-username", u.username);
+    setVal("edit-email", u.email);
     setVal("edit-birthdate", u.birthDate);
     setVal("edit-gender", u.gender);
     setVal("edit-country", u.country);
@@ -1472,6 +1476,7 @@
         const url = URL.createObjectURL(file);
         DCS.user.avatar = url;
         renderProfile();
+        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
       });
     }
 
@@ -1482,6 +1487,7 @@
         if (!email) return;
         DCS.user.email = email;
         DCS.user.gmailLinked = true;
+        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
         renderProfile();
         alert("Gmail lié avec succès (démo).");
       });
@@ -1494,6 +1500,7 @@
         if (!phone) return;
         DCS.user.phone = phone;
         DCS.user.phoneLinked = true;
+        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
         renderProfile();
         alert("Numéro lié avec succès (démo).");
       });
@@ -1536,6 +1543,7 @@
     if (pwdForm) {
       pwdForm.addEventListener("submit", (e) => {
         e.preventDefault();
+        const cur = document.getElementById("pwd-current").value;
         const n = document.getElementById("pwd-new").value;
         const c = document.getElementById("pwd-confirm").value;
         if (n.length < 8) {
@@ -1546,7 +1554,14 @@
           alert("Les mots de passe ne correspondent pas.");
           return;
         }
-        alert("Mot de passe mis à jour (démo).");
+        if (window.DCS && DCS.auth) {
+          const res = DCS.auth.updatePassword(cur, n);
+          if (!res.ok) {
+            alert(res.error || "Impossible de changer le mot de passe.");
+            return;
+          }
+        }
+        alert("Mot de passe mis à jour.");
         pwdForm.reset();
       });
     }
@@ -1558,7 +1573,6 @@
         const firstName = document.getElementById("edit-firstname").value.trim();
         const lastName = document.getElementById("edit-lastname").value.trim();
         const name = document.getElementById("edit-displayname").value.trim();
-        const user = document.getElementById("edit-username").value.trim().replace(/^@/, "");
         DCS.user.firstName = firstName;
         DCS.user.lastName = lastName;
         DCS.user.birthDate = document.getElementById("edit-birthdate").value;
@@ -1569,14 +1583,10 @@
         DCS.user.bio = document.getElementById("edit-bio").value.trim();
         if (name) DCS.user.displayName = name;
         else if (firstName || lastName) DCS.user.displayName = [firstName, lastName].filter(Boolean).join(" ");
-        if (user) {
-          DCS.user.username = user;
-          DCS.user.referralLink =
-            (typeof DCS.buildShareLinks === "function"
-              ? (DCS.buildShareLinks(), DCS.user.referralLink)
-              : "join.html?ref=" + DCS.user.inviteCode + "&u=" + DCS.user.username);
-        }
+        if (typeof DCS.buildShareLinks === "function") DCS.buildShareLinks();
+        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
         renderProfile();
+        updateAuthNav();
         alert("Identité enregistrée avec succès.");
       });
     }
@@ -1631,15 +1641,300 @@
       logoutBtn.addEventListener("click", () => {
         const ok = confirm("Voulez-vous vraiment vous déconnecter ?");
         if (!ok) return;
-        DCS.user.loggedIn = false;
+        if (window.DCS && DCS.auth) DCS.auth.logout();
+        else if (DCS.user) DCS.user.loggedIn = false;
         const session = document.getElementById("session-label");
         if (session) session.textContent = "Déconnecté";
         logoutBtn.disabled = true;
         logoutBtn.textContent = "Déconnecté";
-        alert("Vous êtes déconnecté. Redirection vers l'accueil…");
-        window.location.href = "index.html";
+        alert("Vous êtes déconnecté.");
+        window.location.href = "signin.html";
       });
     }
+  }
+
+  function isLoggedIn() {
+    return !!(window.DCS && DCS.user && DCS.user.loggedIn && DCS.user.username);
+  }
+
+  function updateAuthNav() {
+    const actions = document.querySelector(".header-actions");
+    if (!actions) return;
+    const toggle = actions.querySelector(".menu-toggle");
+    const logged = isLoggedIn();
+    const frag = document.createDocumentFragment();
+    if (logged) {
+      const name = document.createElement("a");
+      name.className = "btn btn-outline";
+      name.href = "profil.html";
+      name.textContent = DCS.user.displayName || DCS.user.email || "Profil";
+      name.title = DCS.user.email || "";
+      const gold = document.createElement("a");
+      gold.className = "btn btn-gold";
+      gold.href = "wallet.html";
+      gold.textContent = "Wallet";
+      frag.appendChild(name);
+      frag.appendChild(gold);
+    } else {
+      const signin = document.createElement("a");
+      signin.className = "btn btn-outline";
+      signin.href = "signin.html";
+      signin.textContent = "Connexion";
+      const signup = document.createElement("a");
+      signup.className = "btn btn-gold";
+      signup.href = "signup.html";
+      signup.textContent = "Inscription";
+      frag.appendChild(signin);
+      frag.appendChild(signup);
+    }
+    Array.from(actions.children).forEach((el) => {
+      if (!el.classList.contains("menu-toggle")) el.remove();
+    });
+    if (toggle) actions.insertBefore(frag, toggle);
+    else actions.appendChild(frag);
+  }
+
+  const PROTECTED_PAGES = [
+    "wallet.html",
+    "swap.html",
+    "transfer.html",
+    "marketplace.html",
+    "parrainage.html",
+    "profil.html",
+    "academy.html",
+    "learning.html",
+    "community.html"
+  ];
+
+  function requireAuth(page) {
+    if (!PROTECTED_PAGES.includes(page)) return true;
+    if (isLoggedIn()) return true;
+    const next = encodeURIComponent(page);
+    window.location.replace("signin.html?next=" + next);
+    return false;
+  }
+
+  function authNextUrl() {
+    const params = new URLSearchParams(location.search);
+    const next = params.get("next") || "";
+    if (next && /^[a-z0-9._-]+\.html$/i.test(next)) return next;
+    return "profil.html";
+  }
+
+  function setupSignup() {
+    const form = document.getElementById("signup-form");
+    const otpForm = document.getElementById("signup-otp-form");
+    if (!form || !window.DCS || !DCS.auth) return;
+    if (isLoggedIn()) {
+      window.location.replace(authNextUrl());
+      return;
+    }
+    const hint = document.getElementById("signup-ref-hint");
+    const err = document.getElementById("signup-error");
+    const otpErr = document.getElementById("otp-error");
+    const otpHint = document.getElementById("otp-sent-hint");
+    const otpDemo = document.getElementById("otp-demo-code");
+    const dot1 = document.getElementById("step-dot-1");
+    const dot2 = document.getElementById("step-dot-2");
+
+    try {
+      const ref = localStorage.getItem("dcs_ref");
+      const refUser = localStorage.getItem("dcs_ref_user");
+      if (hint && ref && ref !== "—") {
+        hint.hidden = false;
+        hint.textContent =
+          "Parrainage actif : code " +
+          ref +
+          (refUser ? " (@" + refUser + ")" : "") +
+          ".";
+      }
+    } catch (e) {}
+
+    function showError(el, msg) {
+      if (!el) return;
+      el.hidden = !msg;
+      el.textContent = msg || "";
+    }
+
+    function setStep(step) {
+      if (form) form.hidden = step !== 1;
+      if (otpForm) otpForm.hidden = step !== 2;
+      if (dot1) dot1.classList.toggle("active", step === 1);
+      if (dot2) dot2.classList.toggle("active", step === 2);
+    }
+
+    function collectPayload() {
+      return {
+        firstName: form.querySelector("#su-firstname").value.trim(),
+        lastName: form.querySelector("#su-lastname").value.trim(),
+        email: form.querySelector("#su-email").value.trim(),
+        phone: form.querySelector("#su-phone").value.trim(),
+        country: form.querySelector("#su-country").value.trim(),
+        password: form.querySelector("#su-password").value
+      };
+    }
+
+    function showOtpUi(email, code, emailed) {
+      if (otpHint) {
+        otpHint.textContent = emailed
+          ? "Un code OTP à 6 chiffres a été envoyé à " + email + " (valide 10 min). Vérifiez votre boîte mail."
+          : "Un code OTP à 6 chiffres a été généré pour " + email + " (valide 10 min).";
+      }
+      if (otpDemo) {
+        if (emailed) {
+          otpDemo.hidden = true;
+          otpDemo.textContent = "";
+        } else {
+          otpDemo.hidden = false;
+          otpDemo.innerHTML =
+            "Mode démo — code : <code>" +
+            code +
+            "</code><br/><span style=\"font-size:0.72rem\">Configurez EmailJS dans js/data.js pour un envoi réel.</span>";
+        }
+      }
+      showError(err, "");
+      showError(otpErr, "");
+      setStep(2);
+      const otpInput = document.getElementById("su-otp");
+      if (otpInput) {
+        otpInput.value = "";
+        otpInput.focus();
+      }
+    }
+
+    function sendOtp(payload) {
+      const email = payload.email;
+      if (!email || email.indexOf("@") < 1) {
+        showError(err, "E-mail invalide.");
+        return Promise.resolve(false);
+      }
+      DCS.auth.seedDemo();
+      if (DCS.auth.findUser(email)) {
+        showError(err, "Ce compte existe déjà. Connectez-vous.");
+        return Promise.resolve(false);
+      }
+      const sent = DCS.auth.createOtp(email, payload);
+      if (!sent.ok) {
+        showError(err, "Impossible de générer le code.");
+        return Promise.resolve(false);
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const name =
+        ((payload.firstName || "") + " " + (payload.lastName || "")).trim() || email;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Envoi du code…";
+      }
+      return DCS.auth.sendOtpEmail(sent.email, sent.code, name).then((mail) => {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Recevoir le code OTP";
+        }
+        showOtpUi(sent.email, sent.code, !!(mail && mail.ok && !mail.demo));
+        if (mail && !mail.ok && mail.reason && DCS.emailConfig && DCS.emailConfig.enabled) {
+          showError(
+            otpErr,
+            "E-mail non envoyé (" + mail.reason + "). Utilisez le code démo ci-dessous."
+          );
+        }
+        return true;
+      });
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      showError(err, "");
+      const password = form.querySelector("#su-password").value;
+      const password2 = form.querySelector("#su-password2").value;
+      if (password !== password2) {
+        showError(err, "Les mots de passe ne correspondent pas.");
+        return;
+      }
+      if (password.length < 6) {
+        showError(err, "Mot de passe : 6 caractères minimum.");
+        return;
+      }
+      sendOtp(collectPayload());
+    });
+
+    if (otpForm) {
+      otpForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        showError(otpErr, "");
+        const code = document.getElementById("su-otp").value.trim();
+        if (!/^\d{6}$/.test(code)) {
+          showError(otpErr, "Entrez le code à 6 chiffres.");
+          return;
+        }
+        const result = DCS.auth.verifyOtp(code);
+        if (!result.ok) {
+          showError(otpErr, result.error || "Vérification impossible.");
+          return;
+        }
+        alert("Compte vérifié et créé. Bienvenue sur DCS !");
+        window.location.href = authNextUrl();
+      });
+    }
+
+    const resend = document.getElementById("otp-resend");
+    if (resend) {
+      resend.addEventListener("click", () => {
+        const pending = DCS.auth.getPendingOtp();
+        const payload = pending && pending.payload ? pending.payload : collectPayload();
+        if (!payload.email) {
+          showError(otpErr, "Revenez à l'étape 1 pour renseigner l'e-mail.");
+          return;
+        }
+        resend.disabled = true;
+        sendOtp(payload).then(() => {
+          resend.disabled = false;
+        });
+      });
+    }
+
+    const back = document.getElementById("otp-back");
+    if (back) {
+      back.addEventListener("click", () => {
+        showError(otpErr, "");
+        setStep(1);
+      });
+    }
+
+    /* Si un OTP est déjà en cours */
+    const pending = DCS.auth.getPendingOtp();
+    if (pending) {
+      showOtpUi(pending.email, pending.code, !!pending.emailed);
+    } else {
+      setStep(1);
+    }
+  }
+
+  function setupSignin() {
+    const form = document.getElementById("signin-form");
+    if (!form || !window.DCS || !DCS.auth) return;
+    if (isLoggedIn()) {
+      window.location.replace(authNextUrl());
+      return;
+    }
+    const err = document.getElementById("signin-error");
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      const login = form.querySelector("#si-login").value.trim();
+      const password = form.querySelector("#si-password").value;
+      const result = DCS.auth.login(login, password);
+      if (!result.ok) {
+        if (err) {
+          err.hidden = false;
+          err.textContent = result.error || "Connexion impossible.";
+        }
+        return;
+      }
+      window.location.href = authNextUrl();
+    });
   }
 
   const LANG_LABELS = {
@@ -1745,9 +2040,12 @@
   }
 
   function boot() {
+    if (window.DCS && DCS.auth) DCS.auth.hydrate();
     setupNav();
     setupLanguage();
     const page = pageName();
+    if (!requireAuth(page)) return;
+
     if (document.getElementById("ticker-track")) renderTicker();
 
     /* Détection par DOM + nom de page (plus fiable) */
@@ -1758,6 +2056,11 @@
     const isRef = page === "parrainage.html" || !!document.getElementById("ref-link");
     const isProfil = page === "profil.html" || !!document.getElementById("profile-user-form");
     const isHome = page === "index.html" || !!document.getElementById("markets-body");
+    const isSignup = page === "signup.html" || !!document.getElementById("signup-form");
+    const isSignin = page === "signin.html" || !!document.getElementById("signin-form");
+
+    if (isSignup) setupSignup();
+    if (isSignin) setupSignin();
 
     if (isHome && document.getElementById("markets-body")) {
       renderPiSpotlight();

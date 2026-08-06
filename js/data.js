@@ -361,32 +361,33 @@ DCS.corridors = {
   }
 };
 
-/* Compte membre démo */
+/* Compte invité par défaut — remplacé si session active */
 DCS.user = {
-  username: "damie.pro",
-  displayName: "Damie Crypto",
-  firstName: "Damie",
-  lastName: "Crypto",
+  username: "",
+  displayName: "Invité DCS",
+  firstName: "",
+  lastName: "",
   birthDate: "",
   gender: "",
-  country: "Sénégal",
-  city: "Dakar",
+  country: "",
+  city: "",
   address: "",
-  bio: "Passionné de PI COIN et des services DCS en Afrique.",
+  bio: "",
   email: "",
   phone: "",
-  inviteCode: "DCS-DAMIE7X",
+  inviteCode: "",
   referralLink: "",
+  siteLink: "",
   avatar: "",
-  kyc: "pending",
+  kyc: "none",
   gmailLinked: false,
   phoneLinked: false,
   googleAuth: false,
-  joined: "12/07/2026",
-  language: "fr"
+  joined: "",
+  language: "fr",
+  loggedIn: false,
+  referredBy: ""
 };
-
-DCS.user.referralLink = "";
 
 DCS.buildShareLinks = function () {
   var base = "./";
@@ -403,13 +404,414 @@ DCS.buildShareLinks = function () {
       if (base.slice(-1) !== "/") base += "/";
     }
   } catch (e) {}
-  var code = DCS.user.inviteCode || "DCS";
-  var user = DCS.user.username || "membre";
-  DCS.user.siteLink = base + "index.html";
-  DCS.user.referralLink =
-    base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
-  return { site: DCS.user.siteLink, join: DCS.user.referralLink };
+  var code = (DCS.user && DCS.user.inviteCode) || "DCS";
+  var user = (DCS.user && DCS.user.username) || "membre";
+  if (DCS.user) {
+    DCS.user.siteLink = base + "index.html";
+    DCS.user.referralLink =
+      base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
+  }
+  return {
+    site: base + "index.html",
+    join: base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user)
+  };
 };
+
+/* Auth démo — comptes en localStorage (pas un vrai backend) */
+DCS.auth = {
+  USERS_KEY: "dcs_users",
+  SESSION_KEY: "dcs_session",
+
+  hash(pw) {
+    try {
+      return btoa(unescape(encodeURIComponent("dcs:" + String(pw || ""))));
+    } catch (e) {
+      return "dcs:" + String(pw || "");
+    }
+  },
+
+  getUsers: function () {
+    try {
+      var raw = localStorage.getItem(this.USERS_KEY);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  saveUsers: function (users) {
+    try {
+      localStorage.setItem(this.USERS_KEY, JSON.stringify(users || []));
+    } catch (e) {}
+  },
+
+  seedDemo: function () {
+    var users = this.getUsers();
+    if (users.length) return users;
+    users.push({
+      username: "damie.pro",
+      email: "demo@damiecrypto.service",
+      passwordHash: this.hash("DemoDCS2026"),
+      displayName: "Damie Crypto",
+      firstName: "Damie",
+      lastName: "Crypto",
+      birthDate: "",
+      gender: "",
+      country: "Sénégal",
+      city: "Dakar",
+      address: "",
+      bio: "Compte démo DCS — PI COIN & services en Afrique.",
+      phone: "",
+      inviteCode: "DCS-DAMIE7X",
+      avatar: "",
+      kyc: "pending",
+      gmailLinked: false,
+      phoneLinked: false,
+      googleAuth: false,
+      joined: "12/07/2026",
+      language: "fr",
+      referredBy: ""
+    });
+    this.saveUsers(users);
+    return users;
+  },
+
+  findUser: function (login) {
+    var q = String(login || "")
+      .trim()
+      .toLowerCase();
+    if (!q) return null;
+    return (
+      this.getUsers().find(function (u) {
+        return (
+          (u.username && u.username.toLowerCase() === q) ||
+          (u.email && u.email.toLowerCase() === q)
+        );
+      }) || null
+    );
+  },
+
+  getSession: function () {
+    try {
+      var raw = localStorage.getItem(this.SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  setSession: function (username) {
+    try {
+      localStorage.setItem(
+        this.SESSION_KEY,
+        JSON.stringify({ username: username, at: Date.now() })
+      );
+    } catch (e) {}
+  },
+
+  clearSession: function () {
+    try {
+      localStorage.removeItem(this.SESSION_KEY);
+    } catch (e) {}
+  },
+
+  applyUser: function (stored) {
+    if (!stored) {
+      DCS.user.loggedIn = false;
+      DCS.user.username = "";
+      DCS.user.displayName = "Invité DCS";
+      return DCS.user;
+    }
+    var keys = Object.keys(stored);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === "passwordHash") continue;
+      DCS.user[k] = stored[k];
+    }
+    DCS.user.loggedIn = true;
+    if (!DCS.user.displayName) {
+      DCS.user.displayName =
+        ((DCS.user.firstName || "") + " " + (DCS.user.lastName || "")).trim() ||
+        DCS.user.username;
+    }
+    DCS.buildShareLinks();
+    return DCS.user;
+  },
+
+  hydrate: function () {
+    this.seedDemo();
+    var session = this.getSession();
+    if (!session || !session.username) {
+      DCS.user.loggedIn = false;
+      DCS.buildShareLinks();
+      return false;
+    }
+    var u = this.findUser(session.username);
+    if (!u) {
+      this.clearSession();
+      DCS.user.loggedIn = false;
+      DCS.buildShareLinks();
+      return false;
+    }
+    this.applyUser(u);
+    return true;
+  },
+
+  persistCurrentUser: function () {
+    if (!DCS.user || !DCS.user.loggedIn || !DCS.user.username) return;
+    var users = this.getUsers();
+    var idx = users.findIndex(function (u) {
+      return u.username === DCS.user.username;
+    });
+    if (idx < 0) return;
+    var keepHash = users[idx].passwordHash;
+    var next = {};
+    var keys = Object.keys(DCS.user);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      if (k === "loggedIn" || k === "referralLink" || k === "siteLink") continue;
+      next[k] = DCS.user[k];
+    }
+    next.passwordHash = keepHash;
+    users[idx] = next;
+    this.saveUsers(users);
+  },
+
+  genInviteCode: function (username) {
+    var base = String(username || "DCS")
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .toUpperCase()
+      .slice(0, 6);
+    var rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return "DCS-" + (base || "MEM") + rnd;
+  },
+
+  register: function (payload) {
+    var email = String(payload.email || "")
+      .trim()
+      .toLowerCase();
+    var password = String(payload.password || "");
+    if (!email || email.indexOf("@") < 1) return { ok: false, error: "E-mail invalide." };
+    if (password.length < 6) return { ok: false, error: "Mot de passe : 6 caractères minimum." };
+    this.seedDemo();
+    if (this.findUser(email)) return { ok: false, error: "Ce compte existe déjà. Connectez-vous." };
+
+    /* Pseudo interne généré depuis l'e-mail (pas saisi par l'utilisateur) */
+    var local = email.split("@")[0] || "membre";
+    var username = local
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, ".")
+      .replace(/\.+/g, ".")
+      .replace(/^\.|\.$/g, "");
+    if (username.length < 3) username = "membre" + Math.random().toString(36).slice(2, 6);
+    var baseUser = username;
+    var n = 1;
+    while (this.findUser(username)) {
+      username = baseUser + n;
+      n += 1;
+    }
+
+    var referredBy = "";
+    try {
+      referredBy = localStorage.getItem("dcs_ref") || "";
+    } catch (e) {}
+
+    var user = {
+      username: username,
+      email: email,
+      passwordHash: this.hash(password),
+      displayName:
+        ((payload.firstName || "") + " " + (payload.lastName || "")).trim() || username,
+      firstName: payload.firstName || "",
+      lastName: payload.lastName || "",
+      birthDate: "",
+      gender: "",
+      country: payload.country || "",
+      city: "",
+      address: "",
+      bio: "",
+      phone: payload.phone || "",
+      inviteCode: this.genInviteCode(username),
+      avatar: "",
+      kyc: "none",
+      gmailLinked: false,
+      phoneLinked: !!payload.phone,
+      googleAuth: false,
+      joined: new Date().toLocaleDateString("fr-FR"),
+      language: "fr",
+      referredBy: referredBy === "—" ? "" : referredBy
+    };
+    var users = this.getUsers();
+    users.push(user);
+    this.saveUsers(users);
+    this.setSession(user.username);
+    this.applyUser(user);
+    return { ok: true, user: user };
+  },
+
+  login: function (login, password) {
+    this.seedDemo();
+    var u = this.findUser(login);
+    if (!u) return { ok: false, error: "Compte introuvable. Vérifiez votre e-mail." };
+    if (u.passwordHash !== this.hash(password))
+      return { ok: false, error: "Mot de passe incorrect." };
+    this.setSession(u.username);
+    this.applyUser(u);
+    return { ok: true, user: u };
+  },
+
+  logout: function () {
+    this.persistCurrentUser();
+    this.clearSession();
+    DCS.user.loggedIn = false;
+    DCS.user.username = "";
+    DCS.user.displayName = "Invité DCS";
+  },
+
+  updatePassword: function (currentPw, newPw) {
+    if (!DCS.user.loggedIn) return { ok: false, error: "Non connecté." };
+    var u = this.findUser(DCS.user.username);
+    if (!u) return { ok: false, error: "Compte introuvable." };
+    if (u.passwordHash !== this.hash(currentPw))
+      return { ok: false, error: "Mot de passe actuel incorrect." };
+    if (String(newPw || "").length < 8)
+      return { ok: false, error: "Nouveau mot de passe trop court (min. 8)." };
+    var users = this.getUsers();
+    var idx = users.findIndex(function (x) {
+      return x.username === u.username;
+    });
+    if (idx < 0) return { ok: false, error: "Erreur de sauvegarde." };
+    users[idx].passwordHash = this.hash(newPw);
+    this.saveUsers(users);
+    return { ok: true };
+  }
+};
+
+/* Config e-mail OTP (EmailJS) — remplissez pour un envoi réel */
+DCS.emailConfig = {
+  /* true = tenter l'envoi e-mail ; false = mode démo uniquement */
+  enabled: false,
+  publicKey: "YOUR_EMAILJS_PUBLIC_KEY",
+  serviceId: "YOUR_EMAILJS_SERVICE_ID",
+  templateId: "YOUR_EMAILJS_TEMPLATE_ID",
+  /* Variables template EmailJS attendues : to_email, to_name, otp_code, app_name */
+  appName: "DAMIE CRYPTO SERVICE"
+};
+
+DCS.emailConfig.isReady = function () {
+  return !!(
+    this.enabled &&
+    this.publicKey &&
+    this.serviceId &&
+    this.templateId &&
+    this.publicKey.indexOf("YOUR_") !== 0 &&
+    this.serviceId.indexOf("YOUR_") !== 0 &&
+    this.templateId.indexOf("YOUR_") !== 0
+  );
+};
+
+/* OTP inscription */
+DCS.auth.OTP_KEY = "dcs_signup_otp";
+DCS.auth.OTP_TTL_MS = 10 * 60 * 1000;
+
+DCS.auth.createOtp = function (email, payload) {
+  var code = String(Math.floor(100000 + Math.random() * 900000));
+  var data = {
+    email: String(email || "").trim().toLowerCase(),
+    code: code,
+    payload: payload || {},
+    expiresAt: Date.now() + this.OTP_TTL_MS,
+    attempts: 0,
+    emailed: false
+  };
+  try {
+    sessionStorage.setItem(this.OTP_KEY, JSON.stringify(data));
+  } catch (e) {}
+  return { ok: true, code: code, email: data.email, expiresInMin: 10 };
+};
+
+DCS.auth.getPendingOtp = function () {
+  try {
+    var raw = sessionStorage.getItem(this.OTP_KEY);
+    if (!raw) return null;
+    var data = JSON.parse(raw);
+    if (!data || !data.expiresAt || Date.now() > data.expiresAt) {
+      sessionStorage.removeItem(this.OTP_KEY);
+      return null;
+    }
+    return data;
+  } catch (e) {
+    return null;
+  }
+};
+
+DCS.auth.clearOtp = function () {
+  try {
+    sessionStorage.removeItem(this.OTP_KEY);
+  } catch (e) {}
+};
+
+DCS.auth.markOtpEmailed = function () {
+  var pending = this.getPendingOtp();
+  if (!pending) return;
+  pending.emailed = true;
+  try {
+    sessionStorage.setItem(this.OTP_KEY, JSON.stringify(pending));
+  } catch (e) {}
+};
+
+DCS.auth.sendOtpEmail = function (email, code, name) {
+  var cfg = DCS.emailConfig || {};
+  if (!cfg.isReady || !cfg.isReady()) {
+    return Promise.resolve({ ok: false, demo: true, reason: "EmailJS non configuré" });
+  }
+  if (typeof emailjs === "undefined") {
+    return Promise.resolve({ ok: false, demo: true, reason: "SDK EmailJS absent" });
+  }
+  try {
+    emailjs.init({ publicKey: cfg.publicKey });
+  } catch (e) {}
+  return emailjs
+    .send(cfg.serviceId, cfg.templateId, {
+      to_email: email,
+      to_name: name || email,
+      otp_code: code,
+      app_name: cfg.appName || "DAMIE CRYPTO SERVICE"
+    })
+    .then(function () {
+      DCS.auth.markOtpEmailed();
+      return { ok: true, demo: false };
+    })
+    .catch(function (err) {
+      return {
+        ok: false,
+        demo: true,
+        reason: (err && (err.text || err.message)) || "Échec envoi e-mail"
+      };
+    });
+};
+
+DCS.auth.verifyOtp = function (inputCode) {
+  var pending = this.getPendingOtp();
+  if (!pending) return { ok: false, error: "Code expiré. Renvoyez un nouveau OTP." };
+  pending.attempts = (pending.attempts || 0) + 1;
+  try {
+    sessionStorage.setItem(this.OTP_KEY, JSON.stringify(pending));
+  } catch (e) {}
+  if (pending.attempts > 5) {
+    this.clearOtp();
+    return { ok: false, error: "Trop de tentatives. Recommencez l'inscription." };
+  }
+  var typed = String(inputCode || "").replace(/\s/g, "");
+  if (typed !== String(pending.code))
+    return { ok: false, error: "Code OTP incorrect." };
+  var payload = pending.payload || {};
+  this.clearOtp();
+  return this.register(payload);
+};
+
+DCS.auth.hydrate();
 DCS.buildShareLinks();
 
 DCS.referralRates = [
