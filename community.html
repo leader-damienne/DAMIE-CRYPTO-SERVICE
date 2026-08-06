@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DCS Community — Damie Crypto Service</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" data-brand-name translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Sécuriser · Échanger · Apprendre · Prospérer</span>
+        </div>
+      </a>
+      <nav class="nav" id="main-nav">
+        <a href="index.html">Accueil</a>
+        <a href="index.html#markets">Marchés</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="swap.html">Swap</a>
+        <a href="transfer.html">Transfer</a>
+        <a href="marketplace.html">Marketplace</a>
+        <a href="parrainage.html">Parrainage</a>
+        <a href="profil.html">Profil</a>
+        <a href="academy.html">Academy</a>
+        <a href="learning.html">Learning</a>
+        <a href="community.html">Community</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="header-actions">
+        <a class="btn btn-gold" href="swap.html">Trader PI COIN</a>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>DCS <span>Community</span></h1>
+      <p>Discussions, questions/réponses, partage d'expériences et annonces officielles.</p>
+    </div>
+
+    <div style="padding-bottom:3rem;max-width:720px">
+      <div class="panel" style="margin-bottom:1rem">
+        <h3>Publier</h3>
+        <textarea class="form-control" rows="3" placeholder="Partagez une question ou une expérience…" style="resize:vertical;margin-bottom:0.75rem"></textarea>
+        <button class="btn btn-gold" type="button" onclick="alert('Publication simulée — démo DCS.')">Publier</button>
+      </div>
+      <div class="community-feed" id="community-feed"></div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-bottom" style="border:none;padding-top:0">
+      <span>© 2026 Damie Crypto Service (DCS)</span>
+      <span><a href="contact.html">Contact</a></span>
+    </div>
+  </footer>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

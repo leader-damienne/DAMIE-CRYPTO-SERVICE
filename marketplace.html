@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marketplace PI COIN — Damie Crypto Service</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" data-brand-name translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Sécuriser · Échanger · Apprendre · Prospérer</span>
+        </div>
+      </a>
+      <nav class="nav" id="main-nav">
+        <a href="index.html">Accueil</a>
+        <a href="index.html#markets">Marchés</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="swap.html">Swap</a>
+        <a href="transfer.html">Transfer</a>
+        <a href="marketplace.html">Marketplace</a>
+        <a href="parrainage.html">Parrainage</a>
+        <a href="profil.html">Profil</a>
+        <a href="academy.html">Academy</a>
+        <a href="learning.html">Learning</a>
+        <a href="community.html">Community</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="header-actions">
+        <button type="button" class="btn btn-outline" data-open-view="buy">Acheter</button>
+        <button type="button" class="btn btn-gold" data-open-view="sell">Devenir vendeur</button>
+        <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="page-hero">
+      <h1>Marketplace <span>PI COIN</span></h1>
+      <p>Deux choix : <strong>acheter</strong> des articles auprès des vendeurs, ou <strong>devenir vendeur</strong> et publier vos propres articles (paiement en PI COIN).</p>
+      <div class="hero-ctas" style="margin-top:1.25rem">
+        <button type="button" class="btn btn-gold" data-open-view="buy">Acheter des articles</button>
+        <button type="button" class="btn btn-outline" data-open-view="sell">Devenir vendeur</button>
+      </div>
+    </div>
+
+    <div class="market-actions-strip">
+      <button type="button" class="market-action-card" data-open-view="buy">
+        <span class="market-action-icon">🛒</span>
+        <strong>Je veux acheter</strong>
+        <span>Parcourir les vendeurs, visiter les articles et payer en PI COIN</span>
+      </button>
+      <button type="button" class="market-action-card" data-open-view="sell">
+        <span class="market-action-icon">π</span>
+        <strong>Je veux vendre</strong>
+        <span>S'inscrire vendeur, publier un article avec photos, recevoir des PI COIN</span>
+      </button>
+    </div>
+
+    <div class="market-toolbar" style="margin-bottom:1.25rem">
+      <div class="tabs" id="market-tabs">
+        <button type="button" class="active" data-view="buy">Acheter des articles</button>
+        <button type="button" data-view="sell">Devenir vendeur</button>
+      </div>
+      <div class="search-box" id="buyer-search-wrap">
+        <span aria-hidden="true">⌕</span>
+        <input id="buyer-search" type="search" placeholder="Rechercher un article ou un vendeur…" autocomplete="off" />
+      </div>
+    </div>
+
+    <!-- CATALOGUE ACHETEURS -->
+    <section id="buyers-catalog" class="market-view" data-view-panel="buy">
+      <div class="buyers-layout">
+        <aside class="panel sellers-panel">
+          <h3>Tous les vendeurs</h3>
+          <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.85rem">Cliquez pour filtrer leurs articles</p>
+          <button type="button" class="seller-chip active" data-seller="all">Tous · <span id="seller-count-all">0</span></button>
+          <div id="sellers-list" class="sellers-list"></div>
+        </aside>
+
+        <div>
+          <div class="panel" style="margin-bottom:1rem">
+            <div class="section-head" style="margin-bottom:0.75rem">
+              <div>
+                <h2 style="font-family:var(--font-display);font-size:0.95rem;letter-spacing:0.08em">Articles disponibles</h2>
+                <p id="catalog-hint" style="color:var(--muted);font-size:0.85rem">Visitez un article puis achetez en PI COIN</p>
+              </div>
+            </div>
+            <div id="marketplace-list" class="course-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ESPACE VENDEURS -->
+    <section id="sellers-space" class="market-view" data-view-panel="sell" hidden>
+      <div class="grid-2" style="padding-bottom:1rem">
+        <div class="panel" id="seller-panel">
+          <h3>Devenir vendeur — publier un article</h3>
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Inscrivez-vous, ajoutez vos photos et mettez votre article en vente. Les acheteurs paient uniquement en PI COIN.</p>
+          <form id="seller-form">
+            <div class="form-group">
+              <label for="seller-name">Nom / pseudo vendeur</label>
+              <input id="seller-name" class="form-control" type="text" required placeholder="Ex. Amina K." />
+            </div>
+            <div class="form-group">
+              <label for="article-title">Titre de l'article</label>
+              <input id="article-title" class="form-control" type="text" required placeholder="Titre de votre contenu" />
+            </div>
+            <div class="form-group">
+              <label for="article-category">Catégorie</label>
+              <select id="article-category" class="form-control">
+                <option>Trading</option>
+                <option>Transfer</option>
+                <option>Business</option>
+                <option>Sécurité</option>
+                <option>Formation</option>
+                <option>Actualité</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="article-price">Prix (PI COIN uniquement)</label>
+              <input id="article-price" class="form-control" type="number" min="1" step="1" value="5" required />
+            </div>
+            <div class="form-group">
+              <label for="article-excerpt">Résumé</label>
+              <textarea id="article-excerpt" class="form-control" rows="3" required placeholder="Court résumé visible dans le catalogue…" style="resize:vertical"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="article-content">Contenu détaillé (page article)</label>
+              <textarea id="article-content" class="form-control" rows="5" required placeholder="Texte complet que l'acheteur lira en visitant l'article…" style="resize:vertical"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="article-photos">Photos de l'article <span style="color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0">(max. 5)</span></label>
+              <input id="article-photos" class="form-control" type="file" accept="image/*" multiple />
+              <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Ajoutez quelques images pour illustrer votre article.</p>
+              <div class="photo-preview" id="photo-preview" aria-live="polite"></div>
+            </div>
+            <p style="font-size:0.78rem;color:var(--gold-muted);margin-bottom:1rem">Paiement acheteur : 100 % en PI COIN · $314,159</p>
+            <button class="btn btn-gold" type="submit" style="width:100%">Devenir vendeur et publier</button>
+          </form>
+        </div>
+        <div>
+          <div class="panel">
+            <h3>Pourquoi vendre en PI COIN ?</h3>
+            <div class="feed-post"><p>Prix stable : pas de chute de valeur entre publication et paiement.</p></div>
+            <div class="feed-post" style="margin-top:0.75rem"><p>Vos articles apparaissent dans le catalogue acheteurs avec photos.</p></div>
+            <div class="feed-post" style="margin-top:0.75rem"><p>Convertible ensuite en XOF ou XAF via DCS Swap / Transfer.</p></div>
+          </div>
+          <div class="panel">
+            <h3>Mes publications (aperçu)</h3>
+            <div id="my-pubs-hint" style="font-size:0.85rem;color:var(--muted)">Publiez un article pour le voir ici et dans le catalogue.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Fiche article (visite + achat) -->
+  <div id="article-modal" class="article-modal" hidden>
+    <div class="article-modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button type="button" class="article-modal-close" id="article-modal-close" aria-label="Fermer">×</button>
+      <div class="article-modal-gallery" id="modal-gallery"></div>
+      <div class="article-modal-content">
+        <div class="ref-badge" id="modal-category">—</div>
+        <h2 id="modal-title">—</h2>
+        <p class="article-modal-meta">Par <strong id="modal-author">—</strong> · <span id="modal-price" class="price-pi">—</span></p>
+        <p id="modal-excerpt" style="color:var(--muted);margin:0.75rem 0 1rem"></p>
+        <div id="modal-body" class="article-modal-body"></div>
+        <div class="article-modal-actions">
+          <button type="button" class="btn btn-outline" id="modal-back">Retour au catalogue</button>
+          <button type="button" class="btn btn-outline btn-report" id="modal-report">Signaler le vendeur</button>
+          <button type="button" class="btn btn-gold" id="modal-buy">Acheter en PI COIN</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signalement vendeur -->
+  <div id="report-modal" class="article-modal" hidden>
+    <div class="article-modal-card report-card" role="dialog" aria-modal="true" aria-labelledby="report-title">
+      <button type="button" class="article-modal-close" id="report-modal-close" aria-label="Fermer">×</button>
+      <div class="article-modal-content" style="padding-top:1.5rem">
+        <h2 id="report-title">Signaler un vendeur</h2>
+        <p style="color:var(--muted);font-size:0.88rem;margin:0.5rem 0 1rem">Vendeur : <strong id="report-seller-name">—</strong></p>
+        <form id="report-seller-form">
+          <input type="hidden" id="report-seller" />
+          <input type="hidden" id="report-article-id" />
+          <div class="form-group">
+            <label for="report-reason">Motif</label>
+            <select id="report-reason" class="form-control" required>
+              <option value="">— Choisir —</option>
+              <option value="fraude">Fraude / arnaque</option>
+              <option value="contenu">Contenu trompeur ou illégal</option>
+              <option value="prix">Prix abusif / spam</option>
+              <option value="harcelement">Harcèlement</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="report-details">Détails</label>
+            <textarea id="report-details" class="form-control" rows="4" required placeholder="Décrivez le problème…" style="resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button type="button" class="btn btn-outline" id="report-cancel">Annuler</button>
+            <button type="submit" class="btn btn-gold">Envoyer le signalement</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container footer-bottom" style="border:none;padding-top:0">
+      <span>© 2026 Damie Crypto Service (DCS)</span>
+      <span>Catalogue · Vendeurs · Achat PI COIN</span>
+    </div>
+  </footer>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

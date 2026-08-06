@@ -1,0 +1,23 @@
+# Dependencies / logs
+node_modules/
+npm-debug.log*
+.npm/
+_server.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Local / temp
+.env
+.env.*
+!.env.example
+_deploy_tools.txt
+assets/_logo-crop-check.png
+*.log
+
+# Cloudflare / tunnel
+.cloudflared/
