@@ -1660,6 +1660,27 @@
   /* Pages accessibles sans compte */
   const PUBLIC_PAGES = ["signup.html", "signin.html", "join.html", "contact.html"];
 
+  function normalizePage(name) {
+    let p = String(name || "")
+      .split("?")[0]
+      .split("#")[0]
+      .replace(/^\.\//, "")
+      .toLowerCase();
+    if (!p || p === "/" || p === ".") return "index.html";
+    if (p.indexOf("/") >= 0) p = p.split("/").pop() || "index.html";
+    if (!/\.html$/i.test(p)) p += ".html";
+    return p;
+  }
+
+  function isPublicPage(page) {
+    const p = normalizePage(page);
+    if (PUBLIC_PAGES.includes(p)) return true;
+    /* Filet de sécurité Netlify (/signin sans .html, etc.) */
+    if (document.getElementById("signin-form") || document.getElementById("signup-form")) return true;
+    if (document.getElementById("signup-otp-form")) return true;
+    return false;
+  }
+
   function updateAuthNav() {
     const actions = document.querySelector(".header-actions");
     if (!actions) return;
@@ -1701,12 +1722,14 @@
       document.querySelectorAll(".hero-ctas a.btn-gold, a.module-card").forEach((a) => {
         const href = a.getAttribute("href") || "";
         if (/wallet|swap|transfer|marketplace|parrainage|profil|academy|learning|community/i.test(href)) {
-          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(href.split("#")[0] || "index.html"));
+          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(normalizePage(href.split("#")[0] || "index.html")));
         }
       });
       document.querySelectorAll("#main-nav a").forEach((a) => {
-        const href = (a.getAttribute("href") || "").split("#")[0];
-        if (!href || PUBLIC_PAGES.includes(href) || href === "index.html") return;
+        const raw = (a.getAttribute("href") || "").split("#")[0];
+        if (!raw) return;
+        const href = normalizePage(raw);
+        if (isPublicPage(href) || href === "index.html") return;
         if (/\.html$/i.test(href)) {
           a.setAttribute("href", "signup.html?next=" + encodeURIComponent(href));
         }
@@ -1715,18 +1738,21 @@
   }
 
   function requireAuth(page) {
-    const p = page || "index.html";
-    if (PUBLIC_PAGES.includes(p)) return true;
+    const p = normalizePage(page || "index.html");
+    if (isPublicPage(p)) return true;
     if (isLoggedIn()) return true;
-    const next = encodeURIComponent(p === "" || p === "/" ? "index.html" : p);
-    window.location.replace("signup.html?next=" + next);
+    const next = encodeURIComponent(p);
+    window.location.replace("signin.html?next=" + next);
     return false;
   }
 
   function authNextUrl() {
     const params = new URLSearchParams(location.search);
     const next = params.get("next") || "";
-    if (next && /^[a-z0-9._-]+\.html$/i.test(next)) return next;
+    if (next) {
+      const n = normalizePage(next);
+      if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) return n;
+    }
     return "index.html";
   }
 
@@ -2045,6 +2071,7 @@
     p = p.split("/").pop() || "index.html";
     p = p.split("?")[0].toLowerCase();
     if (!p || p === "/" || p === ".") return "index.html";
+    if (!/\.html$/i.test(p)) p += ".html";
     return p;
   }
 

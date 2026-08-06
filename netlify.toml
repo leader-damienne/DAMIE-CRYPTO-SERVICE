@@ -1,2 +1,22 @@
 [build]
   publish = "."
+
+[[redirects]]
+  from = "/signin"
+  to = "/signin.html"
+  status = 200
+
+[[redirects]]
+  from = "/signup"
+  to = "/signup.html"
+  status = 200
+
+[[redirects]]
+  from = "/join"
+  to = "/join.html"
+  status = 200
+
+[[redirects]]
+  from = "/contact"
+  to = "/contact.html"
+  status = 200
