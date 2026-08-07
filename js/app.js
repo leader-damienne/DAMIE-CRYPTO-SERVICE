@@ -1048,7 +1048,7 @@
     });
   }
 
-  /* Prix live Binance pour cryptos ; PI / XOF / XAF restent gérés DCS */
+  /* Prix live Binance (WebSocket temps réel) ; PI / XOF / XAF gérés DCS */
   const LIVE_BINANCE_MAP = {
     BTC: "BTCUSDT",
     ETH: "ETHUSDT",
@@ -1059,6 +1059,14 @@
     TRX: "TRXUSDT",
     USDT: "USDCUSDT"
   };
+  const LIVE_PAIR_TO_SYM = {};
+  Object.keys(LIVE_BINANCE_MAP).forEach((sym) => {
+    LIVE_PAIR_TO_SYM[LIVE_BINANCE_MAP[sym]] = sym;
+  });
+
+  let marketsDirty = false;
+  let marketsWs = null;
+  let marketsWsRetry = null;
 
   function setMarketsLiveStatus(ok, detail) {
     const el = document.getElementById("markets-live-status");
@@ -1068,85 +1076,89 @@
     el.classList.toggle("is-offline", !ok);
   }
 
-  async function refreshLiveMarkets() {
+  function lockPiPrice() {
+    const pi = DCS.markets && DCS.markets.find((x) => x.id === "pi");
+    if (!pi) return;
+    pi.price = DCS.PI_PRICE || 314159;
+    pi.change24h = 0;
+    pi.high = pi.price;
+    pi.low = pi.price;
+    pi.stable = true;
+  }
+
+  function applyCfaFromEur(eurUsd) {
+    if (!(eurUsd > 0) || !DCS.markets) return;
+    const xofPerUsd = 655.957 / eurUsd;
+    DCS.CFA_PER_USD = Math.round(xofPerUsd);
+    ["xof", "xaf"].forEach((id) => {
+      const m = DCS.markets.find((x) => x.id === id);
+      if (m) {
+        m.price = 1 / xofPerUsd;
+        m.high = m.price;
+        m.low = m.price;
+        m.change24h = 0;
+      }
+    });
+  }
+
+  function applyTickerToMarket(sym, price, change, high, low, vol) {
+    const m = DCS.markets.find((x) => x.symbol === sym);
+    if (!m || !(price > 0)) return;
+    m.price = price;
+    if (change != null && !isNaN(change)) m.change24h = change;
+    if (high > 0) m.high = high;
+    if (low > 0) m.low = low;
+    if (vol > 0) m.volume = vol;
+    marketsDirty = true;
+  }
+
+  function paintLiveMarkets() {
+    if (!marketsDirty || !window.DCS || !DCS.markets) return;
+    marketsDirty = false;
+    lockPiPrice();
+    DCS.marketsLiveAt = Date.now();
+    setMarketsLiveStatus(true, new Date().toLocaleTimeString("fr-FR"));
+    if (document.getElementById("ticker-track")) renderTicker();
+    if (document.getElementById("pi-price")) renderPiSpotlight();
+    if (document.getElementById("markets-body")) {
+      const input = document.getElementById("market-search");
+      renderMarkets(input ? input.value : "");
+    }
+    if (document.getElementById("wallet-assets") && typeof renderWallet === "function") {
+      renderWallet();
+    }
+  }
+
+  async function refreshLiveMarketsRest() {
     if (!window.DCS || !DCS.markets) return false;
     const symbols = Object.keys(LIVE_BINANCE_MAP).map((k) => LIVE_BINANCE_MAP[k]);
     const url =
       "https://api.binance.com/api/v3/ticker/24hr?symbols=" +
       encodeURIComponent(JSON.stringify(symbols.concat(["EURUSDT"])));
-
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const rows = await res.json();
       if (!Array.isArray(rows)) throw new Error("Réponse invalide");
-
-      const bySym = {};
-      rows.forEach((r) => {
-        bySym[r.symbol] = r;
-      });
-
-      /* Parité CFA : 1 EUR = 655,957 XOF/XAF (UEMOA/CEMAC) */
-      const eur = bySym.EURUSDT;
-      if (eur && Number(eur.lastPrice) > 0) {
-        const xofPerUsd = 655.957 / Number(eur.lastPrice);
-        DCS.CFA_PER_USD = Math.round(xofPerUsd);
-        ["xof", "xaf"].forEach((id) => {
-          const m = DCS.markets.find((x) => x.id === id);
-          if (m) {
-            m.price = 1 / xofPerUsd;
-            m.high = m.price;
-            m.low = m.price;
-            m.change24h = 0;
-          }
-        });
-      }
-
-      Object.keys(LIVE_BINANCE_MAP).forEach((sym) => {
-        const pair = LIVE_BINANCE_MAP[sym];
-        const tick = bySym[pair];
-        const m = DCS.markets.find((x) => x.symbol === sym);
-        if (!tick || !m) return;
-        const price = Number(tick.lastPrice);
-        const change = Number(tick.priceChangePercent);
-        const high = Number(tick.highPrice);
-        const low = Number(tick.lowPrice);
-        const vol = Number(tick.quoteVolume);
-        if (!(price > 0)) return;
-        if (sym === "USDT") {
-          /* approx USDT ≈ USD via USDC */
-          m.price = price > 0 ? price : 1;
-          m.change24h = change || 0;
-        } else {
-          m.price = price;
-          m.change24h = change;
-          m.high = high || price;
-          m.low = low || price;
-          if (vol > 0) m.volume = vol;
+      rows.forEach((tick) => {
+        if (tick.symbol === "EURUSDT") {
+          applyCfaFromEur(Number(tick.lastPrice));
+          return;
         }
+        const sym = LIVE_PAIR_TO_SYM[tick.symbol];
+        if (!sym) return;
+        applyTickerToMarket(
+          sym,
+          Number(tick.lastPrice),
+          Number(tick.priceChangePercent),
+          Number(tick.highPrice),
+          Number(tick.lowPrice),
+          Number(tick.quoteVolume)
+        );
       });
-
-      /* PI COIN reste fixe DCS */
-      const pi = DCS.markets.find((x) => x.id === "pi");
-      if (pi) {
-        pi.price = DCS.PI_PRICE || 314159;
-        pi.change24h = 0;
-        pi.high = pi.price;
-        pi.low = pi.price;
-        pi.stable = true;
-      }
-
-      DCS.marketsLiveAt = Date.now();
-      setMarketsLiveStatus(true, new Date().toLocaleTimeString("fr-FR"));
-      if (document.getElementById("ticker-track")) renderTicker();
-      if (document.getElementById("pi-price")) renderPiSpotlight();
-      if (document.getElementById("markets-body")) {
-        const input = document.getElementById("market-search");
-        renderMarkets(input ? input.value : "");
-      }
-      if (document.getElementById("wallet-assets") && typeof renderWallet === "function") {
-        renderWallet();
-      }
+      lockPiPrice();
+      marketsDirty = true;
+      paintLiveMarkets();
       return true;
     } catch (err) {
       setMarketsLiveStatus(false, "Prix de secours (API indisponible)");
@@ -1154,10 +1166,72 @@
     }
   }
 
+  function connectMarketsWebSocket() {
+    if (marketsWs) {
+      try {
+        marketsWs.close();
+      } catch (e) {}
+      marketsWs = null;
+    }
+    const streams = Object.keys(LIVE_BINANCE_MAP)
+      .map((sym) => LIVE_BINANCE_MAP[sym].toLowerCase() + "@ticker")
+      .concat(["eurusdt@ticker"])
+      .join("/");
+    const wsUrl = "wss://stream.binance.com:9443/stream?streams=" + streams;
+    try {
+      marketsWs = new WebSocket(wsUrl);
+    } catch (e) {
+      setMarketsLiveStatus(false, "WebSocket indisponible");
+      return;
+    }
+    marketsWs.onopen = () => {
+      setMarketsLiveStatus(true, "temps réel");
+    };
+    marketsWs.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        const tick = msg.data || msg;
+        if (!tick || !tick.s) return;
+        if (tick.s === "EURUSDT") {
+          applyCfaFromEur(Number(tick.c));
+          marketsDirty = true;
+          return;
+        }
+        const sym = LIVE_PAIR_TO_SYM[tick.s];
+        if (!sym) return;
+        applyTickerToMarket(
+          sym,
+          Number(tick.c),
+          Number(tick.P),
+          Number(tick.h),
+          Number(tick.l),
+          Number(tick.q)
+        );
+      } catch (e) {}
+    };
+    marketsWs.onclose = () => {
+      setMarketsLiveStatus(false, "Reconnexion…");
+      if (marketsWsRetry) clearTimeout(marketsWsRetry);
+      marketsWsRetry = setTimeout(connectMarketsWebSocket, 2000);
+    };
+    marketsWs.onerror = () => {
+      try {
+        marketsWs.close();
+      } catch (e) {}
+    };
+  }
+
   function startLiveMarkets() {
-    refreshLiveMarkets();
+    refreshLiveMarketsRest();
+    connectMarketsWebSocket();
+    /* Affichage à chaque seconde (le flux WS arrive en continu) */
     if (window.__dcsMarketsTimer) clearInterval(window.__dcsMarketsTimer);
-    window.__dcsMarketsTimer = setInterval(refreshLiveMarkets, 60000);
+    window.__dcsMarketsTimer = setInterval(paintLiveMarkets, 1000);
+    /* Filet de secours REST si le WS coupe longtemps */
+    if (window.__dcsMarketsRestTimer) clearInterval(window.__dcsMarketsRestTimer);
+    window.__dcsMarketsRestTimer = setInterval(() => {
+      if (!marketsWs || marketsWs.readyState !== 1) refreshLiveMarketsRest();
+    }, 15000);
   }
 
   function getFeePercent(kind, usdValue) {
