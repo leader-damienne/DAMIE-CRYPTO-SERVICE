@@ -2245,7 +2245,27 @@ html.is-navigating body {
 }
 
 /* ——— Auth (signup / signin) ——— */
-.auth-panel {
+.mfa-enroll-panel {
+  margin: 0.75rem 0 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 12px;
+  background: rgba(18, 18, 18, 0.55);
+}
+
+.mfa-qr-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0.75rem 0;
+}
+
+.mfa-qr-wrap img {
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
   max-width: 480px;
   margin: 0 auto 3rem;
 }

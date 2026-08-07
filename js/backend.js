@@ -278,19 +278,161 @@
                       return;
                     }
                     applyProfile(p2);
-                    Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
-                      resolve(true);
+                    self.syncSecurityFlags(session.user).then(function () {
+                      Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
+                        resolve(true);
+                      });
                     });
                   });
                 }, 600);
               });
             }
             applyProfile(profile);
-            return Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
-              return true;
+            return self.syncSecurityFlags(session.user).then(function () {
+              return Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
+                return true;
+              });
             });
           });
         });
+      });
+    },
+
+    /* Alignement des drapeaux sécurité avec la vraie session Auth */
+    syncSecurityFlags: function (authUser) {
+      var self = this;
+      var gate = this.requireClient();
+      if (!gate.ok || !DCS.user.id) return Promise.resolve();
+
+      var emailConfirmed = !!(authUser && (authUser.email_confirmed_at || authUser.confirmed_at));
+      DCS.user.gmailLinked = emailConfirmed && !!DCS.user.email;
+
+      return gate.client.auth.mfa.listFactors().then(function (res) {
+        var totp = (res.data && res.data.totp) || [];
+        DCS.user.googleAuth = totp.some(function (f) {
+          return f.status === "verified";
+        });
+        /* Téléphone : lié seulement si vérifié côté Auth */
+        var phoneOk = !!(authUser && authUser.phone && authUser.phone_confirmed_at);
+        if (phoneOk) {
+          DCS.user.phoneLinked = true;
+          if (!DCS.user.phone) DCS.user.phone = authUser.phone;
+        } else {
+          DCS.user.phoneLinked = false;
+        }
+        return self.persistProfile().catch(function () {});
+      });
+    },
+
+    startTotpEnroll: function () {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      return gate.client.auth.mfa
+        .enroll({ factorType: "totp", friendlyName: "DAMIE CRYPTO SERVICE" })
+        .then(function (res) {
+          if (res.error) {
+            return { ok: false, error: res.error.message || "Impossible de démarrer le 2FA." };
+          }
+          var d = res.data || {};
+          return {
+            ok: true,
+            factorId: d.id,
+            qr: (d.totp && d.totp.qr_code) || "",
+            secret: (d.totp && d.totp.secret) || ""
+          };
+        });
+    },
+
+    verifyTotpEnroll: function (factorId, code) {
+      var self = this;
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      code = String(code || "").replace(/\s/g, "");
+      return gate.client.auth.mfa
+        .challenge({ factorId: factorId })
+        .then(function (ch) {
+          if (ch.error) {
+            return { ok: false, error: ch.error.message || "Challenge 2FA impossible." };
+          }
+          return gate.client.auth.mfa
+            .verify({
+              factorId: factorId,
+              challengeId: ch.data.id,
+              code: code
+            })
+            .then(function (v) {
+              if (v.error) {
+                return { ok: false, error: v.error.message || "Code 2FA incorrect." };
+              }
+              DCS.user.googleAuth = true;
+              return self.persistProfile().then(function () {
+                return { ok: true };
+              });
+            });
+        });
+    },
+
+    disableTotp: function (factorId) {
+      var self = this;
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      function unenroll(id) {
+        return gate.client.auth.mfa.unenroll({ factorId: id });
+      }
+      var p = factorId
+        ? Promise.resolve(factorId)
+        : gate.client.auth.mfa.listFactors().then(function (res) {
+            var totp = (res.data && res.data.totp) || [];
+            var f = totp.find(function (x) {
+              return x.status === "verified";
+            });
+            return f && f.id;
+          });
+      return p.then(function (id) {
+        if (!id) return { ok: false, error: "Aucun 2FA actif." };
+        return unenroll(id).then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          DCS.user.googleAuth = false;
+          return self.persistProfile().then(function () {
+            return { ok: true };
+          });
+        });
+      });
+    },
+
+    sendPasswordReset: function (email) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      email = String(email || "")
+        .trim()
+        .toLowerCase();
+      if (!email) return Promise.resolve({ ok: false, error: "E-mail requis." });
+      return gate.client.auth
+        .resetPasswordForEmail(email, {
+          redirectTo: location.origin + "/profil.html"
+        })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return { ok: true };
+        });
+    },
+
+    savePhoneUnverified: function (phone) {
+      var self = this;
+      phone = String(phone || "").trim();
+      if (phone.length < 8) {
+        return Promise.resolve({ ok: false, error: "Numéro invalide." });
+      }
+      DCS.user.phone = phone;
+      DCS.user.phoneLinked = false;
+      return self.persistProfile().then(function (p) {
+        if (!p.ok) return p;
+        return {
+          ok: true,
+          verified: false,
+          message:
+            "Numéro enregistré, mais non vérifié. La vérification SMS (OTP) nécessite un fournisseur SMS dans Supabase."
+        };
       });
     },
 

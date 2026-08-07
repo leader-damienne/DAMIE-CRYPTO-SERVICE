@@ -158,6 +158,7 @@
               <div>
                 <strong>Pièce d'identité</strong>
                 <p style="font-size:0.82rem;color:var(--muted)">CNI, passeport ou titre de séjour</p>
+                <input id="kyc-id-file" class="form-control" type="file" accept="image/*,.pdf" style="margin-top:0.45rem" />
               </div>
             </div>
             <div class="kyc-step">
@@ -165,13 +166,15 @@
               <div>
                 <strong>Selfie de vérification</strong>
                 <p style="font-size:0.82rem;color:var(--muted)">Photo de visage pour confirmer l'identité</p>
+                <input id="kyc-selfie-file" class="form-control" type="file" accept="image/*" style="margin-top:0.45rem" />
               </div>
             </div>
             <div class="kyc-step">
               <div class="num">3</div>
               <div>
                 <strong>Justificatif de domicile</strong>
-                <p style="font-size:0.82rem;color:var(--muted)">Facture ou attestation récente</p>
+                <p style="font-size:0.82rem;color:var(--muted)">Facture ou attestation récente (optionnel)</p>
+                <input id="kyc-address-file" class="form-control" type="file" accept="image/*,.pdf" style="margin-top:0.45rem" />
               </div>
             </div>
           </div>
@@ -182,26 +185,45 @@
       <div>
         <div class="panel">
           <h3>Liaisons & sécurité</h3>
+          <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">
+            Une liaison n'est marquée active qu'après vérification réelle (e-mail confirmé, code 2FA, etc.).
+          </p>
           <div class="status-row">
             <div>
-              <strong>Gmail</strong>
-              <div style="font-size:0.78rem;color:var(--muted)" id="gmail-status">Non lié</div>
+              <strong>E-mail du compte</strong>
+              <div style="font-size:0.78rem;color:var(--muted)" id="gmail-status">Non vérifié</div>
             </div>
-            <button type="button" class="btn btn-outline" id="link-gmail">Lier Gmail</button>
+            <button type="button" class="btn btn-outline" id="link-gmail">Vérifier le statut</button>
           </div>
           <div class="status-row">
             <div>
               <strong>Numéro de téléphone</strong>
-              <div style="font-size:0.78rem;color:var(--muted)" id="phone-status">Non lié</div>
+              <div style="font-size:0.78rem;color:var(--muted)" id="phone-status">Non vérifié</div>
             </div>
-            <button type="button" class="btn btn-outline" id="link-phone">Lier le numéro</button>
+            <button type="button" class="btn btn-outline" id="link-phone">Enregistrer le numéro</button>
           </div>
           <div class="status-row">
             <div>
-              <strong>Google Authenticator</strong>
+              <strong>Google Authenticator (2FA)</strong>
               <div style="font-size:0.78rem;color:var(--muted)" id="ga-status">Non activé</div>
             </div>
-            <button type="button" class="btn btn-outline" id="link-ga">Activer 2FA</button>
+            <button type="button" class="btn btn-outline" id="link-ga">Configurer 2FA</button>
+          </div>
+          <div id="mfa-enroll-panel" class="mfa-enroll-panel" hidden>
+            <p class="auth-hint" id="mfa-enroll-hint">Scannez le QR avec Google Authenticator, puis entrez le code à 6 chiffres.</p>
+            <div class="mfa-qr-wrap">
+              <img id="mfa-qr" alt="QR code 2FA" hidden />
+            </div>
+            <p class="auth-hint" id="mfa-secret" hidden></p>
+            <div class="form-group">
+              <label for="mfa-code">Code Authenticator</label>
+              <input id="mfa-code" class="form-control otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+            </div>
+            <p id="mfa-error" class="auth-error" hidden></p>
+            <div class="otp-actions">
+              <button type="button" class="btn btn-gold" id="mfa-verify">Valider le 2FA</button>
+              <button type="button" class="btn btn-outline" id="mfa-cancel">Annuler</button>
+            </div>
           </div>
           <div class="status-row">
             <div>

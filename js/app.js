@@ -1456,9 +1456,19 @@
         ? `<span class="status-dot on"></span>${okLabel}`
         : `<span class="status-dot off"></span>${koLabel}`;
     }
-    linkStatus("gmail-status", u.gmailLinked, u.email || "Gmail lié", "Non lié");
-    linkStatus("phone-status", u.phoneLinked, u.phone || "Téléphone lié", "Non lié");
-    linkStatus("ga-status", u.googleAuth, "Google Authenticator actif", "Non activé");
+    linkStatus("gmail-status", u.gmailLinked, u.email || "E-mail vérifié", "E-mail non confirmé");
+    if (u.phone && !u.phoneLinked) {
+      const phoneEl = document.getElementById("phone-status");
+      if (phoneEl) {
+        phoneEl.innerHTML =
+          `<span class="status-dot off"></span>${u.phone} · non vérifié`;
+      }
+    } else {
+      linkStatus("phone-status", u.phoneLinked, u.phone || "Téléphone vérifié", "Non vérifié");
+    }
+    linkStatus("ga-status", u.googleAuth, "2FA actif", "Non activé");
+    const gaBtn = document.getElementById("link-ga");
+    if (gaBtn) gaBtn.textContent = u.googleAuth ? "Désactiver 2FA" : "Configurer 2FA";
   }
 
   function setupProfileForms() {
@@ -1496,59 +1506,187 @@
 
     const gmailBtn = document.getElementById("link-gmail");
     if (gmailBtn) {
-      gmailBtn.addEventListener("click", () => {
-        const email = prompt("Adresse Gmail à lier :", DCS.user.email || "exemple@gmail.com");
-        if (!email) return;
-        DCS.user.email = email;
-        DCS.user.gmailLinked = true;
-        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
+      gmailBtn.addEventListener("click", async () => {
+        if (!DCS.backend || !DCS.backend.client) {
+          alert("Backend non configuré.");
+          return;
+        }
+        const { data, error } = await DCS.backend.client.auth.getUser();
+        if (error || !data.user) {
+          alert("Session invalide. Reconnectez-vous.");
+          return;
+        }
+        await DCS.backend.syncSecurityFlags(data.user);
         renderProfile();
-        alert("Gmail lié avec succès.");
+        if (DCS.user.gmailLinked) {
+          alert(
+            "E-mail vérifié : " +
+              (DCS.user.email || data.user.email) +
+              ".\nCet e-mail a été confirmé à l'inscription. Pour lier un compte Google séparé, activez le provider Google dans Supabase."
+          );
+        } else {
+          alert(
+            "E-mail pas encore confirmé. Vérifiez votre boîte mail (lien de confirmation) puis réessayez."
+          );
+        }
       });
     }
 
     const phoneBtn = document.getElementById("link-phone");
     if (phoneBtn) {
-      phoneBtn.addEventListener("click", () => {
-        const phone = prompt("Numéro de téléphone :", DCS.user.phone || "+221 77 000 00 00");
+      phoneBtn.addEventListener("click", async () => {
+        const phone = prompt(
+          "Numéro international (ex. +229…).\nAttention : sans vérification SMS, le numéro sera enregistré mais restera « non vérifié ».",
+          DCS.user.phone || ""
+        );
         if (!phone) return;
-        DCS.user.phone = phone;
-        DCS.user.phoneLinked = true;
-        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
+        const res = await DCS.backend.savePhoneUnverified(phone);
+        if (!res.ok) {
+          alert(res.error || "Enregistrement impossible.");
+          return;
+        }
         renderProfile();
-        alert("Numéro lié avec succès.");
+        alert(res.message);
       });
+    }
+
+    let pendingMfaFactorId = "";
+    const mfaPanel = document.getElementById("mfa-enroll-panel");
+    const mfaQr = document.getElementById("mfa-qr");
+    const mfaSecret = document.getElementById("mfa-secret");
+    const mfaErr = document.getElementById("mfa-error");
+    const mfaCode = document.getElementById("mfa-code");
+
+    function hideMfaPanel() {
+      pendingMfaFactorId = "";
+      if (mfaPanel) mfaPanel.hidden = true;
+      if (mfaQr) {
+        mfaQr.hidden = true;
+        mfaQr.removeAttribute("src");
+      }
+      if (mfaSecret) {
+        mfaSecret.hidden = true;
+        mfaSecret.textContent = "";
+      }
+      if (mfaCode) mfaCode.value = "";
+      if (mfaErr) {
+        mfaErr.hidden = true;
+        mfaErr.textContent = "";
+      }
     }
 
     const gaBtn = document.getElementById("link-ga");
     if (gaBtn) {
-      gaBtn.addEventListener("click", () => {
-        DCS.user.googleAuth = !DCS.user.googleAuth;
+      gaBtn.addEventListener("click", async () => {
+        if (DCS.user.googleAuth) {
+          const ok = confirm("Désactiver Google Authenticator (2FA) ?");
+          if (!ok) return;
+          const res = await DCS.backend.disableTotp();
+          if (!res.ok) {
+            alert(res.error || "Désactivation impossible.");
+            return;
+          }
+          hideMfaPanel();
+          renderProfile();
+          alert("2FA désactivé.");
+          return;
+        }
+        gaBtn.disabled = true;
+        const enroll = await DCS.backend.startTotpEnroll();
+        gaBtn.disabled = false;
+        if (!enroll.ok) {
+          alert(enroll.error || "Impossible de démarrer le 2FA.");
+          return;
+        }
+        pendingMfaFactorId = enroll.factorId;
+        if (mfaPanel) mfaPanel.hidden = false;
+        if (mfaQr && enroll.qr) {
+          mfaQr.src = enroll.qr;
+          mfaQr.hidden = false;
+        }
+        if (mfaSecret && enroll.secret) {
+          mfaSecret.hidden = false;
+          mfaSecret.textContent = "Clé manuelle : " + enroll.secret;
+        }
+        if (mfaCode) mfaCode.focus();
+      });
+    }
+
+    const mfaVerify = document.getElementById("mfa-verify");
+    if (mfaVerify) {
+      mfaVerify.addEventListener("click", async () => {
+        if (!pendingMfaFactorId) {
+          alert("Relancez la configuration 2FA.");
+          return;
+        }
+        const code = (mfaCode && mfaCode.value) || "";
+        if (!/^\d{6}$/.test(code.trim())) {
+          if (mfaErr) {
+            mfaErr.hidden = false;
+            mfaErr.textContent = "Entrez le code à 6 chiffres.";
+          }
+          return;
+        }
+        mfaVerify.disabled = true;
+        const res = await DCS.backend.verifyTotpEnroll(pendingMfaFactorId, code);
+        mfaVerify.disabled = false;
+        if (!res.ok) {
+          if (mfaErr) {
+            mfaErr.hidden = false;
+            mfaErr.textContent = res.error || "Code incorrect.";
+          }
+          return;
+        }
+        hideMfaPanel();
         renderProfile();
-        alert(
-          DCS.user.googleAuth
-            ? "Google Authenticator activé . Scannez le QR dans l'app authenticator."
-            : "Google Authenticator désactivé."
-        );
+        alert("2FA activé. Conservez votre application Authenticator.");
+      });
+    }
+
+    const mfaCancel = document.getElementById("mfa-cancel");
+    if (mfaCancel) {
+      mfaCancel.addEventListener("click", async () => {
+        if (pendingMfaFactorId) {
+          await DCS.backend.disableTotp(pendingMfaFactorId);
+        }
+        hideMfaPanel();
       });
     }
 
     const kycBtn = document.getElementById("start-kyc");
     if (kycBtn) {
-      kycBtn.addEventListener("click", () => {
+      kycBtn.addEventListener("click", async () => {
+        const idFile = document.getElementById("kyc-id-file");
+        const selfieFile = document.getElementById("kyc-selfie-file");
+        const hasId = idFile && idFile.files && idFile.files[0];
+        const hasSelfie = selfieFile && selfieFile.files && selfieFile.files[0];
+        if (!hasId || !hasSelfie) {
+          alert(
+            "Pour soumettre un KYC, ajoutez au moins une pièce d'identité et un selfie. Sans documents, le dossier ne peut pas être vérifié."
+          );
+          return;
+        }
         DCS.user.kyc = "pending";
+        if (window.DCS && DCS.auth) await DCS.auth.persistCurrentUser();
         renderProfile();
-        alert("Dossier KYC soumis — statut : en attente de vérification.");
+        alert(
+          "Dossier KYC soumis avec documents — statut : en attente de vérification manuelle par l'équipe DCS."
+        );
       });
     }
 
     const forgot = document.getElementById("forgot-password-form");
     if (forgot) {
-      forgot.addEventListener("submit", (e) => {
+      forgot.addEventListener("submit", async (e) => {
         e.preventDefault();
         const email = document.getElementById("forgot-email").value.trim();
         if (!email) return;
-        alert("Lien de réinitialisation envoyé à " + email + " si un compte existe.");
+        const res = await DCS.backend.sendPasswordReset(email);
+        if (!res.ok) {
+          alert(res.error || "Envoi impossible.");
+          return;
+        }
+        alert("Si un compte existe pour " + email + ", un lien de réinitialisation a été envoyé.");
         forgot.reset();
       });
     }
