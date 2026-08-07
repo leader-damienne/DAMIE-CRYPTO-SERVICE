@@ -49,6 +49,50 @@
     }
   }
 
+  /** Toast visible + rafraîchissement liste (la persistance DB vient du trigger SQL / RPC) */
+  function showToast(title, body) {
+    try {
+      var existing = document.getElementById("dcs-toast");
+      if (existing) existing.remove();
+      var el = document.createElement("div");
+      el.id = "dcs-toast";
+      el.className = "dcs-toast";
+      el.setAttribute("role", "status");
+      el.innerHTML =
+        "<strong>" +
+        String(title || "Notification").replace(/</g, "&lt;") +
+        "</strong>" +
+        (body
+          ? "<span>" + String(body).replace(/</g, "&lt;") + "</span>"
+          : "");
+      document.body.appendChild(el);
+      requestAnimationFrame(function () {
+        el.classList.add("show");
+      });
+      setTimeout(function () {
+        el.classList.remove("show");
+        setTimeout(function () {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 350);
+      }, 4500);
+    } catch (e) {}
+  }
+
+  function pushTxNotice(title, body, kind) {
+    showToast(title, body);
+    if (!window.DCS || !DCS.backend) return Promise.resolve();
+    var chain = Promise.resolve();
+    if (typeof DCS.backend.notifyMe === "function") {
+      chain = DCS.backend.notifyMe(title, body || "", kind || "tx").catch(function () {});
+    }
+    return chain.then(function () {
+      if (typeof DCS.backend.loadNotifications !== "function") return;
+      return DCS.backend.loadNotifications().then(function () {
+        if (typeof renderNotifications === "function") renderNotifications();
+      });
+    });
+  }
+
   /** Conformité listing Pi Ecosystem : auth Pi + transactions Pi only. */
   function applyEcosystemCompliance() {
     if (!isEcosystemMode()) return;
@@ -519,6 +563,7 @@
       if (typeof renderWallet === "function") renderWallet();
       if (typeof renderHistory === "function") renderHistory();
       if (typeof renderNotifications === "function") renderNotifications();
+      showToast("Dépôt Pi confirmé", "+" + res.amount + " PI crédités");
       alert("Dépôt Pi réussi : +" + res.amount + " PI crédités sur votre wallet DCS.");
     }
 
@@ -622,6 +667,7 @@
           return;
         }
         renderCourses();
+        pushTxNotice("Cours débloqué", course.title, "academy");
         alert("Cours débloqué : " + course.title);
       });
     });
@@ -741,6 +787,11 @@
         return;
       }
       form.reset();
+      pushTxNotice(
+        "Demande de dépôt",
+        amount + " PI · en attente de validation",
+        "deposit"
+      );
       alert(
         "Demande de dépôt enregistrée (#" +
           String(res.id).slice(0, 8) +
@@ -964,6 +1015,11 @@
       alert(res.error || "Achat impossible.");
       return;
     }
+    pushTxNotice(
+      "Achat Marketplace",
+      article.title + " · " + article.pricePi + " PI",
+      "market"
+    );
     alert(
       "Achat réussi !\nVous avez payé " +
         article.pricePi +
@@ -1752,6 +1808,14 @@
         }
         if (typeof renderWallet === "function") renderWallet();
         if (typeof renderHistory === "function") renderHistory();
+        pushTxNotice(
+          "Swap confirmé",
+          executed.toLocaleString("fr-FR", { maximumFractionDigits: digits }) +
+            " " +
+            to.value +
+            " reçus",
+          "swap"
+        );
         alert(
           "Swap confirmé.\nReçu : " +
             executed.toLocaleString("fr-FR", { maximumFractionDigits: digits }) +
@@ -1956,6 +2020,11 @@
         renderHistory();
         if (typeof renderWallet === "function") renderWallet();
         const data = res.data || {};
+        pushTxNotice(
+          data.p2p ? "Transfert P2P envoyé" : "Transfert enregistré",
+          qty + " " + asset.value + " · " + country.value,
+          "transfer"
+        );
         alert(
           (data.p2p
             ? "Transfert P2P instantané vers un membre DCS.\n"

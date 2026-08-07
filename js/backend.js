@@ -819,7 +819,7 @@
           if (res.error) {
             return { ok: false, error: res.error.message || "Swap échoué." };
           }
-          return Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
+          return Promise.all([self.loadWallet(), self.loadHistory(), self.loadNotifications()]).then(function () {
             return { ok: true };
           });
         });
@@ -851,7 +851,7 @@
           if (res.error) {
             return { ok: false, error: res.error.message || "Transfert échoué." };
           }
-          return Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
+          return Promise.all([self.loadWallet(), self.loadHistory(), self.loadNotifications()]).then(function () {
             return { ok: true };
           });
         });
@@ -912,6 +912,35 @@
           }
           DCS.notifications = res.data || [];
           return DCS.notifications;
+        });
+    },
+
+    /** Notification persistée (RPC) — anti-doublon côté SQL */
+    notifyMe: function (title, body, kind) {
+      var gate = this.requireClient();
+      if (!gate.ok || !DCS.user.id) return Promise.resolve({ ok: false });
+      return gate.client
+        .rpc("dcs_notify_me", {
+          p_title: title || "Notification",
+          p_body: body || "",
+          p_kind: kind || "info"
+        })
+        .then(function (res) {
+          if (res.error) {
+            /* Fallback insert direct si RPC pas encore déployé */
+            return gate.client
+              .from("notifications")
+              .insert({
+                user_id: DCS.user.id,
+                title: title || "Notification",
+                body: body || "",
+                kind: kind || "info"
+              })
+              .then(function (ins) {
+                return { ok: !ins.error };
+              });
+          }
+          return { ok: true };
         });
     },
 
