@@ -284,12 +284,15 @@
   }
 
   function getWalletAssets() {
-    if (!window.DCS || !DCS.markets) return [];
+    if (!window.DCS) return [];
     const bySymbol = {};
     (DCS.wallet || []).forEach((w) => {
       bySymbol[w.symbol] = w;
     });
-    return DCS.markets.map((m) => {
+    const markets = Array.isArray(DCS.markets) && DCS.markets.length
+      ? DCS.markets
+      : [{ symbol: "PI", name: "PI COIN", iconClass: "pi", logo: "assets/coins/pi.png" }];
+    let assets = markets.map((m) => {
       const held = bySymbol[m.symbol];
       return {
         symbol: m.symbol,
@@ -300,6 +303,22 @@
         logo: m.logo || (held && held.logo) || ""
       };
     });
+    /* Si PI n’est pas dans markets (filtre trop agressif), le rajouter depuis le wallet */
+    if (!assets.some((a) => a.symbol === "PI")) {
+      const held = bySymbol.PI;
+      assets.unshift({
+        symbol: "PI",
+        name: (held && held.name) || "PI COIN",
+        amount: held ? Number(held.amount) || 0 : 0,
+        iconClass: "pi",
+        iconText: "",
+        logo: "assets/coins/pi.png"
+      });
+    }
+    if (isEcosystemMode()) {
+      assets = assets.filter((a) => a.symbol === "PI");
+    }
+    return assets;
   }
 
   function renderWallet() {
@@ -311,8 +330,13 @@
     if (!window.DCS) return;
 
     const assets = getWalletAssets();
+    const piFromWallet = (DCS.wallet || []).find((w) => w.symbol === "PI");
     const piAsset = assets.find((w) => w.symbol === "PI");
-    const piAmount = piAsset ? piAsset.amount : 0;
+    const piAmount = piFromWallet
+      ? Number(piFromWallet.amount) || 0
+      : piAsset
+        ? piAsset.amount
+        : 0;
     const piPrice = DCS.PI_PRICE || 314159;
     const piUsd = piAmount * piPrice;
 
@@ -3347,6 +3371,8 @@
       setupMarketSearch();
     }
     if (isWallet) {
+      await DCS.backend.loadWallet();
+      await DCS.backend.loadHistory();
       renderWallet();
       setupDeposit();
       setupPiDeposit();

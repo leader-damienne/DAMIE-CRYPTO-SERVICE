@@ -118,22 +118,17 @@
     TRX: { name: "TRON", iconClass: "trx", logo: "assets/coins/trx.svg" }
   };
 
-  function emptyWallet() {
-    var symbols = Object.keys(META);
-    try {
-      if (window.DCS_CONFIG && DCS_CONFIG.piEcosystemMode !== false) {
-        symbols = ["PI"];
-      }
-    } catch (e) {}
+  function emptyWallet(symbolsOnly) {
+    var symbols = symbolsOnly && symbolsOnly.length ? symbolsOnly : Object.keys(META);
     return symbols.map(function (sym) {
-      var m = META[sym];
+      var m = META[sym] || { name: sym, iconClass: "", logo: "" };
       return {
         symbol: sym,
-        name: m.name,
+        name: m.name || sym,
         amount: 0,
-        iconClass: m.iconClass,
+        iconClass: m.iconClass || "",
         iconText: "",
-        logo: m.logo
+        logo: m.logo || ""
       };
     });
   }
@@ -199,10 +194,15 @@
             return DCS.wallet;
           }
           var map = {};
+          var symbols = Object.keys(META);
           (res.data || []).forEach(function (r) {
-            map[r.symbol] = Number(r.amount) || 0;
+            var sym = String(r.symbol || "").toUpperCase();
+            if (!sym) return;
+            map[sym] = Number(r.amount) || 0;
+            if (symbols.indexOf(sym) < 0) symbols.push(sym);
           });
-          DCS.wallet = emptyWallet().map(function (w) {
+          /* Toujours charger TOUS les soldes DB (même hors affichage Pi-only) */
+          DCS.wallet = emptyWallet(symbols).map(function (w) {
             if (map[w.symbol] != null) w.amount = map[w.symbol];
             return w;
           });

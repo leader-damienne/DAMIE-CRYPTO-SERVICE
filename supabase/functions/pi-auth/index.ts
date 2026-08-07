@@ -108,11 +108,33 @@ Deno.serve(async (req) => {
     const password = await derivePassword(piUser.uid);
     const db = admin();
 
-    const existing = await db
+    /* 1) Compte déjà lié à ce Pi uid */
+    let existing = await db
       .from("profiles")
-      .select("id, email, username")
+      .select("id, email, username, pi_uid")
       .eq("pi_uid", piUser.uid)
       .maybeSingle();
+
+    /* 2) Sinon : réutiliser un profil existant (même username Pi) pour ne PAS perdre les soldes */
+    if (!existing.data?.id && piUser.username) {
+      const byName = await db
+        .from("profiles")
+        .select("id, email, username, pi_uid")
+        .ilike("username", piUser.username)
+        .maybeSingle();
+      if (byName.data?.id && !byName.data.pi_uid) {
+        existing = byName;
+      } else if (!byName.data?.id) {
+        const byDisplay = await db
+          .from("profiles")
+          .select("id, email, username, pi_uid")
+          .ilike("display_name", piUser.username)
+          .maybeSingle();
+        if (byDisplay.data?.id && !byDisplay.data.pi_uid) {
+          existing = byDisplay;
+        }
+      }
+    }
 
     let authUserId = existing.data?.id as string | undefined;
     let loginEmail = (existing.data?.email as string) || email;
@@ -120,15 +142,19 @@ Deno.serve(async (req) => {
     if (authUserId) {
       const upd = await db.auth.admin.updateUserById(authUserId, {
         password,
-        email: loginEmail,
+        /* Garder l’e-mail existant s’il n’est pas synthétique — sinon e-mail Pi */
+        email: loginEmail && !/@auth\.dcs\.app$/i.test(loginEmail) ? loginEmail : email,
         user_metadata: {
           pi_uid: piUser.uid,
           pi_username: piUser.username,
-          username: piUser.username,
+          username: existing.data?.username || piUser.username,
           auth_provider: "pi",
         },
       });
       if (upd.error) throw new Error(upd.error.message);
+      if (!loginEmail || /@auth\.dcs\.app$/i.test(loginEmail)) {
+        loginEmail = email;
+      }
     } else {
       const created = await db.auth.admin.createUser({
         email,
