@@ -1048,6 +1048,118 @@
     });
   }
 
+  /* Prix live Binance pour cryptos ; PI / XOF / XAF restent gérés DCS */
+  const LIVE_BINANCE_MAP = {
+    BTC: "BTCUSDT",
+    ETH: "ETHUSDT",
+    BNB: "BNBUSDT",
+    SOL: "SOLUSDT",
+    XRP: "XRPUSDT",
+    XLM: "XLMUSDT",
+    TRX: "TRXUSDT",
+    USDT: "USDCUSDT"
+  };
+
+  function setMarketsLiveStatus(ok, detail) {
+    const el = document.getElementById("markets-live-status");
+    if (!el) return;
+    el.textContent = ok ? "Live · " + (detail || "Binance") : detail || "Hors ligne · prix de secours";
+    el.classList.toggle("is-live", !!ok);
+    el.classList.toggle("is-offline", !ok);
+  }
+
+  async function refreshLiveMarkets() {
+    if (!window.DCS || !DCS.markets) return false;
+    const symbols = Object.keys(LIVE_BINANCE_MAP).map((k) => LIVE_BINANCE_MAP[k]);
+    const url =
+      "https://api.binance.com/api/v3/ticker/24hr?symbols=" +
+      encodeURIComponent(JSON.stringify(symbols.concat(["EURUSDT"])));
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const rows = await res.json();
+      if (!Array.isArray(rows)) throw new Error("Réponse invalide");
+
+      const bySym = {};
+      rows.forEach((r) => {
+        bySym[r.symbol] = r;
+      });
+
+      /* Parité CFA : 1 EUR = 655,957 XOF/XAF (UEMOA/CEMAC) */
+      const eur = bySym.EURUSDT;
+      if (eur && Number(eur.lastPrice) > 0) {
+        const xofPerUsd = 655.957 / Number(eur.lastPrice);
+        DCS.CFA_PER_USD = Math.round(xofPerUsd);
+        ["xof", "xaf"].forEach((id) => {
+          const m = DCS.markets.find((x) => x.id === id);
+          if (m) {
+            m.price = 1 / xofPerUsd;
+            m.high = m.price;
+            m.low = m.price;
+            m.change24h = 0;
+          }
+        });
+      }
+
+      Object.keys(LIVE_BINANCE_MAP).forEach((sym) => {
+        const pair = LIVE_BINANCE_MAP[sym];
+        const tick = bySym[pair];
+        const m = DCS.markets.find((x) => x.symbol === sym);
+        if (!tick || !m) return;
+        const price = Number(tick.lastPrice);
+        const change = Number(tick.priceChangePercent);
+        const high = Number(tick.highPrice);
+        const low = Number(tick.lowPrice);
+        const vol = Number(tick.quoteVolume);
+        if (!(price > 0)) return;
+        if (sym === "USDT") {
+          /* approx USDT ≈ USD via USDC */
+          m.price = price > 0 ? price : 1;
+          m.change24h = change || 0;
+        } else {
+          m.price = price;
+          m.change24h = change;
+          m.high = high || price;
+          m.low = low || price;
+          if (vol > 0) m.volume = vol;
+        }
+      });
+
+      /* PI COIN reste fixe DCS */
+      const pi = DCS.markets.find((x) => x.id === "pi");
+      if (pi) {
+        pi.price = DCS.PI_PRICE || 314159;
+        pi.change24h = 0;
+        pi.high = pi.price;
+        pi.low = pi.price;
+        pi.stable = true;
+      }
+
+      DCS.marketsLiveAt = Date.now();
+      setMarketsLiveStatus(true, new Date().toLocaleTimeString("fr-FR"));
+      if (document.getElementById("ticker-track")) renderTicker();
+      if (document.getElementById("pi-price")) renderPiSpotlight();
+      if (document.getElementById("markets-body")) {
+        const input = document.getElementById("market-search");
+        renderMarkets(input ? input.value : "");
+      }
+      if (document.getElementById("wallet-assets") && typeof renderWallet === "function") {
+        renderWallet();
+      }
+      return true;
+    } catch (err) {
+      setMarketsLiveStatus(false, "Prix de secours (API indisponible)");
+      return false;
+    }
+  }
+
+  function startLiveMarkets() {
+    refreshLiveMarkets();
+    if (window.__dcsMarketsTimer) clearInterval(window.__dcsMarketsTimer);
+    window.__dcsMarketsTimer = setInterval(refreshLiveMarkets, 60000);
+  }
+
   function getFeePercent(kind, usdValue) {
     if (DCS.fees && typeof DCS.fees.percent === "number") return DCS.fees.percent;
     const tiers = (DCS.fees && DCS.fees[kind]) || [];
@@ -2817,7 +2929,10 @@
     const page = pageName();
     if (!requireAuth(page)) return;
 
-    if (document.getElementById("ticker-track")) renderTicker();
+    if (document.getElementById("ticker-track")) {
+      renderTicker();
+      startLiveMarkets();
+    }
 
     /* Détection par DOM + nom de page (plus fiable) */
     const isSwap = page === "swap.html" || !!document.getElementById("swap-from");
