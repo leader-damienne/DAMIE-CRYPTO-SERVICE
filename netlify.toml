@@ -1,11 +1,12 @@
 [build]
   publish = "."
 
-[[headers]]
-  for = "/validation-key.txt"
-  [headers.values]
-    Content-Type = "text/plain; charset=utf-8"
-    Cache-Control = "public, max-age=0, must-revalidate"
+# Pi Domain Ownership — force-serve key even if static file missing from publish
+[[redirects]]
+  from = "/validation-key.txt"
+  to = "https://raw.githubusercontent.com/leader-damienne/DAMIE-CRYPTO-SERVICE/main/validation-key.txt"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/signin"
