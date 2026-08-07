@@ -651,6 +651,26 @@ ul {
   font-size: 0.85rem;
 }
 
+.markets-live-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.markets-live-status.is-live {
+  color: #0ecb81;
+  border-color: rgba(14, 203, 129, 0.35);
+}
+
+.markets-live-status.is-offline {
+  color: #f6465d;
+  border-color: rgba(246, 70, 93, 0.35);
+}
+
 .vision-section {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
