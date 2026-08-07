@@ -84,10 +84,10 @@ ul {
 }
 
 .container {
-  width: min(100% - 2rem, var(--max));
-  max-width: 100%;
+  width: 100%;
+  max-width: var(--max);
   margin-inline: auto;
-  padding-inline: 0;
+  padding-inline: 1rem;
   box-sizing: border-box;
 }
 
@@ -157,8 +157,11 @@ ul {
   align-items: center;
   flex-wrap: nowrap;
   gap: 1.5rem;
-  width: min(100% - 2rem, var(--max));
+  width: 100%;
+  max-width: var(--max);
   margin-inline: auto;
+  padding-inline: 1rem;
+  box-sizing: border-box;
 }
 
 .brand {
@@ -1301,6 +1304,11 @@ select.form-control {
   margin-bottom: 2rem;
 }
 
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+}
+
 .footer-brand img {
   width: 72px;
   height: 72px;
@@ -1411,6 +1419,59 @@ select.form-control {
   }
 }
 
+@media (max-width: 720px) {
+  .header-inner,
+  .container {
+    width: 100%;
+    max-width: 100%;
+    padding-inline: 1rem;
+    margin-inline: auto;
+    box-sizing: border-box;
+  }
+
+  .page-hero {
+    text-align: center;
+  }
+
+  .page-hero p {
+    margin-inline: auto;
+  }
+
+  .auth-panel {
+    margin-inline: auto;
+    text-align: left;
+  }
+
+  .hero-pi .hero-grid > div:first-child {
+    text-align: center;
+  }
+
+  .hero-ctas {
+    justify-content: center;
+  }
+
+  .hero-brand-line {
+    justify-content: center;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.35rem;
+  }
+
+  .site-footer .footer-grid {
+    text-align: center;
+  }
+
+  .footer-brand {
+    align-items: center;
+    text-align: center;
+  }
+}
+
 @media (max-width: 560px) {
   .modules {
     grid-template-columns: 1fr;
@@ -1426,11 +1487,7 @@ select.form-control {
 
   .header-inner {
     gap: 0.65rem;
-    width: min(100% - 1.25rem, var(--max));
-  }
-
-  .container {
-    width: min(100% - 1.25rem, var(--max));
+    justify-content: space-between;
   }
 
   .page-hero h1,
@@ -1443,6 +1500,11 @@ select.form-control {
 
   .btn {
     max-width: 100%;
+  }
+
+  #pi-login-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .panel,
