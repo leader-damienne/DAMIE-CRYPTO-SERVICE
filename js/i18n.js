@@ -108,8 +108,6 @@
       "page.join.title": "Rejoindre",
       "page.join.sub": "Inscription via lien de parrainage.",
       "lang.title": "Langue de l'application",
-      "lang.help":
-        "Choisissez la langue d'affichage de l'interface. DAMIE CRYPTO SERVICE et LEADER DAMIENNE restent inchangés dans toutes les langues.",
       "lang.label": "Langue",
       "lang.current": "Langue actuelle",
       "lang.save": "Enregistrer",
@@ -216,8 +214,6 @@
       "page.join.title": "Join",
       "page.join.sub": "Sign up via referral link.",
       "lang.title": "App language",
-      "lang.help":
-        "Choose the interface display language. DAMIE CRYPTO SERVICE and LEADER DAMIENNE stay the same in every language.",
       "lang.label": "Language",
       "lang.current": "Current language",
       "lang.save": "Save",
@@ -324,8 +320,6 @@
       "page.join.title": "Juntar-se",
       "page.join.sub": "Registo via link de indicação.",
       "lang.title": "Idioma da aplicação",
-      "lang.help":
-        "Escolha o idioma da interface. DAMIE CRYPTO SERVICE e LEADER DAMIENNE permanecem iguais em todos os idiomas.",
       "lang.label": "Idioma",
       "lang.current": "Idioma atual",
       "lang.save": "Guardar",
@@ -432,8 +426,6 @@
       "page.join.title": "انضم",
       "page.join.sub": "التسجيل عبر رابط الإحالة.",
       "lang.title": "لغة التطبيق",
-      "lang.help":
-        "اختر لغة واجهة العرض. يبقي DAMIE CRYPTO SERVICE و LEADER DAMIENNE دون تغيير في كل اللغات.",
       "lang.label": "اللغة",
       "lang.current": "اللغة الحالية",
       "lang.save": "حفظ",
@@ -682,23 +674,10 @@
     var panel = document.getElementById("profile-language");
     if (!panel) return;
     var h3 = panel.querySelector("h3");
-    var help = panel.querySelector("p");
     var label = panel.querySelector('label[for="app-language"]');
     var current = document.getElementById("lang-current-label");
     var save = document.getElementById("save-language");
     if (h3) h3.textContent = t("lang.title", lang);
-    if (help) {
-      help.innerHTML =
-        t("lang.help", lang)
-          .replace(
-            "DAMIE CRYPTO SERVICE",
-            '<strong style="color:var(--gold-bright)" translate="no">DAMIE CRYPTO SERVICE</strong>'
-          )
-          .replace(
-            "LEADER DAMIENNE",
-            '<strong style="color:var(--gold-bright)" translate="no">LEADER DAMIENNE</strong>'
-          );
-    }
     if (label) label.textContent = t("lang.label", lang);
     if (current) current.textContent = t("lang.current", lang);
     if (save) save.textContent = t("lang.save", lang);
