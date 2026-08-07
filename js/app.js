@@ -115,23 +115,8 @@
       }
     }
 
-    /* Profil : masquer e-mail / téléphone / mot de passe / KYC docs */
-    [
-      "link-gmail",
-      "link-phone",
-      "change-password-form",
-      "start-kyc",
-      "reset-kyc"
-    ].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const panel = el.closest(".panel") || el.closest("form") || el;
-      if (panel) panel.style.display = "none";
-    });
-    document.querySelectorAll(".kyc-steps").forEach(function (el) {
-      const panel = el.closest(".panel");
-      if (panel) panel.style.display = "none";
-    });
+    /* Profil : masquer e-mail / téléphone / mot de passe / KYC (lignes, pas tout le panneau) */
+    /* (appliqué plus bas après le wallet, pour garder l’upload avatar) */
 
     /* Contact : pas de collecte e-mail */
     const contactEmail = document.getElementById("contact-email");
@@ -169,6 +154,33 @@
       const piWrap = piBtn.closest(".panel");
       if (piWrap) piWrap.style.display = "";
     }
+
+    /* Profil : ne pas cacher tout le panneau sécurité (avatar upload) — masquer les lignes ciblées */
+    ["link-gmail", "link-phone"].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const row = el.closest(".status-row") || el.parentElement;
+      if (row) row.style.display = "none";
+    });
+    const pwForm = document.getElementById("change-password-form");
+    if (pwForm) pwForm.style.display = "none";
+    const startKyc = document.getElementById("start-kyc");
+    if (startKyc) {
+      const kycRow = startKyc.closest(".status-row") || startKyc.parentElement;
+      if (kycRow) kycRow.style.display = "none";
+    }
+    const resetKyc = document.getElementById("reset-kyc");
+    if (resetKyc) resetKyc.style.display = "none";
+    document.querySelectorAll(".kyc-steps").forEach(function (el) {
+      const panel = el.closest(".panel");
+      if (panel) panel.style.display = "none";
+    });
+    const editEmail = document.getElementById("edit-email");
+    if (editEmail) {
+      const eg = editEmail.closest(".form-group");
+      if (eg) eg.style.display = "none";
+    }
+  }
 
   function sparkPath(seed, up, flat) {
     const pts = [];
@@ -283,7 +295,11 @@
               <polyline fill="none" stroke="${stroke}" stroke-width="1.8" points="${sparkPath(m.symbol.charCodeAt(0), up, !!m.stable)}" />
             </svg>
           </td>
-          <td><button class="trade-btn" type="button" data-swap="${m.symbol}">Swap</button></td>
+          <td>${
+            isEcosystemMode()
+              ? `<a class="trade-btn" href="wallet.html" style="display:inline-block;text-decoration:none">Wallet</a>`
+              : `<button class="trade-btn" type="button" data-swap="${m.symbol}">Swap</button>`
+          }</td>
         </tr>`;
       })
       .join("");
@@ -2846,7 +2862,7 @@
   }
 
   /* Pages accessibles sans compte */
-  const PUBLIC_PAGES = ["signup.html", "signin.html", "join.html", "contact.html"];
+  const PUBLIC_PAGES = ["signup.html", "signin.html", "join.html", "contact.html", "privacy.html", "terms.html"];
 
   function normalizePage(name) {
     let p = String(name || "")
@@ -3361,19 +3377,20 @@
   function detectPiBrowser() {
     try {
       const ua = navigator.userAgent || "";
+      /* Ne pas utiliser !!window.Pi : le SDK charge aussi hors Pi Browser */
       const isPi =
-        !!window.Pi ||
         /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
         /\.pinet\.com$/i.test(location.hostname) ||
         /pinet\.com/i.test(location.hostname);
-      /* Aussi sur mobile étroit : même correctifs anti-décalage */
       const narrow =
         (window.visualViewport && visualViewport.width < 900) ||
         window.innerWidth < 900 ||
         /Android|iPhone|iPad|Mobile/i.test(ua);
-      if (isPi || narrow) {
+      if (isPi) {
         document.documentElement.classList.add("pi-webview");
         if (document.body) document.body.classList.add("is-pi-browser");
+      } else if (narrow) {
+        document.documentElement.classList.add("pi-webview");
       }
       document.documentElement.style.width = "100%";
       document.documentElement.style.maxWidth = "100%";
@@ -3437,7 +3454,7 @@
         await DCS.backend.loadHistory();
       } catch (e) {}
       renderWallet();
-      setupDeposit();
+      if (!isEcosystemMode()) setupDeposit();
       setupPiDeposit();
       if (!isEcosystemMode()) setupDepositRequest();
       /* Re-assurer le bouton Pi visible après compliance */

@@ -28,3 +28,6 @@ _netlify_deploy/
 # Full-size image backups
 *.full.png
 
+# Ancienne copie imbriquée (ne pas republier)
+/DamieCryptoService/
+

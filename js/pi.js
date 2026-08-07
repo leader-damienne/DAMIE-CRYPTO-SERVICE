@@ -66,8 +66,23 @@
   function ensurePiSdk() {
     return new Promise(function (resolve, reject) {
       if (isPiBrowser()) return resolve(global.Pi);
-      var existing = document.querySelector('script[data-pi-sdk="1"]');
-      if (existing && isPiBrowser()) return resolve(global.Pi);
+      var existing =
+        document.querySelector('script[data-pi-sdk="1"]') ||
+        document.querySelector('script[src*="sdk.minepi.com/pi-sdk"]');
+      if (existing) {
+        var tries = 0;
+        var timer = setInterval(function () {
+          tries += 1;
+          if (isPiBrowser()) {
+            clearInterval(timer);
+            resolve(global.Pi);
+          } else if (tries > 40) {
+            clearInterval(timer);
+            reject(new Error("SDK Pi chargé mais window.Pi indisponible (ouvrez dans Pi Browser)."));
+          }
+        }, 100);
+        return;
+      }
       var s = document.createElement("script");
       s.src = "https://sdk.minepi.com/pi-sdk.js";
       s.async = true;
@@ -215,8 +230,13 @@
                   memo: memo
                 }).then(function (res) {
                   if (!res.ok) {
-                    resolve({ ok: false, error: res.error || "Approve échoué." });
+                    resolve({ ok: false, error: res.error || "Approve échoué (vérifiez PI_API_KEY / JWT OFF)." });
                   }
+                }).catch(function (err) {
+                  resolve({
+                    ok: false,
+                    error: (err && err.message) || "Erreur réseau approve Pi."
+                  });
                 });
               },
               onReadyForServerCompletion: function (paymentId, txid) {

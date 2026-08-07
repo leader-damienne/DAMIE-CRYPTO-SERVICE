@@ -1,6 +1,5 @@
 /* Redirection auth + correctif viewport Pi Browser / WebView */
 (function () {
-  /* Pi Browser / Android WebView : forcer un vrai viewport mobile */
   try {
     var content =
       "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
@@ -43,14 +42,7 @@
   if (!/\.html$/i.test(path)) path += ".html";
   if (PUBLIC[path]) return;
 
-  function hasSession() {
-    try {
-      var raw = localStorage.getItem("dcs_session");
-      if (raw) {
-        var s = JSON.parse(raw);
-        if (s && (s.username || s.userId)) return true;
-      }
-    } catch (e) {}
+  function hasSupabaseSession() {
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
@@ -64,6 +56,10 @@
     return false;
   }
 
-  if (hasSession()) return;
+  /* Ne plus faire confiance à dcs_session seul (peut être périmé) */
+  if (hasSupabaseSession()) return;
+  try {
+    localStorage.removeItem("dcs_session");
+  } catch (e3) {}
   location.replace("signin.html?next=" + encodeURIComponent(path));
 })();

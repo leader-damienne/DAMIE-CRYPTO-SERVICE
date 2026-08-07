@@ -27,3 +27,9 @@
   from = "/contact"
   to = "/contact.html"
   status = 200
+
+# Ancienne arborescence imbriquée → site racine
+[[redirects]]
+  from = "/DamieCryptoService/*"
+  to = "/:splat"
+  status = 301
