@@ -1,0 +1,10 @@
+# Cloudflare Pages — redirects (équivalent netlify.toml)
+
+# Auth / pages courtes
+/signin   /signin.html   200
+/signup   /signup.html   200
+/join     /join.html     200
+/contact  /contact.html  200
+
+# Ancienne copie imbriquée
+/DamieCryptoService/*  /:splat  301

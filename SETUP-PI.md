@@ -14,7 +14,8 @@ Supabase → **SQL Editor** → exécuter dans l’ordre :
 1. Ouvrez le **Pi Browser**
 2. Allez sur `pi://develop.pinet.com` (Developer Portal)
 3. Créez une app **DAMIE CRYPTO SERVICE**
-4. URL : `https://damie-crypto-service.netlify.app`
+4. URL : ton URL Cloudflare Pages (ex. `https://damie-crypto-service.pages.dev`) ou domaine custom  
+   (voir `SETUP-CLOUDFLARE.md` — anciennement Netlify)
 5. Sandbox pour les tests
 6. Copiez la **API Key** (Server) — **jamais dans le front**
 
@@ -40,7 +41,7 @@ piEcosystemMode: true     // listing Pi Apps : auth Pi + Pi only
 
 ## 5. Tester (Pi Browser)
 
-1. `https://damie-crypto-service.netlify.app/signin.html`
+1. Ton URL Cloudflare / domaine (`…/signin.html`) — voir `SETUP-CLOUDFLARE.md`
 2. **Continuer avec Pi**
 3. Wallet → **Déposer via Pi Browser**
 4. Solde PI + historique « Dépôt Pi »

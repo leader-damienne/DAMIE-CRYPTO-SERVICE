@@ -4,8 +4,10 @@ Plateforme web — wallet PI COIN, swap, transferts, marketplace, academy et par
 
 ## Lien
 
-**https://damie-crypto-service.netlify.app/**  
+**Production** : hébergement via **Cloudflare Pages** (voir [`SETUP-CLOUDFLARE.md`](SETUP-CLOUDFLARE.md)).  
 Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE
+
+*(Ancienne URL Netlify éventuelle : `damie-crypto-service.netlify.app` — à remplacer dans le Pi Developer Portal après migration.)*
 
 ## Mode production
 
@@ -27,15 +29,14 @@ Sans cette config, les pages Connexion / Inscription affichent un message d’in
 |--------|---------|
 | `signup.html`, `signin.html`, `join.html`, `contact.html` | wallet, swap, transfer, marketplace, academy, learning, community, parrainage, profil, accueil |
 
-## Republier (Netlify)
+## Republier (Cloudflare Pages)
 
-Connectez le dépôt GitHub au site Netlify : chaque push redéploie.
-
-Ou : [Netlify Drop](https://app.netlify.com/drop) — déposer le dossier **racine** (`index.html`, `js/`, `css/`, …).
+Connecte le dépôt GitHub à **Cloudflare Pages** : chaque push redéploie.  
+Guide : [`SETUP-CLOUDFLARE.md`](SETUP-CLOUDFLARE.md).
 
 ## Parrainage
 
-`https://damie-crypto-service.netlify.app/join.html?ref=VOTRE_CODE&u=pseudo`
+`https://TON-DOMAINE-CLOUDFLARE/join.html?ref=VOTRE_CODE&u=pseudo`
 
 ## En local
 
