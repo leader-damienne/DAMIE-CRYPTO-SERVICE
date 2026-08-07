@@ -1541,14 +1541,29 @@
     }
 
     const kycEl = document.getElementById("kyc-status");
+    const kycHint = document.getElementById("kyc-status-hint");
+    const resetKycBtn = document.getElementById("reset-kyc");
     if (kycEl) {
       const map = {
         verified: ["on", "Vérifié"],
-        pending: ["off", "En attente"],
+        pending: ["off", "En attente de revue"],
         none: ["off", "Non démarré"]
       };
-      const s = map[u.kyc] || map.none;
+      const key = u.kyc === "pending" || u.kyc === "verified" ? u.kyc : "none";
+      const s = map[key];
       kycEl.innerHTML = `<span class="status-dot ${s[0]}"></span>${s[1]}`;
+      if (kycHint) {
+        if (key === "pending") {
+          kycHint.textContent =
+            "Un statut « en attente » signifie qu'un dossier a été enregistré. S'il n'y a pas eu de vrais documents, réinitialisez ci-dessous.";
+        } else if (key === "verified") {
+          kycHint.textContent = "Identité validée par l'équipe DCS.";
+        } else {
+          kycHint.textContent =
+            "Ajoutez la pièce d'identité + le selfie, puis cliquez sur Soumettre. Sans fichiers, le statut reste « Non démarré ».";
+        }
+      }
+      if (resetKycBtn) resetKycBtn.hidden = key === "none";
     }
 
     function linkStatus(id, linked, okLabel, koLabel) {
@@ -1764,16 +1779,34 @@
         const hasSelfie = selfieFile && selfieFile.files && selfieFile.files[0];
         if (!hasId || !hasSelfie) {
           alert(
-            "Pour soumettre un KYC, ajoutez au moins une pièce d'identité et un selfie. Sans documents, le dossier ne peut pas être vérifié."
+            "Pour soumettre un KYC, ajoutez au moins une pièce d'identité et un selfie. Sans documents, le statut reste « Non démarré »."
           );
           return;
         }
         DCS.user.kyc = "pending";
+        try {
+          localStorage.setItem("dcs_kyc_docs_" + (DCS.user.id || ""), "1");
+        } catch (e) {}
         if (window.DCS && DCS.auth) await DCS.auth.persistCurrentUser();
         renderProfile();
         alert(
           "Dossier KYC soumis avec documents — statut : en attente de vérification manuelle par l'équipe DCS."
         );
+      });
+    }
+
+    const resetKycBtn = document.getElementById("reset-kyc");
+    if (resetKycBtn) {
+      resetKycBtn.addEventListener("click", async () => {
+        const ok = confirm("Remettre le KYC à « Non démarré » ?");
+        if (!ok) return;
+        DCS.user.kyc = "none";
+        try {
+          localStorage.removeItem("dcs_kyc_docs_" + (DCS.user.id || ""));
+        } catch (e) {}
+        if (window.DCS && DCS.auth) await DCS.auth.persistCurrentUser();
+        renderProfile();
+        alert("Statut KYC réinitialisé.");
       });
     }
 
