@@ -1150,29 +1150,71 @@
   function setupTransfer() {
     const asset = document.getElementById("tr-asset");
     const country = document.getElementById("tr-country");
+    const method = document.getElementById("tr-method");
+    const methodHint = document.getElementById("tr-method-hint");
     const zoneHint = document.getElementById("tr-zone-hint");
     const receive = document.getElementById("tr-receive");
     const amount = document.getElementById("tr-amount");
     const feeBox = document.getElementById("tr-fee");
     const confirmBtn = document.getElementById("tr-confirm");
+    const destInput = document.getElementById("tr-dest");
     if (!asset || !country) return;
 
     let lastFee = null;
 
+    function countriesForAsset(sym) {
+      if (sym === "XOF" || sym === "XAF") {
+        return DCS.corridors[sym] || [];
+      }
+      return (DCS.africaPayout || []).map((c) => c.name);
+    }
+
+    function fillMethods() {
+      if (!method) return;
+      const info = DCS.getCountryInfo && DCS.getCountryInfo(country.value);
+      const list = (info && info.methods) || ["Banque locale"];
+      method.innerHTML = list
+        .map((m) => `<option value="${m}">${m}</option>`)
+        .join("");
+      if (methodHint) {
+        methodHint.textContent = info
+          ? "Zone " +
+            info.zone +
+            " · devise locale indicative : " +
+            info.currency +
+            "."
+          : "";
+      }
+      if (destInput) {
+        const m = method.value || "";
+        destInput.placeholder = /banque/i.test(m)
+          ? "IBAN / compte bancaire"
+          : "Numéro Mobile Money du destinataire";
+      }
+    }
+
     function fillCountries() {
       const sym = asset.value;
-      const list =
-        DCS.corridors[sym] ||
-        [].concat(DCS.corridors.XOF, DCS.corridors.XAF);
-      country.innerHTML = list.map((c) => `<option value="${c}">${c}</option>`).join("");
+      const list = countriesForAsset(sym);
+      const prev = country.value;
+      country.innerHTML = list
+        .map((c) => {
+          const info = DCS.getCountryInfo && DCS.getCountryInfo(c);
+          const label = info ? c + " · " + info.zone : c;
+          return `<option value="${c}">${label}</option>`;
+        })
+        .join("");
+      if (prev && list.includes(prev)) country.value = prev;
+      fillMethods();
       updateHint();
     }
 
     function updateHint() {
       const sym = asset.value;
       const dest = country.value;
-      const inXof = DCS.corridors.XOF.includes(dest);
-      const inXaf = DCS.corridors.XAF.includes(dest);
+      const info = DCS.getCountryInfo && DCS.getCountryInfo(dest);
+      const inXof = (DCS.corridors.XOF || []).includes(dest);
+      const inXaf = (DCS.corridors.XAF || []).includes(dest);
       let msg = "";
       if (sym === "XOF" && inXaf) {
         msg = "Transfert transfrontalier XOF → XAF (UEMOA → CEMAC). Conversion 1:1 indicative.";
@@ -1182,13 +1224,23 @@
         msg =
           "Transfert local " +
           sym +
-          " dans la zone " +
-          (inXof ? "UEMOA" : inXaf ? "CEMAC" : "Afrique") +
+          (info ? " · " + info.zone : "") +
           ".";
       } else if (sym === "PI") {
-        msg = "Transfert en PI COIN ($314,159) — convertible en XOF/XAF à l'arrivée.";
+        msg =
+          "Transfert en PI COIN ($314,159) vers " +
+          dest +
+          " — convertible / payable via " +
+          ((method && method.value) || "Mobile Money") +
+          ".";
       } else {
-        msg = "Transfert en " + sym + " vers " + dest + ".";
+        msg =
+          "Transfert en " +
+          sym +
+          " vers " +
+          dest +
+          (method && method.value ? " via " + method.value : "") +
+          ".";
       }
       if (zoneHint) zoneHint.textContent = msg;
 
@@ -1203,6 +1255,10 @@
           const cfa = qty * DCS.PI_PRICE * (DCS.CFA_PER_USD || 600);
           receive.value = cfa
             ? cfa.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " " + outSym
+            : "";
+        } else if (sym === "PI" && info && info.currency && info.currency !== "XOF" && info.currency !== "XAF") {
+          receive.value = qty
+            ? fmt.amount(qty) + " PI → payout " + info.currency + " (indicatif)"
             : "";
         } else if (fromM && (outSym === "XOF" || outSym === "XAF") && sym !== outSym && sym !== "PI") {
           const toM = DCS.markets.find((m) => m.symbol === outSym);
@@ -1220,15 +1276,28 @@
     }
 
     asset.addEventListener("change", fillCountries);
-    country.addEventListener("change", updateHint);
+    country.addEventListener("change", () => {
+      fillMethods();
+      updateHint();
+    });
+    if (method) method.addEventListener("change", updateHint);
     if (amount) amount.addEventListener("input", updateHint);
 
     if (confirmBtn) {
       confirmBtn.addEventListener("click", async () => {
         const qty = parseFloat(amount && amount.value) || 0;
-        const dest = (document.getElementById("tr-dest") || {}).value || "";
+        const dest = (destInput && destInput.value) || "";
+        const payMethod = (method && method.value) || "";
         if (qty <= 0) {
           alert("Indiquez un montant valide.");
+          return;
+        }
+        if (!dest.trim()) {
+          alert("Indiquez l'identifiant / numéro du destinataire.");
+          return;
+        }
+        if (!payMethod) {
+          alert("Choisissez un moyen de paiement.");
           return;
         }
         if (!lastFee) updateHint();
@@ -1240,7 +1309,12 @@
         if (!deductPiFee(lastFee.feePi)) return;
         confirmBtn.disabled = true;
         const detail =
-          asset.value + " → " + country.value + (dest ? " · " + dest : "");
+          asset.value +
+          " → " +
+          country.value +
+          " · " +
+          payMethod +
+          (dest ? " · " + dest.trim() : "");
         const res = await DCS.backend.transfer(
           asset.value,
           qty,
@@ -1255,10 +1329,14 @@
         renderHistory();
         if (typeof renderWallet === "function") renderWallet();
         alert(
-          "Transfert enregistré.\nFrais prélevés : " +
-            formatPiFee(lastFee.feePi) +
-            "\nDestination : " +
-            country.value
+          "Transfert enregistré.\nPays : " +
+            country.value +
+            "\nMoyen : " +
+            payMethod +
+            "\nDestinataire : " +
+            dest.trim() +
+            "\nFrais : " +
+            formatPiFee(lastFee.feePi)
         );
       });
     }

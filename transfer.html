@@ -47,7 +47,7 @@
   <main class="container">
     <div class="page-hero">
       <h1>DCS <span>Transfer</span></h1>
-      <p>Transferts transfrontaliers en XOF, XAF et PI COIN. Frais : 1 % en PI COIN.</p>
+      <p>Transferts vers l'Afrique via Mobile Money (MTN MoMo, Orange Money, Wave, M-Pesa…). Frais : 1 % en PI COIN.</p>
     </div>
 
     <div class="grid-2" style="padding-bottom:3rem;max-width:960px;margin-inline:auto">
@@ -68,8 +68,13 @@
         </div>
         <p id="tr-zone-hint" style="font-size:0.8rem;color:var(--gold-muted);margin:-0.35rem 0 1rem"></p>
         <div class="form-group">
+          <label for="tr-method">Moyen de paiement (arrivée)</label>
+          <select id="tr-method" class="form-control"></select>
+        </div>
+        <p id="tr-method-hint" style="font-size:0.78rem;color:var(--muted);margin:-0.35rem 0 1rem"></p>
+        <div class="form-group">
           <label for="tr-dest">Identifiant destinataire</label>
-          <input id="tr-dest" class="form-control" type="text" placeholder="Pseudo DCS, téléphone ou adresse" />
+          <input id="tr-dest" class="form-control" type="text" placeholder="Numéro Mobile Money, pseudo DCS…" />
         </div>
         <div class="form-group">
           <label for="tr-amount">Montant</label>
@@ -84,18 +89,18 @@
       </div>
       <div>
         <div class="panel">
-          <h3>Zones CFA</h3>
+          <h3>Zones & Mobile Money</h3>
           <div class="asset-row">
-            <div><strong>XOF · UEMOA</strong><div style="font-size:0.78rem;color:var(--muted)">Sénégal, Côte d'Ivoire, Bénin, Togo, Mali…</div></div>
+            <div><strong>XOF · UEMOA</strong><div style="font-size:0.78rem;color:var(--muted)">Wave, Orange Money, MTN MoMo, Moov…</div></div>
             <span class="stable-pill">Ouest</span>
           </div>
           <div class="asset-row">
-            <div><strong>XAF · CEMAC</strong><div style="font-size:0.78rem;color:var(--muted)">Cameroun, Gabon, Tchad, Congo…</div></div>
+            <div><strong>XAF · CEMAC</strong><div style="font-size:0.78rem;color:var(--muted)">MTN MoMo, Orange Money, Airtel Money…</div></div>
             <span class="stable-pill">Centre</span>
           </div>
           <div class="asset-row">
-            <div><strong>XOF ↔ XAF</strong><div style="font-size:0.78rem;color:var(--muted)">Conversion transfrontalière 1:1 indicative</div></div>
-            <span class="stable-pill">Cross</span>
+            <div><strong>Afrique élargie</strong><div style="font-size:0.78rem;color:var(--muted)">M-Pesa, Telebirr, EcoCash, OPay… selon le pays</div></div>
+            <span class="stable-pill">54 pays</span>
           </div>
         </div>
         <div class="panel">

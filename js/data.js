@@ -334,14 +334,106 @@ DCS.community = [
 /* Historique chargé depuis Supabase */
 DCS.history = [];
 
+/* Pays africains + Mobile Money disponibles à l'arrivée */
+DCS.africaPayout = [
+  /* UEMOA — XOF */
+  { name: "Bénin", zone: "UEMOA", currency: "XOF", methods: ["MTN MoMo", "Moov Money"] },
+  { name: "Burkina Faso", zone: "UEMOA", currency: "XOF", methods: ["Orange Money", "Moov Money"] },
+  { name: "Côte d'Ivoire", zone: "UEMOA", currency: "XOF", methods: ["Orange Money", "MTN MoMo", "Moov Money", "Wave"] },
+  { name: "Guinée-Bissau", zone: "UEMOA", currency: "XOF", methods: ["Orange Money"] },
+  { name: "Mali", zone: "UEMOA", currency: "XOF", methods: ["Orange Money", "Moov Money", "Wave"] },
+  { name: "Niger", zone: "UEMOA", currency: "XOF", methods: ["Airtel Money", "Orange Money", "Moov Money"] },
+  { name: "Sénégal", zone: "UEMOA", currency: "XOF", methods: ["Wave", "Orange Money", "Free Money"] },
+  { name: "Togo", zone: "UEMOA", currency: "XOF", methods: ["Flooz (Moov)", "TMoney (Togocel)"] },
+  /* CEMAC — XAF */
+  { name: "Cameroun", zone: "CEMAC", currency: "XAF", methods: ["MTN MoMo", "Orange Money"] },
+  { name: "Centrafrique", zone: "CEMAC", currency: "XAF", methods: ["Orange Money"] },
+  { name: "Congo", zone: "CEMAC", currency: "XAF", methods: ["Airtel Money", "MTN MoMo"] },
+  { name: "Gabon", zone: "CEMAC", currency: "XAF", methods: ["Airtel Money", "Moov Money"] },
+  { name: "Guinée équatoriale", zone: "CEMAC", currency: "XAF", methods: ["Muni Money"] },
+  { name: "Tchad", zone: "CEMAC", currency: "XAF", methods: ["Airtel Money", "Moov Money"] },
+  /* Afrique de l'Ouest (hors UEMOA) */
+  { name: "Cabo Verde", zone: "Afrique de l'Ouest", currency: "CVE", methods: ["vinti4", "Banque locale"] },
+  { name: "Gambie", zone: "Afrique de l'Ouest", currency: "GMD", methods: ["Wave", "Africell Money"] },
+  { name: "Ghana", zone: "Afrique de l'Ouest", currency: "GHS", methods: ["MTN MoMo", "Vodafone Cash", "AirtelTigo Money"] },
+  { name: "Guinée", zone: "Afrique de l'Ouest", currency: "GNF", methods: ["Orange Money", "MTN MoMo"] },
+  { name: "Liberia", zone: "Afrique de l'Ouest", currency: "LRD", methods: ["Orange Money", "MTN MoMo"] },
+  { name: "Nigeria", zone: "Afrique de l'Ouest", currency: "NGN", methods: ["OPay", "PalmPay", "MTN MoMo", "Banque locale"] },
+  { name: "Sierra Leone", zone: "Afrique de l'Ouest", currency: "SLE", methods: ["Orange Money", "Africell Money"] },
+  /* Afrique centrale / Est */
+  { name: "Burundi", zone: "Afrique de l'Est", currency: "BIF", methods: ["Lumicash", "EcoCash"] },
+  { name: "Djibouti", zone: "Afrique de l'Est", currency: "DJF", methods: ["Waafi", "D-Money"] },
+  { name: "Érythrée", zone: "Afrique de l'Est", currency: "ERN", methods: ["Banque locale"] },
+  { name: "Éthiopie", zone: "Afrique de l'Est", currency: "ETB", methods: ["Telebirr", "CBE Birr"] },
+  { name: "Kenya", zone: "Afrique de l'Est", currency: "KES", methods: ["M-Pesa", "Airtel Money"] },
+  { name: "Ouganda", zone: "Afrique de l'Est", currency: "UGX", methods: ["MTN MoMo", "Airtel Money"] },
+  { name: "Rwanda", zone: "Afrique de l'Est", currency: "RWF", methods: ["MTN MoMo", "Airtel Money"] },
+  { name: "Seychelles", zone: "Afrique de l'Est", currency: "SCR", methods: ["Banque locale"] },
+  { name: "Somalie", zone: "Afrique de l'Est", currency: "SOS", methods: ["EVC Plus", "Zaad", "Sahal"] },
+  { name: "Soudan", zone: "Afrique de l'Est", currency: "SDG", methods: ["Bankak", "Banque locale"] },
+  { name: "Soudan du Sud", zone: "Afrique de l'Est", currency: "SSP", methods: ["mGurush"] },
+  { name: "Tanzanie", zone: "Afrique de l'Est", currency: "TZS", methods: ["M-Pesa", "Tigo Pesa", "Airtel Money", "HaloPesa"] },
+  /* Afrique centrale élargie */
+  { name: "Angola", zone: "Afrique centrale", currency: "AOA", methods: ["Multicaixa", "Banque locale"] },
+  { name: "RDC", zone: "Afrique centrale", currency: "CDF", methods: ["Orange Money", "M-Pesa", "Airtel Money"] },
+  { name: "Sao Tomé-et-Principe", zone: "Afrique centrale", currency: "STN", methods: ["Banque locale"] },
+  /* Afrique australe */
+  { name: "Afrique du Sud", zone: "Afrique australe", currency: "ZAR", methods: ["Capitec Pay", "SnapScan", "Mukuru", "Banque locale"] },
+  { name: "Botswana", zone: "Afrique australe", currency: "BWP", methods: ["Orange Money", "MyZaka"] },
+  { name: "Eswatini", zone: "Afrique australe", currency: "SZL", methods: ["MoMo", "eWallet"] },
+  { name: "Lesotho", zone: "Afrique australe", currency: "LSL", methods: ["EcoCash", "M-Pesa"] },
+  { name: "Malawi", zone: "Afrique australe", currency: "MWK", methods: ["Airtel Money", "TNM Mpamba"] },
+  { name: "Mozambique", zone: "Afrique australe", currency: "MZN", methods: ["M-Pesa", "e-Mola"] },
+  { name: "Namibie", zone: "Afrique australe", currency: "NAD", methods: ["eWallet", "BlueWallet"] },
+  { name: "Zambie", zone: "Afrique australe", currency: "ZMW", methods: ["MTN MoMo", "Airtel Money", "Zamtel Kwacha"] },
+  { name: "Zimbabwe", zone: "Afrique australe", currency: "USD", methods: ["EcoCash", "OneMoney"] },
+  /* Afrique du Nord */
+  { name: "Algérie", zone: "Afrique du Nord", currency: "DZD", methods: ["BaridiMob", "Banque locale"] },
+  { name: "Égypte", zone: "Afrique du Nord", currency: "EGP", methods: ["Vodafone Cash", "Orange Cash", "Etisalat Cash"] },
+  { name: "Libye", zone: "Afrique du Nord", currency: "LYD", methods: ["Banque locale"] },
+  { name: "Maroc", zone: "Afrique du Nord", currency: "MAD", methods: ["Orange Money", "inwi money", "Banque locale"] },
+  { name: "Mauritanie", zone: "Afrique du Nord", currency: "MRU", methods: ["Bankily", "Sedad", "Masrivi"] },
+  { name: "Tunisie", zone: "Afrique du Nord", currency: "TND", methods: ["Orange Money", "Flouci", "Banque locale"] },
+  /* Océan Indien */
+  { name: "Comores", zone: "Océan Indien", currency: "KMF", methods: ["Banque locale"] },
+  { name: "Madagascar", zone: "Océan Indien", currency: "MGA", methods: ["Orange Money", "MVola", "Airtel Money"] },
+  { name: "Maurice", zone: "Océan Indien", currency: "MUR", methods: ["Juice by MCB", "My.t Money"] }
+];
+
+DCS.getCountryInfo = function (name) {
+  return (DCS.africaPayout || []).find(function (c) {
+    return c.name === name;
+  }) || null;
+};
+
 DCS.corridors = {
-  XOF: ["Sénégal", "Côte d'Ivoire", "Bénin", "Togo", "Mali", "Burkina Faso", "Niger", "Guinée-Bissau"],
-  XAF: ["Cameroun", "Gabon", "Tchad", "Congo", "Guinée équatoriale", "Centrafrique"],
+  get XOF() {
+    return (DCS.africaPayout || [])
+      .filter(function (c) {
+        return c.currency === "XOF";
+      })
+      .map(function (c) {
+        return c.name;
+      });
+  },
+  get XAF() {
+    return (DCS.africaPayout || [])
+      .filter(function (c) {
+        return c.currency === "XAF";
+      })
+      .map(function (c) {
+        return c.name;
+      });
+  },
   get PI() {
-    return this.XOF.concat(this.XAF);
+    return (DCS.africaPayout || []).map(function (c) {
+      return c.name;
+    });
   },
   get USDT() {
-    return this.XOF.concat(this.XAF);
+    return (DCS.africaPayout || []).map(function (c) {
+      return c.name;
+    });
   }
 };
 
