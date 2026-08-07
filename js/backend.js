@@ -817,8 +817,19 @@
         });
     },
 
-    transfer: function (symbol, amount, feePi, detail) {
+    transfer: function (symbol, amount, feePi, detail, extra) {
       var self = this;
+      if (extra && extra.destination) {
+        return this.createPayout({
+          symbol: symbol,
+          amount: amount,
+          feePi: feePi || 0,
+          country: extra.country || "",
+          method: extra.method || "",
+          destination: extra.destination,
+          detail: detail || ""
+        });
+      }
       var gate = this.requireClient();
       if (!gate.ok) return Promise.resolve(gate);
       return gate.client
@@ -857,6 +868,523 @@
           if (res.error) return { ok: false, error: res.error.message };
           return { ok: true, id: res.data.id };
         });
+    },
+
+    listTickets: function () {
+      var gate = this.requireClient();
+      if (!gate.ok || !DCS.user.id) return Promise.resolve([]);
+      return gate.client
+        .from("support_tickets")
+        .select("id, subject, message, status, created_at")
+        .eq("user_id", DCS.user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .then(function (res) {
+          if (res.error) return [];
+          return res.data || [];
+        });
+    },
+
+    loadNotifications: function () {
+      var gate = this.requireClient();
+      if (!gate.ok || !DCS.user.id) {
+        DCS.notifications = [];
+        return Promise.resolve([]);
+      }
+      return gate.client
+        .from("notifications")
+        .select("id, title, body, kind, read, created_at")
+        .eq("user_id", DCS.user.id)
+        .order("created_at", { ascending: false })
+        .limit(30)
+        .then(function (res) {
+          if (res.error) {
+            DCS.notifications = [];
+            return [];
+          }
+          DCS.notifications = res.data || [];
+          return DCS.notifications;
+        });
+    },
+
+    createDepositRequest: function (amountPi, note) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      var amt = Number(amountPi);
+      if (!(amt > 0)) return Promise.resolve({ ok: false, error: "Montant invalide." });
+      return gate.client
+        .from("deposit_requests")
+        .insert({
+          user_id: DCS.user.id,
+          amount_pi: amt,
+          note: note || "",
+          status: "pending"
+        })
+        .select("id")
+        .single()
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return { ok: true, id: res.data.id };
+        });
+    },
+
+    loadListings: function () {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) {
+        return Promise.resolve(DCS.marketplace || []);
+      }
+      return gate.client
+        .from("marketplace_listings")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .then(function (res) {
+          if (res.error || !res.data || !res.data.length) {
+            return DCS.marketplace || [];
+          }
+          DCS.marketplace = res.data.map(function (row) {
+            return {
+              id: row.id,
+              title: row.title,
+              author: row.seller_name,
+              sellerId: row.seller_id,
+              pricePi: Number(row.price_pi),
+              category: row.category || "Divers",
+              excerpt: row.excerpt || "",
+              content: row.content || "",
+              photos: Array.isArray(row.photos) ? row.photos : []
+            };
+          });
+          return DCS.marketplace;
+        })
+        .then(function (list) {
+          if (!DCS.user.id) {
+            DCS.purchases = [];
+            return list;
+          }
+          return gate.client
+            .from("marketplace_purchases")
+            .select("id, listing_id, price_pi, created_at")
+            .eq("buyer_id", DCS.user.id)
+            .then(function (p) {
+              DCS.purchases = (p.data || []).map(function (row) {
+                var art = (DCS.marketplace || []).find(function (a) {
+                  return a.id === row.listing_id;
+                });
+                return {
+                  id: row.id,
+                  articleId: row.listing_id,
+                  title: art ? art.title : "Article",
+                  author: art ? art.author : "",
+                  pricePi: Number(row.price_pi),
+                  date: row.created_at
+                    ? new Date(row.created_at).toLocaleDateString("fr-FR")
+                    : ""
+                };
+              });
+              return list;
+            });
+        });
+    },
+
+    uploadMarketplacePhoto: function (file) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve({ ok: false, error: gate.error });
+      if (!DCS.user.id || !file) {
+        return Promise.resolve({ ok: false, error: "Fichier manquant." });
+      }
+      var ext = (file.name && file.name.split(".").pop()) || "jpg";
+      var path = DCS.user.id + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
+      return gate.client.storage
+        .from("marketplace")
+        .upload(path, file, { upsert: false, contentType: file.type || "image/jpeg" })
+        .then(function (up) {
+          if (up.error) return { ok: false, error: up.error.message };
+          var pub = gate.client.storage.from("marketplace").getPublicUrl(path);
+          return { ok: true, url: pub.data && pub.data.publicUrl ? pub.data.publicUrl : path };
+        });
+    },
+
+    createListing: function (payload) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      return gate.client
+        .from("marketplace_listings")
+        .insert({
+          seller_id: DCS.user.id,
+          seller_name: payload.sellerName || DCS.user.displayName || DCS.user.username,
+          title: payload.title,
+          price_pi: payload.pricePi,
+          category: payload.category || "Divers",
+          excerpt: payload.excerpt || "",
+          content: payload.content || "",
+          photos: payload.photos || [],
+          active: true
+        })
+        .select("*")
+        .single()
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return { ok: true, listing: res.data };
+        });
+    },
+
+    buyListing: function (listingId) {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) return Promise.resolve(gate);
+      return gate.client
+        .rpc("dcs_buy_listing", { p_listing_id: listingId })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return Promise.all([self.loadWallet(), self.loadHistory(), self.loadListings(), self.loadNotifications()]).then(
+            function () {
+              return { ok: true, data: res.data };
+            }
+          );
+        });
+    },
+
+    reportListing: function (listingId, reason, details) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      return gate.client
+        .from("seller_reports")
+        .insert({
+          listing_id: listingId,
+          reporter_id: DCS.user.id,
+          reason: reason || "signalement",
+          details: details || ""
+        })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return { ok: true };
+        });
+    },
+
+    loadCommunity: function () {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(DCS.community || []);
+      return gate.client
+        .from("community_posts")
+        .select("id, author_name, body, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .then(function (res) {
+          if (res.error || !res.data) return DCS.community || [];
+          DCS.community = res.data.map(function (p) {
+            var ago = p.created_at ? new Date(p.created_at) : null;
+            return {
+              id: p.id,
+              author: p.author_name,
+              time: ago ? ago.toLocaleString("fr-FR") : "",
+              text: p.body
+            };
+          });
+          return DCS.community;
+        });
+    },
+
+    createPost: function (body) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      var text = String(body || "").trim();
+      if (!text) return Promise.resolve({ ok: false, error: "Message vide." });
+      return gate.client
+        .from("community_posts")
+        .insert({
+          author_id: DCS.user.id,
+          author_name: DCS.user.displayName || DCS.user.username || "Membre",
+          body: text
+        })
+        .select("id")
+        .single()
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return { ok: true, id: res.data.id };
+        });
+    },
+
+    loadCourses: function () {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) return Promise.resolve(DCS.courses || []);
+      return gate.client
+        .from("courses")
+        .select("id, title, level, price_pi, description, content, sort_order")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .then(function (res) {
+          if (res.error || !res.data || !res.data.length) return DCS.courses || [];
+          DCS.courses = res.data.map(function (c) {
+            return {
+              id: c.id,
+              title: c.title,
+              level: c.level,
+              pricePi: Number(c.price_pi),
+              desc: c.description,
+              content: c.content || "",
+              enrolled: false
+            };
+          });
+          if (!DCS.user.id) return DCS.courses;
+          return gate.client
+            .from("course_enrollments")
+            .select("course_id")
+            .eq("user_id", DCS.user.id)
+            .then(function (en) {
+              var set = {};
+              (en.data || []).forEach(function (e) {
+                set[e.course_id] = true;
+              });
+              DCS.courses.forEach(function (c) {
+                c.enrolled = !!set[c.id];
+              });
+              return DCS.courses;
+            });
+        });
+    },
+
+    enrollCourse: function (courseId) {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) return Promise.resolve(gate);
+      return gate.client
+        .rpc("dcs_enroll_course", { p_course_id: courseId })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return Promise.all([self.loadWallet(), self.loadHistory(), self.loadCourses(), self.loadNotifications()]).then(
+            function () {
+              return { ok: true, data: res.data };
+            }
+          );
+        });
+    },
+
+    loadArticles: function () {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(DCS.articles || []);
+      return gate.client
+        .from("learning_articles")
+        .select("id, title, tag, body, published_at")
+        .eq("active", true)
+        .order("published_at", { ascending: false })
+        .then(function (res) {
+          if (res.error || !res.data || !res.data.length) return DCS.articles || [];
+          DCS.articles = res.data.map(function (a) {
+            return {
+              id: a.id,
+              title: a.title,
+              tag: a.tag,
+              body: a.body || "",
+              date: a.published_at
+                ? new Date(a.published_at).toLocaleDateString("fr-FR")
+                : ""
+            };
+          });
+          return DCS.articles;
+        });
+    },
+
+    loadReferrals: function () {
+      var gate = this.requireClient();
+      if (!gate.ok || !DCS.user.id || !DCS.user.inviteCode) {
+        return Promise.resolve({
+          level1: [],
+          level2: [],
+          level3: [],
+          earnings: { fromFeesPi: 0, recent: [] }
+        });
+      }
+      var code = DCS.user.inviteCode;
+      var empty = { level1: [], level2: [], level3: [], earnings: { fromFeesPi: 0, recent: [] } };
+
+      function mapMember(row, via) {
+        return {
+          username: row.username,
+          code: row.invite_code,
+          earned: "—",
+          via: via || "",
+          date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : ""
+        };
+      }
+
+      return gate.client
+        .from("profiles")
+        .select("id, username, invite_code, created_at, referred_by")
+        .eq("referred_by", code)
+        .then(function (l1res) {
+          var l1 = l1res.data || [];
+          empty.level1 = l1.map(function (r) {
+            return mapMember(r);
+          });
+          if (!l1.length) return empty;
+          var codes = l1.map(function (r) {
+            return r.invite_code;
+          });
+          return gate.client
+            .from("profiles")
+            .select("id, username, invite_code, created_at, referred_by")
+            .in("referred_by", codes)
+            .then(function (l2res) {
+              var l2 = l2res.data || [];
+              var viaMap = {};
+              l1.forEach(function (r) {
+                viaMap[r.invite_code] = r.username;
+              });
+              empty.level2 = l2.map(function (r) {
+                return mapMember(r, viaMap[r.referred_by]);
+              });
+              if (!l2.length) return empty;
+              var codes2 = l2.map(function (r) {
+                return r.invite_code;
+              });
+              return gate.client
+                .from("profiles")
+                .select("id, username, invite_code, created_at, referred_by")
+                .in("referred_by", codes2)
+                .then(function (l3res) {
+                  var l3 = l3res.data || [];
+                  var via2 = {};
+                  l2.forEach(function (r) {
+                    via2[r.invite_code] = r.username;
+                  });
+                  empty.level3 = l3.map(function (r) {
+                    return mapMember(r, via2[r.referred_by]);
+                  });
+                  return empty;
+                });
+            });
+        })
+        .then(function (tree) {
+          return gate.client
+            .from("referral_commissions")
+            .select("commission_pi, fee_pi, level, kind, created_at, from_user_id")
+            .eq("beneficiary_id", DCS.user.id)
+            .order("created_at", { ascending: false })
+            .limit(20)
+            .then(function (cres) {
+              var rows = cres.data || [];
+              var total = 0;
+              rows.forEach(function (r) {
+                total += Number(r.commission_pi) || 0;
+              });
+              tree.earnings = {
+                fromFeesPi: Math.round(total * 1000) / 1000,
+                recent: rows.map(function (r) {
+                  return {
+                    from: "membre",
+                    type: r.kind || "Frais",
+                    feePi: Number(r.fee_pi),
+                    commissionPi: Number(r.commission_pi),
+                    level: r.level,
+                    date: r.created_at ? new Date(r.created_at).toLocaleDateString("fr-FR") : ""
+                  };
+                })
+              };
+              DCS.referrals = {
+                level1: tree.level1,
+                level2: tree.level2,
+                level3: tree.level3
+              };
+              DCS.referralEarnings = tree.earnings;
+              return tree;
+            });
+        })
+        .catch(function () {
+          return empty;
+        });
+    },
+
+    createPayout: function (payload) {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) return Promise.resolve(gate);
+      return gate.client
+        .rpc("dcs_create_payout", {
+          p_symbol: payload.symbol,
+          p_amount: payload.amount,
+          p_fee_pi: payload.feePi || 0,
+          p_country: payload.country || "",
+          p_method: payload.method || "",
+          p_destination: payload.destination || "",
+          p_detail: payload.detail || ""
+        })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          return Promise.all([self.loadWallet(), self.loadHistory(), self.loadNotifications()]).then(function () {
+            return { ok: true, data: res.data };
+          });
+        });
+    },
+
+    submitKyc: function (payload) {
+      var gate = this.requireClient();
+      var self = this;
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+
+      function uploadOne(fileOrDataUrl, nameHint) {
+        if (!fileOrDataUrl) return Promise.resolve({ ok: true, path: "" });
+        var path =
+          DCS.user.id +
+          "/" +
+          nameHint +
+          "-" +
+          Date.now() +
+          ".jpg";
+        var blobPromise;
+        if (typeof fileOrDataUrl === "string" && fileOrDataUrl.indexOf("data:") === 0) {
+          blobPromise = fetch(fileOrDataUrl).then(function (r) {
+            return r.blob();
+          });
+        } else {
+          blobPromise = Promise.resolve(fileOrDataUrl);
+        }
+        return blobPromise.then(function (blob) {
+          return gate.client.storage
+            .from("kyc")
+            .upload(path, blob, { upsert: true, contentType: "image/jpeg" })
+            .then(function (up) {
+              if (up.error) return { ok: false, error: up.error.message };
+              return { ok: true, path: path };
+            });
+        });
+      }
+
+      return Promise.all([
+        uploadOne(payload.idFile, "id"),
+        uploadOne(payload.selfieDataUrl, "selfie"),
+        uploadOne(payload.addressFile, "address")
+      ]).then(function (ups) {
+        for (var i = 0; i < ups.length; i++) {
+          if (!ups[i].ok) return { ok: false, error: ups[i].error || "Upload KYC impossible." };
+        }
+        return gate.client
+          .from("kyc_submissions")
+          .insert({
+            user_id: DCS.user.id,
+            doc_type: payload.docType || "cni",
+            id_path: ups[0].path || "",
+            selfie_path: ups[1].path || "",
+            address_path: ups[2].path || "",
+            status: "pending"
+          })
+          .then(function (ins) {
+            if (ins.error) return { ok: false, error: ins.error.message };
+            DCS.user.kyc = "pending";
+            DCS.user.kycDocType = payload.docType || "";
+            return self.persistProfile().then(function () {
+              return { ok: true };
+            });
+          });
+      });
     }
   };
 

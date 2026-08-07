@@ -303,39 +303,104 @@
   function renderCourses() {
     const el = document.getElementById("courses-list");
     if (!el || !window.DCS) return;
-    el.innerHTML = DCS.courses
+    const list = DCS.courses || [];
+    if (!list.length) {
+      el.innerHTML = `<p style="color:var(--muted)">Aucun cours pour le moment.</p>`;
+      return;
+    }
+    el.innerHTML = list
       .map(
         (c) => `<article class="course-item">
           <div>
             <h4>${c.title}</h4>
-            <p>${c.level} · ${c.desc}</p>
+            <p>${c.level} · ${c.desc || ""}</p>
+            ${
+              c.enrolled && c.content
+                ? `<p class="course-unlocked" style="margin-top:0.55rem;font-size:0.82rem;white-space:pre-wrap;color:var(--text)">${c.content}</p>`
+                : ""
+            }
           </div>
-          <div class="price-pi">${c.pricePi} π</div>
+          <div style="text-align:right">
+            <div class="price-pi">${c.pricePi} π</div>
+            <button class="trade-btn" type="button" data-enroll="${c.id || ""}" ${c.enrolled ? "disabled" : ""}>
+              ${c.enrolled ? "Débloqué" : "Acheter"}
+            </button>
+          </div>
         </article>`
       )
       .join("");
+    el.querySelectorAll("[data-enroll]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-enroll");
+        if (!id) {
+          alert("Exécutez supabase/features.sql pour activer l'Academy.");
+          return;
+        }
+        const course = (DCS.courses || []).find((x) => x.id === id);
+        if (!course) return;
+        if (
+          !confirm(
+            "Acheter « " + course.title + " » pour " + course.pricePi + " PI COIN ?"
+          )
+        )
+          return;
+        btn.disabled = true;
+        const res = await DCS.backend.enrollCourse(id);
+        btn.disabled = false;
+        if (!res.ok) {
+          alert(res.error || "Inscription impossible.");
+          return;
+        }
+        renderCourses();
+        alert("Cours débloqué : " + course.title);
+      });
+    });
   }
 
   function renderArticles() {
     const el = document.getElementById("articles-list");
     if (!el || !window.DCS) return;
-    el.innerHTML = DCS.articles
+    const list = DCS.articles || [];
+    if (!list.length) {
+      el.innerHTML = `<p style="color:var(--muted)">Aucun article pour le moment.</p>`;
+      return;
+    }
+    el.innerHTML = list
       .map(
         (a) => `<article class="course-item">
           <div>
             <h4>${a.title}</h4>
-            <p>${a.tag} · ${a.date}</p>
+            <p>${a.tag || ""} · ${a.date || ""}</p>
+            <div class="article-body" data-article-body="${a.id || ""}" hidden style="margin-top:0.65rem;font-size:0.88rem;white-space:pre-wrap">${a.body || ""}</div>
           </div>
-          <button class="trade-btn" type="button">Lire</button>
+          <button class="trade-btn" type="button" data-read="${a.id || ""}">Lire</button>
         </article>`
       )
       .join("");
+    el.querySelectorAll("[data-read]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-read");
+        const body = el.querySelector('[data-article-body="' + id + '"]');
+        if (!body) {
+          alert("Contenu indisponible.");
+          return;
+        }
+        const open = body.hidden;
+        body.hidden = !open;
+        btn.textContent = open ? "Fermer" : "Lire";
+      });
+    });
   }
 
   function renderCommunity() {
     const el = document.getElementById("community-feed");
     if (!el || !window.DCS) return;
-    el.innerHTML = DCS.community
+    const list = DCS.community || [];
+    if (!list.length) {
+      el.innerHTML = `<p style="color:var(--muted)">Soyez le premier à publier.</p>`;
+      return;
+    }
+    el.innerHTML = list
       .map(
         (p) => `<article class="feed-post">
           <div class="meta">${p.author} · ${p.time}</div>
@@ -343,6 +408,79 @@
         </article>`
       )
       .join("");
+  }
+
+  function setupCommunity() {
+    const btn = document.getElementById("community-publish");
+    const ta = document.getElementById("community-text");
+    if (!btn || !ta) return;
+    btn.addEventListener("click", async () => {
+      const text = ta.value.trim();
+      if (!text) {
+        alert("Écrivez un message.");
+        return;
+      }
+      btn.disabled = true;
+      const res = await DCS.backend.createPost(text);
+      btn.disabled = false;
+      if (!res.ok) {
+        alert(res.error || "Publication impossible. Exécutez supabase/features.sql.");
+        return;
+      }
+      ta.value = "";
+      await DCS.backend.loadCommunity();
+      renderCommunity();
+      alert("Publication en ligne.");
+    });
+  }
+
+  function renderNotifications() {
+    const el = document.getElementById("wallet-notifications");
+    if (!el) return;
+    const list = DCS.notifications || [];
+    if (!list.length) {
+      el.innerHTML =
+        `<div class="feed-post"><div class="meta">Info</div><p>PI COIN : <strong style="color:var(--gold-bright)">$314,159</strong> · aucune notification récente.</p></div>`;
+      return;
+    }
+    el.innerHTML = list
+      .slice(0, 8)
+      .map((n) => {
+        const when = n.created_at
+          ? new Date(n.created_at).toLocaleString("fr-FR")
+          : "";
+        return `<div class="feed-post" style="margin-top:0.55rem"><div class="meta">${when}</div><p><strong>${n.title}</strong>${n.body ? " — " + n.body : ""}</p></div>`;
+      })
+      .join("");
+  }
+
+  function setupDepositRequest() {
+    const form = document.getElementById("deposit-request-form");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const amount = parseFloat(document.getElementById("deposit-req-amount").value) || 0;
+      const note = (document.getElementById("deposit-req-note") || {}).value || "";
+      if (amount <= 0) {
+        alert("Indiquez le montant PI envoyé / à créditer.");
+        return;
+      }
+      const res = await DCS.backend.createDepositRequest(amount, note.trim());
+      if (!res.ok) {
+        alert(res.error || "Demande impossible. Exécutez supabase/features.sql.");
+        return;
+      }
+      form.reset();
+      alert(
+        "Demande de dépôt enregistrée (#" +
+          String(res.id).slice(0, 8) +
+          "). L'équipe DCS créditera votre wallet après vérification."
+      );
+      if (DCS.backend.loadNotifications) {
+        await DCS.backend.loadNotifications();
+        renderNotifications();
+      }
+    });
   }
 
   let marketFilter = { seller: "all", query: "" };
@@ -532,7 +670,7 @@
     activeArticleId = null;
   }
 
-  function buyArticle(id) {
+  async function buyArticle(id) {
     const article = (DCS.marketplace || []).find((a) => a.id === id);
     if (!article) return;
     const ok = confirm(
@@ -545,32 +683,26 @@
         "\nPaiement exclusivement en PI COIN."
     );
     if (!ok) return;
-    DCS.purchases = DCS.purchases || [];
-    DCS.purchases.unshift({
-      id: Date.now(),
-      articleId: article.id,
-      title: article.title,
-      author: article.author,
-      pricePi: article.pricePi,
-      date: new Date().toLocaleDateString("fr-FR")
-    });
-    if (DCS.history) {
-      DCS.history.unshift({
-        type: "Marketplace",
-        detail: article.title,
-        amount: "-" + article.pricePi + " PI",
-        status: "Payé",
-        date: new Date().toLocaleDateString("fr-FR")
-      });
+    if (!article.id || typeof article.id !== "string") {
+      alert(
+        "Cet article seed n'est pas encore en base. Exécutez supabase/features.sql puis rechargez."
+      );
+      return;
+    }
+    const res = await DCS.backend.buyListing(article.id);
+    if (!res.ok) {
+      alert(res.error || "Achat impossible.");
+      return;
     }
     alert(
       "Achat réussi !\nVous avez payé " +
         article.pricePi +
         " PI COIN à " +
         article.author +
-        ".\nL'article est maintenant disponible dans vos achats."
+        ".\nL'article est débloqué dans vos achats."
     );
     closeArticleModal();
+    renderMarketplace();
   }
 
   function setupMarketplaceForm() {
@@ -617,14 +749,14 @@
         if (files.length > room) alert("Seules " + room + " photo(s) ont été ajoutées (max. 5).");
         toAdd.forEach((file) => {
           if (!file.type.startsWith("image/")) return;
-          pendingPhotos.push({ url: URL.createObjectURL(file), name: file.name });
+          pendingPhotos.push({ file, url: URL.createObjectURL(file), name: file.name });
         });
         photoInput.value = "";
         renderPreview();
       });
     }
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const name = document.getElementById("seller-name").value.trim();
       const title = document.getElementById("article-title").value.trim();
@@ -636,29 +768,41 @@
         alert("Veuillez remplir tous les champs.");
         return;
       }
-      DCS.marketplace.unshift({
-        id: Date.now(),
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+      const photoUrls = [];
+      for (let i = 0; i < pendingPhotos.length; i++) {
+        const item = pendingPhotos[i];
+        if (item.file && DCS.backend.uploadMarketplacePhoto) {
+          const up = await DCS.backend.uploadMarketplacePhoto(item.file);
+          if (up.ok && up.url) photoUrls.push(up.url);
+          else photoUrls.push(item.url);
+        } else if (item.url) {
+          photoUrls.push(item.url);
+        }
+      }
+      const res = await DCS.backend.createListing({
+        sellerName: name,
         title,
-        author: name,
         pricePi: price,
         category,
         excerpt,
         content: content.trim(),
-        photos: pendingPhotos.map((p) => p.url)
+        photos: photoUrls
       });
+      if (submitBtn) submitBtn.disabled = false;
+      if (!res.ok) {
+        alert(res.error || "Publication impossible. Exécutez supabase/features.sql.");
+        return;
+      }
       pendingPhotos = [];
       renderPreview();
+      await DCS.backend.loadListings();
       marketFilter.seller = "all";
       renderSellers();
       renderMarketplace();
       form.reset();
-      alert(
-        "Article publié dans le catalogue acheteurs !\nVendeur : " +
-          name +
-          " · " +
-          (DCS.marketplace[0].photos.length || 0) +
-          " photo(s) · paiement en PI COIN."
-      );
+      alert("Article publié dans le catalogue ! Paiement en PI COIN.");
       const buyTab = document.querySelector('#market-tabs [data-view="buy"]');
       if (buyTab) openMarketView("buy");
     });
@@ -782,7 +926,7 @@
         if (e.target === modal) closeReportModal();
       });
     }
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const seller = document.getElementById("report-seller").value;
       const reason = document.getElementById("report-reason").value;
@@ -799,25 +943,17 @@
         harcelement: "Harcèlement",
         autre: "Autre"
       };
-      DCS.sellerReports = DCS.sellerReports || [];
-      const report = {
-        id: "REP-" + String(Date.now()).slice(-6),
-        seller,
-        articleId: articleId ? Number(articleId) : null,
-        reason: reasonLabels[reason] || reason,
-        details,
-        status: "Reçu",
-        date: new Date().toLocaleString("fr-FR")
-      };
-      DCS.sellerReports.unshift(report);
-      closeReportModal();
-      alert(
-        "Signalement " +
-          report.id +
-          " envoyé contre « " +
-          seller +
-          " ».\nL'équipe DCS examinera le dossier."
+      const res = await DCS.backend.reportListing(
+        articleId || null,
+        reasonLabels[reason] || reason,
+        details
       );
+      if (!res.ok) {
+        alert(res.error || "Signalement impossible. Exécutez supabase/features.sql.");
+        return;
+      }
+      closeReportModal();
+      alert("Signalement envoyé contre « " + seller + " ». L'équipe DCS examinera le dossier.");
     });
   }
 
@@ -1343,7 +1479,12 @@
           asset.value,
           qty,
           lastFee.feePi || 0,
-          detail
+          detail,
+          {
+            destination: dest.trim(),
+            country: country.value,
+            method: payMethod
+          }
         );
         confirmBtn.disabled = false;
         if (!res.ok) {
@@ -1352,8 +1493,12 @@
         }
         renderHistory();
         if (typeof renderWallet === "function") renderWallet();
+        const data = res.data || {};
         alert(
-          "Transfert enregistré.\nPays : " +
+          (data.p2p
+            ? "Transfert P2P instantané vers un membre DCS.\n"
+            : "Transfert débité — payout Mobile Money / banque en file d'attente ops.\n") +
+            "Pays : " +
             country.value +
             "\nMoyen : " +
             payMethod +
@@ -2021,8 +2166,19 @@
           alert("Prenez un selfie avec la caméra avant de soumettre.");
           return;
         }
-        DCS.user.kyc = "pending";
-        DCS.user.kycDocType = docType;
+        kycBtn.disabled = true;
+        const addressFile = document.getElementById("kyc-address-file");
+        const res = await DCS.backend.submitKyc({
+          docType: docType,
+          idFile: idFile.files[0],
+          selfieDataUrl: kycSelfieDataUrl,
+          addressFile: addressFile && addressFile.files && addressFile.files[0]
+        });
+        kycBtn.disabled = false;
+        if (!res.ok) {
+          alert(res.error || "Soumission KYC impossible. Exécutez supabase/features.sql.");
+          return;
+        }
         try {
           localStorage.setItem(
             "dcs_kyc_docs_" + (DCS.user.id || ""),
@@ -2034,12 +2190,11 @@
             })
           );
         } catch (e) {}
-        if (window.DCS && DCS.auth) await DCS.auth.persistCurrentUser();
         renderProfile();
         alert(
           "Dossier KYC soumis (" +
             (DOC_LABELS[docType] || docType) +
-            " + selfie) — statut : en attente de vérification manuelle."
+            " + selfie) — pièces enregistrées, statut : en attente de revue."
         );
       });
     }
@@ -2140,8 +2295,29 @@
 
     const supportForm = document.getElementById("support-ticket-form");
     if (supportForm) {
-      if (!DCS.supportTickets) DCS.supportTickets = [];
-      supportForm.addEventListener("submit", (e) => {
+      async function refreshTickets() {
+        const rows = await DCS.backend.listTickets();
+        const list = document.getElementById("support-tickets");
+        if (!list) return;
+        if (!rows.length) {
+          list.innerHTML = "";
+          return;
+        }
+        list.innerHTML =
+          `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem">Tickets récents</p>` +
+          rows
+            .slice(0, 8)
+            .map((t) => {
+              const date = t.created_at
+                ? new Date(t.created_at).toLocaleString("fr-FR")
+                : "";
+              const short = String(t.id || "").slice(0, 8);
+              return `<div class="feed-post" style="margin-bottom:0.55rem"><div class="meta">${date} · ${t.status || "open"} · ${short}</div><p><strong style="color:var(--gold-bright)">${t.subject}</strong> — ${t.message}</p></div>`;
+            })
+            .join("");
+      }
+      refreshTickets();
+      supportForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const topic = document.getElementById("support-topic").value;
         const message = document.getElementById("support-message").value.trim();
@@ -2158,28 +2334,14 @@
           marketplace: "Marketplace",
           other: "Autre"
         };
-        const ticket = {
-          id: "DCS-" + String(Date.now()).slice(-6),
-          topic: labels[topic] || topic,
-          message,
-          status: "Ouvert",
-          date: new Date().toLocaleString("fr-FR")
-        };
-        DCS.supportTickets.unshift(ticket);
-        const list = document.getElementById("support-tickets");
-        if (list) {
-          list.innerHTML =
-            `<p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem">Tickets récents</p>` +
-            DCS.supportTickets
-              .slice(0, 5)
-              .map(
-                (t) =>
-                  `<div class="feed-post" style="margin-bottom:0.55rem"><div class="meta">${t.date} · ${t.status} · ${t.id}</div><p><strong style="color:var(--gold-bright)">${t.topic}</strong> — ${t.message}</p></div>`
-              )
-              .join("");
+        const res = await DCS.backend.createTicket(labels[topic] || topic, message);
+        if (!res.ok) {
+          alert(res.error || "Envoi impossible.");
+          return;
         }
         supportForm.reset();
-        alert("Ticket " + ticket.id + " envoyé au support DCS.");
+        await refreshTickets();
+        alert("Ticket envoyé au support DCS.");
       });
     }
 
@@ -2679,7 +2841,10 @@
     if (isWallet) {
       renderWallet();
       setupDeposit();
+      setupDepositRequest();
       renderHistory();
+      await DCS.backend.loadNotifications();
+      renderNotifications();
     }
     if (isSwap) {
       renderPiSpotlight();
@@ -2690,12 +2855,14 @@
       renderHistory();
     }
     if (isMarket) {
+      await DCS.backend.loadListings();
       renderMarketplace();
       renderSellers();
       setupMarketplaceForm();
       setupMarketplaceViews();
     }
     if (isRef) {
+      await DCS.backend.loadReferrals();
       renderReferral();
       setupReferralActions();
     }
@@ -2704,14 +2871,49 @@
       setupProfileForms();
     }
     if (page === "academy.html" || document.getElementById("courses-list")) {
+      await DCS.backend.loadCourses();
       renderCourses();
     }
     if (page === "learning.html" || document.getElementById("articles-list")) {
+      await DCS.backend.loadArticles();
       renderArticles();
     }
     if (page === "community.html" || document.getElementById("community-feed")) {
+      await DCS.backend.loadCommunity();
       renderCommunity();
+      setupCommunity();
     }
+    if (page === "contact.html" || document.getElementById("contact-ticket-form")) {
+      setupContactForm();
+    }
+  }
+
+  function setupContactForm() {
+    const form = document.getElementById("contact-ticket-form");
+    if (!form) return;
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById("contact-name") || {}).value || "";
+      const email = (document.getElementById("contact-email") || {}).value || "";
+      const message = (document.getElementById("contact-message") || {}).value || "";
+      if (!message.trim()) {
+        alert("Écrivez votre message.");
+        return;
+      }
+      if (!DCS.user || !DCS.user.id) {
+        alert("Connectez-vous pour envoyer un message au support, ou utilisez le formulaire Profil.");
+        return;
+      }
+      const subject = "Contact — " + (name.trim() || DCS.user.displayName || "Visiteur");
+      const body = (email ? "E-mail : " + email + "\n\n" : "") + message.trim();
+      const res = await DCS.backend.createTicket(subject, body);
+      if (!res.ok) {
+        alert(res.error || "Envoi impossible.");
+        return;
+      }
+      form.reset();
+      alert("Message envoyé au support DCS.");
+    });
   }
 
   if (document.readyState === "loading") {

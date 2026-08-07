@@ -514,27 +514,16 @@ DCS.fees = {
 };
 
 DCS.referralEarnings = {
-  totalPi: 25.7,
-  fromFeesPi: 25.7,
-  recent: [
-    { from: "amina.k", type: "Swap", feePi: 2.4, commissionPi: 0.12, level: 1, date: "05/08/2026" },
-    { from: "jean.marc", type: "Transfer", feePi: 1.8, commissionPi: 0.09, level: 1, date: "04/08/2026" },
-    { from: "omar.b", type: "Swap", feePi: 3.0, commissionPi: 0.09, level: 2, date: "03/08/2026" },
-    { from: "paul.t", type: "Transfer", feePi: 1.2, commissionPi: 0.012, level: 3, date: "02/08/2026" }
-  ]
+  totalPi: 0,
+  fromFeesPi: 0,
+  recent: []
 };
 
 DCS.referrals = {
-  level1: [
-    { username: "amina.k", code: "DCS-AMI42", earned: "12.5 PI", date: "01/08/2026" },
-    { username: "jean.marc", code: "DCS-JM19", earned: "8.0 PI", date: "28/07/2026" },
-    { username: "fatou.s", code: "DCS-FAT08", earned: "5.2 PI", date: "20/07/2026" }
-  ],
-  level2: [
-    { username: "omar.b", code: "DCS-OM33", earned: "3.1 PI", via: "amina.k", date: "02/08/2026" },
-    { username: "lea.m", code: "DCS-LEA21", earned: "1.8 PI", via: "jean.marc", date: "30/07/2026" }
-  ],
-  level3: [
-    { username: "paul.t", code: "DCS-PAU55", earned: "0.6 PI", via: "omar.b", date: "04/08/2026" }
-  ]
+  level1: [],
+  level2: [],
+  level3: []
 };
+
+DCS.notifications = [];
+DCS.supportTickets = [];

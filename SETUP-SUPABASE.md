@@ -1,53 +1,34 @@
 # Activer DCS en production (Supabase)
 
-DCS n’est plus une démo locale : les comptes, soldes et transactions passent par **Supabase**.
+DCS n’est plus une démo locale : les comptes, soldes et modules passent par **Supabase**.
 
 ## 1. Créer le projet
 
-1. Allez sur [https://supabase.com](https://supabase.com) et créez un projet (région proche de l’Afrique de l’Ouest si possible).
+1. Allez sur [https://supabase.com](https://supabase.com) et créez un projet.
 2. Attendez que la base soit prête.
 
-## 2. Exécuter le schéma SQL
+## 2. Exécuter les SQL (dans l’ordre)
 
-1. Dans Supabase : **SQL Editor** → **New query**
-2. Collez tout le fichier `supabase/schema.sql` du dépôt
-3. Cliquez **Run**
+Dans **SQL Editor** → **New query** → **Run** :
 
-Cela crée : `profiles`, `wallets`, `transactions`, `support_tickets`, les politiques de sécurité, le trigger d’inscription, et les fonctions `dcs_swap` / `dcs_transfer`.
+1. `supabase/schema.sql` — profils, wallets, txs, tickets, swap/transfer
+2. `supabase/deposit-addresses.sql` — ID de dépôt unique
+3. `supabase/storage-avatars.sql` — photos de profil
+4. **`supabase/features.sql`** — marketplace, community, academy, learning, KYC storage, notifications, parrainage, payouts
 
-## 3. Auth e-mail (OTP)
+## 3. Auth e-mail
 
 1. **Authentication** → **Providers** → **Email** : activé
-2. **Confirm email** : **ON** (obligatoire pour l’OTP d’inscription)
-3. **Authentication** → **Email Templates** → template **Confirm signup**  
-   Utilisez le token OTP, par exemple :
-
-```text
-Votre code DAMIE CRYPTO SERVICE : {{ .Token }}
-```
-
-4. (Optionnel) **URL Configuration** → ajoutez  
-   `https://damie-crypto-service.netlify.app`  
-   et `http://localhost:3000` dans les Redirect URLs.
+2. **Confirm email** : ON
+3. Templates + Redirect URLs (Netlify + localhost)
 
 ## 4. Clés dans le site
 
-1. **Project Settings** → **API**
-2. Copiez **Project URL** et **anon public** key
-3. Ouvrez `js/config.js` et renseignez :
-
-```js
-window.DCS_CONFIG = {
-  supabaseUrl: "https://XXXX.supabase.co",
-  supabaseAnonKey: "eyJhbGciOi..."
-};
-```
-
-4. Commit + push → Netlify redéploie automatiquement.
+Renseignez `js/config.js` (Project URL + anon key), commit + push Netlify.
 
 ## 5. Créditer un wallet (admin)
 
-Les nouveaux comptes démarrent à **0**. Pour créditer un membre (SQL Editor) :
+Les comptes démarrent à **0**. Pour tester marketplace / academy :
 
 ```sql
 update public.wallets
@@ -56,15 +37,48 @@ where user_id = (select id from public.profiles where email = 'client@email.com'
   and symbol = 'PI';
 ```
 
-## 6. Vérifier
+Valider une demande de dépôt :
 
-1. Ouvrez `/signup.html` → créez un compte avec votre vrai e-mail
-2. Recevez le code à 6 chiffres → validez
-3. Connectez-vous → wallet à 0, historique vide
-4. Après un crédit admin → testez un swap / transfert (soldes + historique en base)
+```sql
+select * from public.deposit_requests where status = 'pending';
+
+update public.wallets
+set amount = amount + 10
+where user_id = '<uuid>' and symbol = 'PI';
+
+update public.deposit_requests set status = 'credited' where id = '<request-uuid>';
+```
+
+Valider un KYC :
+
+```sql
+update public.profiles set kyc = 'verified' where id = '<uuid>';
+update public.kyc_submissions set status = 'verified' where user_id = '<uuid>';
+```
+
+## 6. Ce qui est fonctionnel après `features.sql`
+
+| Module | Comportement |
+|--------|----------------|
+| Marketplace | Publier / acheter en PI (débit acheteur, crédit vendeur) |
+| Academy | Acheter un cours en PI, contenu débloqué |
+| Learning | Lire les articles |
+| Community | Publier et lire le fil |
+| Parrainage | Vrai arbre N1–N3 + commissions sur frais swap/transfer |
+| Transfer | P2P instantané si destinataire DCS, sinon file payout ops |
+| Dépôt | ID unique + demande de crédit |
+| KYC | Upload pièce + selfie (Storage privé) |
+| Support / Contact | Tickets en base |
+| Notifications | Feed wallet |
+
+## Limites externes (hors scope SQL)
+
+- **Pi Mainnet** réel (SDK Pi Browser) — pas encore branché
+- **Mobile Money** API opérateur — file d’attente `payout_requests` pour traitement manuel
+- **SMS OTP téléphone** — nécessite un fournisseur SMS Supabase
+- **Cours des cryptos live** — board marchés encore sur tarifs DCS / indicatifs
 
 ## Notes
 
-- La **anon key** est publique ; la sécurité repose sur le **Row Level Security** du schéma.
+- La **anon key** est publique ; la sécurité repose sur le **RLS**.
 - Ne publiez jamais la clé **service_role**.
-- Marketplace / communauté / KYC avancé peuvent venir ensuite sur les mêmes tables Supabase.

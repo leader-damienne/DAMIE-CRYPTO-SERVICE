@@ -66,8 +66,8 @@
 
         <div class="panel" id="wallet-deposit">
           <h3>Dépôt PI COIN</h3>
-          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Votre <strong>ID de dépôt DCS</strong> est unique. Une adresse Pi Network Mainnet réelle sera affichée dès l’intégration wallet Pi.</p>
-          <div class="panel" style="padding:0.9rem;margin-bottom:0;background:rgba(20,20,20,0.45)">
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Votre <strong>ID de dépôt DCS</strong> est unique. Après envoi, créez une demande de crédit pour que l'équipe valide et crédite votre wallet.</p>
+          <div class="panel" style="padding:0.9rem;margin-bottom:1rem;background:rgba(20,20,20,0.45)">
             <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">ID de dépôt PI COIN (DCS)</div>
             <div class="ref-code-box">
               <input id="deposit-address" class="form-control" type="text" readonly value="" placeholder="Chargement…" />
@@ -75,6 +75,17 @@
             </div>
             <p id="deposit-hint" style="font-size:0.78rem;color:var(--gold-muted);margin-top:0.6rem"></p>
           </div>
+          <form id="deposit-request-form">
+            <div class="form-group">
+              <label for="deposit-req-amount">Montant PI à créditer</label>
+              <input id="deposit-req-amount" class="form-control" type="number" min="0.0001" step="any" required placeholder="Ex. 10" />
+            </div>
+            <div class="form-group">
+              <label for="deposit-req-note">Référence / note (optionnel)</label>
+              <input id="deposit-req-note" class="form-control" type="text" placeholder="Hash, date, canal…" />
+            </div>
+            <button class="btn btn-gold" type="submit" style="width:100%">Demander le crédit</button>
+          </form>
         </div>
 
         <div class="panel">
@@ -103,10 +114,7 @@
         </div>
         <div class="panel">
           <h3>Notifications</h3>
-          <div id="wallet-notifications">
-            <div class="feed-post"><div class="meta">Maintenant</div><p>PI COIN : <strong style="color:var(--gold-bright)">$314,159</strong> (0,00 % 24h)</p></div>
-            <div class="feed-post" style="margin-top:0.75rem"><div class="meta">Aujourd'hui</div><p>Copiez votre adresse <strong>PI COIN</strong> pour déposer sur le wallet.</p></div>
-          </div>
+          <div id="wallet-notifications"></div>
         </div>
       </div>
     </div>
