@@ -1,0 +1,3 @@
+# Edge Functions config (optionnel)
+[functions.pi-payment]
+verify_jwt = true

@@ -14,7 +14,10 @@ Dans **SQL Editor** → **New query** → **Run** :
 1. `supabase/schema.sql` — profils, wallets, txs, tickets, swap/transfer
 2. `supabase/deposit-addresses.sql` — ID de dépôt unique
 3. `supabase/storage-avatars.sql` — photos de profil
-4. **`supabase/features.sql`** — marketplace, community, academy, learning, KYC storage, notifications, parrainage, payouts
+4. **`supabase/features.sql`** — marketplace, community, academy…
+5. **`supabase/pi-payments.sql`** — paiements Pi SDK (dépôts)
+
+Pour le **Pi Network SDK**, suivez aussi **`SETUP-PI.md`** (Developer Portal + Edge Function `pi-payment`).
 
 ## 3. Auth e-mail
 
