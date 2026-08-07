@@ -141,18 +141,34 @@
       contactEmail.required = false;
     }
 
-    /* Wallet : dépôt manuel / ID hors Pi SDK secondaires */
+    /* Wallet : masquer seulement le dépôt manuel / adresse hors SDK — PAS le bouton Pi */
     const manualDeposit = document.getElementById("deposit-request-form");
-    if (manualDeposit) {
-      const wrap = manualDeposit.closest(".panel") || manualDeposit;
-      wrap.style.display = "none";
-    }
+    if (manualDeposit) manualDeposit.style.display = "none";
+
     const depAddr = document.getElementById("deposit-address");
     if (depAddr) {
-      const box = depAddr.closest(".panel");
-      if (box && !box.querySelector("#pi-deposit-btn")) box.style.display = "none";
+      const addrBox = depAddr.closest(".ref-code-box") || depAddr.parentElement;
+      const addrPanel = depAddr.closest(".panel");
+      /* Ne cacher que le sous-bloc adresse, jamais #wallet-deposit (qui contient le bouton Pi) */
+      if (addrPanel && addrPanel.id !== "wallet-deposit" && !addrPanel.querySelector("#pi-deposit-btn")) {
+        addrPanel.style.display = "none";
+      } else if (addrBox) {
+        const hint = document.getElementById("deposit-hint");
+        addrBox.style.display = "none";
+        if (hint) hint.style.display = "none";
+        const label = addrPanel && addrPanel.querySelector("div");
+        if (label && /ID de dépôt/i.test(label.textContent || "")) label.style.display = "none";
+      }
     }
-  }
+
+    const piBtn = document.getElementById("pi-deposit-btn");
+    const walletDep = document.getElementById("wallet-deposit");
+    if (walletDep) walletDep.style.display = "";
+    if (piBtn) {
+      piBtn.style.display = "";
+      const piWrap = piBtn.closest(".panel");
+      if (piWrap) piWrap.style.display = "";
+    }
 
   function sparkPath(seed, up, flat) {
     const pts = [];
@@ -425,31 +441,55 @@
     const btn = document.getElementById("pi-deposit-btn");
     const amountEl = document.getElementById("pi-deposit-amount");
     const status = document.getElementById("pi-deposit-status");
-    if (!btn) return;
+    if (!btn || btn.dataset.piBound === "1") return;
+    btn.dataset.piBound = "1";
 
     function setStatus(msg, isErr) {
       if (!status) return;
+      status.hidden = false;
+      status.style.display = "block";
       status.textContent = msg;
-      status.style.color = isErr ? "#f6465d" : "var(--muted)";
+      status.style.color = isErr ? "#f6465d" : "var(--gold-bright)";
     }
 
-    btn.addEventListener("click", async () => {
+    async function startDeposit() {
       if (!window.DCS || !DCS.pi) {
-        alert("Module Pi non chargé.");
+        setStatus("Module Pi non chargé. Rechargez la page dans le Pi Browser.", true);
+        alert("Module Pi non chargé. Rechargez dans le Pi Browser.");
         return;
       }
       const amount = parseFloat(amountEl && amountEl.value) || 0;
       if (amount <= 0) {
+        setStatus("Indiquez un montant PI valide.", true);
         alert("Indiquez un montant PI valide.");
         return;
       }
+      const prevLabel = btn.textContent;
       btn.disabled = true;
-      setStatus("Ouverture Pi Network… (Pi Browser requis)");
-      const res = await DCS.pi.depositWithPi(amount);
+      btn.textContent = "Ouverture Pi…";
+      setStatus("Ouverture du paiement Pi… (ne fermez pas la fenêtre)");
+      let res;
+      try {
+        res = await Promise.race([
+          DCS.pi.depositWithPi(amount),
+          new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve({
+                ok: false,
+                error:
+                  "Délai dépassé. Ouvrez le site dans le Pi Browser, vérifiez PI_API_KEY, et réessayez."
+              });
+            }, 120000);
+          })
+        ]);
+      } catch (err) {
+        res = { ok: false, error: (err && err.message) || String(err) };
+      }
       btn.disabled = false;
-      if (!res.ok) {
-        setStatus(res.error || "Échec du dépôt Pi.", true);
-        if (!res.cancelled) alert(res.error || "Échec du dépôt Pi.");
+      btn.textContent = prevLabel || "Déposer via Pi Browser";
+      if (!res || !res.ok) {
+        setStatus((res && res.error) || "Échec du dépôt Pi.", true);
+        if (!(res && res.cancelled)) alert((res && res.error) || "Échec du dépôt Pi.");
         return;
       }
       setStatus("Dépôt confirmé : +" + res.amount + " PI" + (res.piUser ? " · @" + res.piUser : ""));
@@ -464,15 +504,36 @@
       if (typeof renderHistory === "function") renderHistory();
       if (typeof renderNotifications === "function") renderNotifications();
       alert("Dépôt Pi réussi : +" + res.amount + " PI crédités sur votre wallet DCS.");
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      startDeposit();
+    });
+
+    /* Lien « Dépôt Pi » du haut : scroll + focus sur le vrai bouton */
+    document.querySelectorAll('a[href="#wallet-deposit"]').forEach(function (a) {
+      a.addEventListener("click", function () {
+        setTimeout(function () {
+          const panel = document.getElementById("wallet-deposit");
+          if (panel) panel.style.display = "";
+          btn.scrollIntoView({ behavior: "smooth", block: "center" });
+          setStatus("Choisissez le montant puis appuyez sur « Déposer via Pi Browser ».");
+        }, 50);
+      });
     });
 
     if (DCS.pi && DCS.pi.init) {
       DCS.pi.init().then(
-        () => setStatus("SDK Pi prêt (sandbox). Ouvrez ce site dans le Pi Browser pour payer."),
-        () =>
+        function () {
+          setStatus("SDK Pi prêt (sandbox). Appuyez sur « Déposer via Pi Browser ».");
+        },
+        function () {
           setStatus(
-            "Chargez la page dans le Pi Browser pour activer les paiements. Chrome : aperçu seulement."
-          )
+            "Ouvrez cette page dans le Pi Browser pour activer les paiements.",
+            true
+          );
+        }
       );
     }
   }
@@ -3371,14 +3432,23 @@
       setupMarketSearch();
     }
     if (isWallet) {
-      await DCS.backend.loadWallet();
-      await DCS.backend.loadHistory();
+      try {
+        await DCS.backend.loadWallet();
+        await DCS.backend.loadHistory();
+      } catch (e) {}
       renderWallet();
       setupDeposit();
       setupPiDeposit();
       if (!isEcosystemMode()) setupDepositRequest();
+      /* Re-assurer le bouton Pi visible après compliance */
+      const wd = document.getElementById("wallet-deposit");
+      const pb = document.getElementById("pi-deposit-btn");
+      if (wd) wd.style.display = "";
+      if (pb) pb.style.display = "";
       renderHistory();
-      await DCS.backend.loadNotifications();
+      try {
+        await DCS.backend.loadNotifications();
+      } catch (e2) {}
       renderNotifications();
     }
     if (isSwap && !isEcosystemMode()) {
