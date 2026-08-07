@@ -5,7 +5,7 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Connexion — Damie Crypto Service | DCS</title>
+  <title>Connexion Pi — Damie Crypto Service | DCS</title>
   <link rel="icon" href="assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -26,12 +26,10 @@
       <nav class="nav" id="main-nav">
         <a href="index.html">Accueil</a>
         <a href="contact.html">Contact</a>
-        <a href="signin.html">Connexion</a>
-        <a href="signup.html">Inscription</a>
+        <a href="signin.html">Connexion Pi</a>
       </nav>
       <div class="header-actions">
-        <a class="btn btn-outline" href="signin.html">Connexion</a>
-        <a class="btn btn-gold" href="signup.html">Inscription</a>
+        <a class="btn btn-gold" href="signin.html">Connexion Pi</a>
         <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
       </div>
     </div>
@@ -39,39 +37,44 @@
 
   <main class="container">
     <div class="page-hero">
-      <h1>Connexion <span>DCS</span></h1>
-      <p>Connectez-vous pour accéder à la plateforme. Pas encore de compte ? Inscrivez-vous d'abord.</p>
+      <h1>Connexion <span>Pi</span></h1>
+      <p>Conformité Pi Ecosystem : connexion uniquement via le compte Pi (Pi Browser).</p>
     </div>
 
     <div class="panel auth-panel">
-      <h3>Se connecter</h3>
+      <h3>Se connecter avec Pi</h3>
       <p id="auth-setup-banner" class="auth-error" hidden></p>
-      <form id="signin-form" autocomplete="on">
+      <p style="font-size:0.88rem;color:var(--muted);margin-bottom:1rem">
+        Ouvrez cette page dans le <strong>Pi Browser</strong>, puis autorisez DCS.
+      </p>
+      <button type="button" class="btn btn-gold" id="pi-login-btn" style="width:100%">Continuer avec Pi</button>
+      <p id="signin-error" class="auth-error" hidden style="margin-top:0.85rem"></p>
+      <form id="signin-form" autocomplete="on" hidden>
         <div class="form-group">
           <label for="si-login">E-mail</label>
-          <input id="si-login" class="form-control" name="login" type="email" required placeholder="vous@email.com" autocomplete="email" />
+          <input id="si-login" class="form-control" name="login" type="email" placeholder="vous@email.com" autocomplete="email" />
         </div>
         <div class="form-group">
           <label for="si-password">Mot de passe</label>
-          <input id="si-password" class="form-control" name="password" type="password" required minlength="6" autocomplete="current-password" />
+          <input id="si-password" class="form-control" name="password" type="password" minlength="6" autocomplete="current-password" />
         </div>
-        <p id="signin-error" class="auth-error" hidden></p>
-        <button class="btn btn-gold" type="submit" style="width:100%;margin-top:0.5rem">Connexion</button>
+        <button class="btn btn-outline" type="submit" style="width:100%;margin-top:0.5rem">Connexion e-mail</button>
       </form>
-      <p class="auth-switch">Pas encore de compte ? <a href="signup.html">S'inscrire</a></p>
     </div>
   </main>
 
   <footer class="site-footer">
     <div class="container footer-bottom" style="border:none;padding-top:0">
       <span>© 2026 Damie Crypto Service (DCS)</span>
-      <span><a href="signup.html">Créer un compte →</a></span>
+      <span>Pi Authentication only</span>
     </div>
   </footer>
+  <script src="https://sdk.minepi.com/pi-sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/backend.js"></script>
+  <script src="js/pi.js"></script>
   <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
 </body>

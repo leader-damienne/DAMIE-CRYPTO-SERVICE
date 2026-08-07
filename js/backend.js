@@ -57,7 +57,7 @@
       id: row.id,
       username: row.username,
       email: row.email,
-      displayName: row.display_name || row.username,
+      displayName: row.display_name || row.pi_username || row.username,
       firstName: row.first_name || "",
       lastName: row.last_name || "",
       birthDate: row.birth_date || "",
@@ -73,6 +73,8 @@
       gmailLinked: !!row.gmail_linked,
       phoneLinked: !!row.phone_linked,
       googleAuth: !!row.google_auth,
+      piUid: row.pi_uid || "",
+      piUsername: row.pi_username || "",
       joined: row.created_at
         ? new Date(row.created_at).toLocaleDateString("fr-FR")
         : "",
@@ -117,7 +119,13 @@
   };
 
   function emptyWallet() {
-    return Object.keys(META).map(function (sym) {
+    var symbols = Object.keys(META);
+    try {
+      if (window.DCS_CONFIG && DCS_CONFIG.piEcosystemMode !== false) {
+        symbols = ["PI"];
+      }
+    } catch (e) {}
+    return symbols.map(function (sym) {
       var m = META[sym];
       return {
         symbol: sym,
@@ -1407,6 +1415,15 @@
     },
     login: function (login, password) {
       return DCS.backend.login(login, password);
+    },
+    loginWithPi: function () {
+      if (!DCS.pi || typeof DCS.pi.loginWithPi !== "function") {
+        return Promise.resolve({
+          ok: false,
+          error: "Module Pi non chargé."
+        });
+      }
+      return DCS.pi.loginWithPi();
     },
     logout: function () {
       return DCS.backend.logout();

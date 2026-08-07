@@ -8,9 +8,13 @@
     return global.DCS_CONFIG || {};
   }
 
-  function functionsUrl() {
+  function functionsUrl(name) {
     var base = (cfg().supabaseUrl || "").replace(/\/$/, "");
-    return base + "/functions/v1/pi-payment";
+    return base + "/functions/v1/" + (name || "pi-payment");
+  }
+
+  function ecosystemMode() {
+    return cfg().piEcosystemMode !== false;
   }
 
   function getAccessToken() {
@@ -29,7 +33,7 @@
       if (!token) {
         return { ok: false, error: "Connectez-vous à DCS d'abord." };
       }
-      return fetch(functionsUrl(), {
+      return fetch(functionsUrl("pi-payment"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -118,6 +122,67 @@
     });
   }
 
+  /** Connexion DCS via Pi Authentication (listing Ecosystem). */
+  function loginWithPi() {
+    return authenticate()
+      .then(function (auth) {
+        var accessToken = auth && (auth.accessToken || auth.access_token);
+        if (!accessToken) {
+          return { ok: false, error: "Jeton Pi manquant après authentification." };
+        }
+        return fetch(functionsUrl("pi-auth"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: cfg().supabaseAnonKey || ""
+          },
+          body: JSON.stringify({
+            accessToken: accessToken,
+            uid: auth.user && auth.user.uid,
+            username: auth.user && auth.user.username
+          })
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok || !data.ok) {
+              return {
+                ok: false,
+                error: (data && data.error) || "Connexion Pi refusée (" + res.status + ")"
+              };
+            }
+            if (!DCS.backend || !DCS.backend.client) {
+              return { ok: false, error: "Backend DCS non prêt." };
+            }
+            return DCS.backend.client.auth
+              .setSession({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token
+              })
+              .then(function (sess) {
+                if (sess.error) {
+                  return { ok: false, error: sess.error.message || "Session impossible." };
+                }
+                return DCS.auth.hydrate().then(function (ok) {
+                  return ok
+                    ? { ok: true, user: data.user }
+                    : { ok: false, error: "Profil DCS introuvable après login Pi." };
+                });
+              });
+          });
+        });
+      })
+      .catch(function (err) {
+        var msg = (err && err.message) || String(err);
+        if (/Pi Browser|not available|undefined/i.test(msg) || !global.Pi) {
+          return {
+            ok: false,
+            error:
+              "Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi (exigence Ecosystem)."
+          };
+        }
+        return { ok: false, error: msg };
+      });
+  }
+
   function depositWithPi(amount) {
     var amt = Number(amount);
     if (!(amt > 0)) {
@@ -203,8 +268,10 @@
   DCS.pi = {
     init: initPi,
     authenticate: authenticate,
+    loginWithPi: loginWithPi,
     depositWithPi: depositWithPi,
     isAvailable: isPiBrowser,
+    ecosystemMode: ecosystemMode,
     callBackend: callPiBackend
   };
 })(typeof window !== "undefined" ? window : this);

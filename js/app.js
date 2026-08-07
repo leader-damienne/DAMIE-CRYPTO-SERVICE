@@ -41,6 +41,119 @@
     }
   };
 
+  function isEcosystemMode() {
+    try {
+      return !(window.DCS_CONFIG && DCS_CONFIG.piEcosystemMode === false);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  /** Conformité listing Pi Ecosystem : auth Pi + transactions Pi only. */
+  function applyEcosystemCompliance() {
+    if (!isEcosystemMode()) return;
+
+    if (window.DCS && Array.isArray(DCS.markets)) {
+      DCS.markets = DCS.markets.filter(function (m) {
+        return m && (m.symbol === "PI" || m.id === "pi");
+      });
+    }
+
+    document.querySelectorAll("#main-nav a, .footer-col a, .footer-bottom a").forEach(function (a) {
+      const href = (a.getAttribute("href") || "").toLowerCase();
+      if (/swap\.html/.test(href) || /transfer\.html/.test(href)) {
+        a.style.display = "none";
+      }
+      if (/signup\.html/.test(href)) {
+        a.setAttribute("href", "signin.html");
+        if (/inscri/i.test(a.textContent || "")) a.textContent = "Connexion Pi";
+      }
+    });
+
+    document.querySelectorAll('a[href="swap.html"], a[href="transfer.html"]').forEach(function (a) {
+      a.style.display = "none";
+    });
+
+    document.querySelectorAll(".stats-strip, #pi-xof, #pi-xaf").forEach(function (el) {
+      const strip = el.classList && el.classList.contains("stats-strip") ? el : null;
+      if (strip) strip.style.display = "none";
+    });
+    const xof = document.getElementById("pi-xof");
+    const xaf = document.getElementById("pi-xaf");
+    if (xof && xof.parentElement) xof.parentElement.style.display = "none";
+    if (xaf && xaf.parentElement) xaf.parentElement.style.display = "none";
+
+    document.querySelectorAll(".module-link").forEach(function (a) {
+      const href = (a.getAttribute("href") || "").toLowerCase();
+      if (/swap|transfer/.test(href)) a.style.display = "none";
+      if (/profil/.test(href)) {
+        const p = a.querySelector("p");
+        if (p) p.textContent = "Profil Pioneer Pi, avatar et préférences.";
+      }
+    });
+
+    const heroTag = document.querySelector(".hero-tagline");
+    if (heroTag) {
+      heroTag.textContent =
+        "Wallet Pi, marketplace et formation — entièrement dans l’écosystème Pi Network.";
+    }
+    const footerNote = document.querySelector(".footer-bottom span:last-child");
+    if (footerNote && /XOF|XAF/.test(footerNote.textContent || "")) {
+      footerNote.textContent = "PI only · Pi Ecosystem";
+    }
+
+    /* Pages non conformes : message + redirection douce */
+    const page = (location.pathname || "").split("/").pop() || "";
+    if (/^swap\.html$/i.test(page) || /^transfer\.html$/i.test(page)) {
+      const main = document.querySelector("main.container");
+      if (main) {
+        main.innerHTML =
+          '<div class="page-hero"><h1>Pi <span>only</span></h1>' +
+          "<p>Conformité Pi Ecosystem : seules les transactions en Pi sont disponibles.</p></div>" +
+          '<div class="panel"><p>Utilisez le wallet pour déposer et gérer votre PI.</p>' +
+          '<a class="btn btn-gold" href="wallet.html">Ouvrir le Wallet Pi</a></div>';
+      }
+    }
+
+    /* Profil : masquer e-mail / téléphone / mot de passe / KYC docs */
+    [
+      "link-gmail",
+      "link-phone",
+      "change-password-form",
+      "start-kyc",
+      "reset-kyc"
+    ].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const panel = el.closest(".panel") || el.closest("form") || el;
+      if (panel) panel.style.display = "none";
+    });
+    document.querySelectorAll(".kyc-steps").forEach(function (el) {
+      const panel = el.closest(".panel");
+      if (panel) panel.style.display = "none";
+    });
+
+    /* Contact : pas de collecte e-mail */
+    const contactEmail = document.getElementById("contact-email");
+    if (contactEmail) {
+      const g = contactEmail.closest(".form-group");
+      if (g) g.style.display = "none";
+      contactEmail.required = false;
+    }
+
+    /* Wallet : dépôt manuel / ID hors Pi SDK secondaires */
+    const manualDeposit = document.getElementById("deposit-request-form");
+    if (manualDeposit) {
+      const wrap = manualDeposit.closest(".panel") || manualDeposit;
+      wrap.style.display = "none";
+    }
+    const depAddr = document.getElementById("deposit-address");
+    if (depAddr) {
+      const box = depAddr.closest(".panel");
+      if (box && !box.querySelector("#pi-deposit-btn")) box.style.display = "none";
+    }
+  }
+
   function sparkPath(seed, up, flat) {
     const pts = [];
     let y = 16;
@@ -1278,6 +1391,12 @@
   }
 
   function startLiveMarkets() {
+    if (isEcosystemMode()) {
+      lockPiPrice();
+      if (document.getElementById("ticker-track")) renderTicker();
+      if (document.getElementById("pi-price")) renderPiSpotlight();
+      return;
+    }
     refreshLiveMarketsRest();
     connectMarketsWebSocket();
     /* Affichage à chaque seconde (le flux WS arrive en continu) */
@@ -2651,15 +2770,18 @@
       frag.appendChild(gold);
     } else {
       const signin = document.createElement("a");
-      signin.className = "btn btn-outline";
+      signin.className = "btn btn-gold";
       signin.href = "signin.html";
-      signin.textContent = "Connexion";
-      const signup = document.createElement("a");
-      signup.className = "btn btn-gold";
-      signup.href = "signup.html";
-      signup.textContent = "Inscription";
+      signin.textContent = isEcosystemMode() ? "Connexion Pi" : "Connexion";
       frag.appendChild(signin);
-      frag.appendChild(signup);
+      if (!isEcosystemMode()) {
+        const signup = document.createElement("a");
+        signup.className = "btn btn-gold";
+        signup.href = "signup.html";
+        signup.textContent = "Inscription";
+        signin.className = "btn btn-outline";
+        frag.appendChild(signup);
+      }
     }
     Array.from(actions.children).forEach((el) => {
       if (!el.classList.contains("menu-toggle")) el.remove();
@@ -2667,12 +2789,13 @@
     if (toggle) actions.insertBefore(frag, toggle);
     else actions.appendChild(frag);
 
-    /* CTAs hero / modules : orienter les invités vers l'inscription */
+    /* CTAs hero / modules : orienter les invités vers la connexion Pi */
     if (!logged) {
+      const authPage = isEcosystemMode() ? "signin.html" : "signup.html";
       document.querySelectorAll(".hero-ctas a.btn-gold, a.module-link").forEach((a) => {
         const href = a.getAttribute("href") || "";
         if (/wallet|swap|transfer|marketplace|parrainage|profil|academy|learning|community/i.test(href)) {
-          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(normalizePage(href.split("#")[0] || "index.html")));
+          a.setAttribute("href", authPage + "?next=" + encodeURIComponent(normalizePage(href.split("#")[0] || "index.html")));
         }
       });
       document.querySelectorAll("#main-nav a").forEach((a) => {
@@ -2681,7 +2804,7 @@
         const href = normalizePage(raw);
         if (isPublicPage(href) || href === "index.html") return;
         if (/\.html$/i.test(href)) {
-          a.setAttribute("href", "signup.html?next=" + encodeURIComponent(href));
+          a.setAttribute("href", authPage + "?next=" + encodeURIComponent(href));
         }
       });
     }
@@ -2706,7 +2829,59 @@
     return "index.html";
   }
 
+  function setupPiLoginButton(errEl) {
+    const btn = document.getElementById("pi-login-btn");
+    if (!btn || !window.DCS || !DCS.auth) return;
+    btn.addEventListener("click", async () => {
+      if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+        errEl.style.color = "";
+      }
+      btn.disabled = true;
+      const prev = btn.textContent;
+      btn.textContent = "Connexion Pi…";
+      try {
+        if (DCS.pi && typeof DCS.pi.init === "function") {
+          await DCS.pi.init().catch(function () {});
+        }
+        const result = await DCS.auth.loginWithPi();
+        if (!result || !result.ok) {
+          if (errEl) {
+            errEl.hidden = false;
+            errEl.textContent =
+              (result && result.error) ||
+              "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser.";
+          }
+          return;
+        }
+        window.location.href = authNextUrl();
+      } catch (e) {
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = (e && e.message) || String(e);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev || "Continuer avec Pi";
+      }
+    });
+  }
+
   function setupSignup() {
+    if (isEcosystemMode()) {
+      const form = document.getElementById("signup-form");
+      if (form) form.hidden = true;
+      const otpForm = document.getElementById("signup-otp-form");
+      if (otpForm) otpForm.hidden = true;
+      if (isLoggedIn()) {
+        window.location.replace(authNextUrl());
+        return;
+      }
+      const err = document.getElementById("signup-error") || document.getElementById("signin-error");
+      setupPiLoginButton(err);
+      return;
+    }
     const form = document.getElementById("signup-form");
     const otpForm = document.getElementById("signup-otp-form");
     if (!form || !window.DCS || !DCS.auth) return;
@@ -2865,12 +3040,26 @@
 
   function setupSignin() {
     const form = document.getElementById("signin-form");
-    if (!form || !window.DCS || !DCS.auth) return;
+    const err = document.getElementById("signin-error");
     if (isLoggedIn()) {
       window.location.replace(authNextUrl());
       return;
     }
-    const err = document.getElementById("signin-error");
+
+    if (isEcosystemMode()) {
+      if (form) form.hidden = true;
+      const switchEl = document.querySelector(".auth-switch");
+      if (switchEl) switchEl.hidden = true;
+      setupPiLoginButton(err);
+      const setupBanner = document.getElementById("auth-setup-banner");
+      if (setupBanner && window.DCS && DCS.auth && !DCS.auth.isConfigured()) {
+        setupBanner.hidden = false;
+        setupBanner.textContent = DCS.backend.setupMessage();
+      }
+      return;
+    }
+
+    if (!form || !window.DCS || !DCS.auth) return;
     const setupBanner = document.getElementById("auth-setup-banner");
     const params = new URLSearchParams(location.search);
     if (params.get("confirmed") === "1" && err) {
@@ -3053,6 +3242,7 @@
   async function boot() {
     if (window.DCS && DCS.backend) await DCS.backend.init();
     if (window.DCS && DCS.auth) await DCS.auth.hydrate();
+    applyEcosystemCompliance();
     setupNav();
     setupLanguage();
     updateAuthNav();
@@ -3072,8 +3262,8 @@
     const isRef = page === "parrainage.html" || !!document.getElementById("ref-link");
     const isProfil = page === "profil.html" || !!document.getElementById("profile-user-form");
     const isHome = page === "index.html" || !!document.getElementById("markets-body");
-    const isSignup = page === "signup.html" || !!document.getElementById("signup-form");
-    const isSignin = page === "signin.html" || !!document.getElementById("signin-form");
+    const isSignup = page === "signup.html";
+    const isSignin = page === "signin.html";
 
     if (isSignup) setupSignup();
     if (isSignin) setupSignin();
@@ -3087,16 +3277,16 @@
       renderWallet();
       setupDeposit();
       setupPiDeposit();
-      setupDepositRequest();
+      if (!isEcosystemMode()) setupDepositRequest();
       renderHistory();
       await DCS.backend.loadNotifications();
       renderNotifications();
     }
-    if (isSwap) {
+    if (isSwap && !isEcosystemMode()) {
       renderPiSpotlight();
       setupSwap();
     }
-    if (isTransfer) {
+    if (isTransfer && !isEcosystemMode()) {
       setupTransfer();
       renderHistory();
     }
