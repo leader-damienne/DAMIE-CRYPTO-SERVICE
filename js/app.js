@@ -1555,12 +1555,20 @@
       if (kycHint) {
         if (key === "pending") {
           kycHint.textContent =
-            "Un statut « en attente » signifie qu'un dossier a été enregistré. S'il n'y a pas eu de vrais documents, réinitialisez ci-dessous.";
+            "Dossier en attente de revue" +
+            (u.kycDocType
+              ? " (" +
+                ({ cni: "CNI", passport: "Passeport", residence: "Titre de séjour", driving: "Permis" }[
+                  u.kycDocType
+                ] || u.kycDocType) +
+                ")."
+              : ".") +
+            " Sans vrais documents, réinitialisez ci-dessous.";
         } else if (key === "verified") {
           kycHint.textContent = "Identité validée par l'équipe DCS.";
         } else {
           kycHint.textContent =
-            "Ajoutez la pièce d'identité + le selfie, puis cliquez sur Soumettre. Sans fichiers, le statut reste « Non démarré ».";
+            "Choisissez le type de pièce, ajoutez le scan, puis prenez un selfie avec la caméra.";
         }
       }
       if (resetKycBtn) resetKycBtn.hidden = key === "none";
@@ -1770,27 +1778,268 @@
       });
     }
 
+    let kycSelfieDataUrl = "";
+    let kycCameraStream = null;
+    let kycCapturedBlobUrl = "";
+
+    function stopKycCamera() {
+      if (kycCameraStream) {
+        kycCameraStream.getTracks().forEach((t) => t.stop());
+        kycCameraStream = null;
+      }
+      const video = document.getElementById("kyc-camera-video");
+      if (video) video.srcObject = null;
+    }
+
+    function setKycSelfiePreview(dataUrl) {
+      kycSelfieDataUrl = dataUrl || "";
+      const wrap = document.getElementById("kyc-selfie-preview-wrap");
+      const img = document.getElementById("kyc-selfie-preview");
+      const status = document.getElementById("kyc-selfie-status");
+      if (wrap && img) {
+        if (dataUrl) {
+          img.src = dataUrl;
+          wrap.hidden = false;
+          if (status) status.textContent = "Selfie capturé";
+        } else {
+          img.removeAttribute("src");
+          wrap.hidden = true;
+          if (status) status.textContent = "Aucun selfie";
+        }
+      }
+    }
+
+    function closeKycCameraModal() {
+      const modal = document.getElementById("kyc-camera-modal");
+      if (modal) modal.hidden = true;
+      stopKycCamera();
+      const shot = document.getElementById("kyc-camera-shot");
+      const video = document.getElementById("kyc-camera-video");
+      const captureBtn = document.getElementById("kyc-camera-capture");
+      const useBtn = document.getElementById("kyc-camera-use");
+      const retryBtn = document.getElementById("kyc-camera-retry");
+      const err = document.getElementById("kyc-camera-error");
+      if (shot) {
+        shot.hidden = true;
+        shot.removeAttribute("src");
+      }
+      if (video) video.hidden = false;
+      if (captureBtn) captureBtn.hidden = false;
+      if (useBtn) useBtn.hidden = true;
+      if (retryBtn) retryBtn.hidden = true;
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      if (kycCapturedBlobUrl) {
+        try {
+          URL.revokeObjectURL(kycCapturedBlobUrl);
+        } catch (e) {}
+        kycCapturedBlobUrl = "";
+      }
+    }
+
+    async function openKycCamera() {
+      const modal = document.getElementById("kyc-camera-modal");
+      const video = document.getElementById("kyc-camera-video");
+      const shot = document.getElementById("kyc-camera-shot");
+      const captureBtn = document.getElementById("kyc-camera-capture");
+      const useBtn = document.getElementById("kyc-camera-use");
+      const retryBtn = document.getElementById("kyc-camera-retry");
+      const err = document.getElementById("kyc-camera-error");
+      if (!modal || !video) return;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Votre navigateur ne permet pas l'accès à la caméra. Utilisez Chrome/Safari à jour, en HTTPS.");
+        return;
+      }
+      modal.hidden = false;
+      if (shot) {
+        shot.hidden = true;
+        shot.removeAttribute("src");
+        delete shot.dataset.dataUrl;
+      }
+      video.hidden = false;
+      if (captureBtn) captureBtn.hidden = false;
+      if (useBtn) useBtn.hidden = true;
+      if (retryBtn) retryBtn.hidden = true;
+      if (err) {
+        err.hidden = true;
+        err.textContent = "";
+      }
+      try {
+        stopKycCamera();
+        kycCameraStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "user" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        video.srcObject = kycCameraStream;
+        await video.play().catch(() => {});
+      } catch (e) {
+        const msg =
+          e && e.name === "NotAllowedError"
+            ? "Accès caméra refusé. Autorisez la caméra dans les paramètres du navigateur, puis réessayez."
+            : "Impossible d'ouvrir la caméra. Vérifiez les permissions et que rien d'autre ne l'utilise.";
+        if (err) {
+          err.textContent = msg;
+          err.hidden = false;
+        } else {
+          alert(msg);
+        }
+      }
+    }
+
+    function captureKycSelfieFrame() {
+      const video = document.getElementById("kyc-camera-video");
+      const canvas = document.getElementById("kyc-camera-canvas");
+      const shot = document.getElementById("kyc-camera-shot");
+      const captureBtn = document.getElementById("kyc-camera-capture");
+      const useBtn = document.getElementById("kyc-camera-use");
+      const retryBtn = document.getElementById("kyc-camera-retry");
+      if (!video || !canvas || !shot) return;
+      const w = video.videoWidth || 720;
+      const h = video.videoHeight || 960;
+      if (!w || !h) {
+        alert("Caméra pas encore prête. Attendez une seconde et réessayez.");
+        return;
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      // Mirror horizontally to match preview
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      shot.src = dataUrl;
+      shot.hidden = false;
+      video.hidden = true;
+      if (captureBtn) captureBtn.hidden = true;
+      if (useBtn) useBtn.hidden = false;
+      if (retryBtn) retryBtn.hidden = false;
+      stopKycCamera();
+      shot.dataset.dataUrl = dataUrl;
+    }
+
+    const idFileInput = document.getElementById("kyc-id-file");
+    if (idFileInput) {
+      idFileInput.addEventListener("change", () => {
+        const nameEl = document.getElementById("kyc-id-name");
+        const f = idFileInput.files && idFileInput.files[0];
+        if (nameEl) {
+          if (f) {
+            nameEl.textContent = "Fichier : " + f.name;
+            nameEl.hidden = false;
+          } else {
+            nameEl.hidden = true;
+            nameEl.textContent = "";
+          }
+        }
+      });
+    }
+
+    const openCamBtn = document.getElementById("kyc-open-camera");
+    if (openCamBtn) openCamBtn.addEventListener("click", () => openKycCamera());
+
+    const closeCamBtn = document.getElementById("kyc-camera-close");
+    if (closeCamBtn) closeCamBtn.addEventListener("click", () => closeKycCameraModal());
+
+    const camModal = document.getElementById("kyc-camera-modal");
+    if (camModal) {
+      camModal.addEventListener("click", (e) => {
+        if (e.target === camModal) closeKycCameraModal();
+      });
+    }
+
+    const captureBtn = document.getElementById("kyc-camera-capture");
+    if (captureBtn) captureBtn.addEventListener("click", () => captureKycSelfieFrame());
+
+    const useBtn = document.getElementById("kyc-camera-use");
+    if (useBtn) {
+      useBtn.addEventListener("click", () => {
+        const shot = document.getElementById("kyc-camera-shot");
+        const dataUrl = shot && shot.dataset.dataUrl;
+        if (!dataUrl) return;
+        setKycSelfiePreview(dataUrl);
+        closeKycCameraModal();
+      });
+    }
+
+    const retryBtn = document.getElementById("kyc-camera-retry");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", async () => {
+        const shot = document.getElementById("kyc-camera-shot");
+        const video = document.getElementById("kyc-camera-video");
+        const capture = document.getElementById("kyc-camera-capture");
+        const use = document.getElementById("kyc-camera-use");
+        if (shot) {
+          shot.hidden = true;
+          shot.removeAttribute("src");
+          delete shot.dataset.dataUrl;
+        }
+        if (capture) capture.hidden = false;
+        if (use) use.hidden = true;
+        retryBtn.hidden = true;
+        if (video) video.hidden = false;
+        await openKycCamera();
+      });
+    }
+
+    const retakeBtn = document.getElementById("kyc-retake-selfie");
+    if (retakeBtn) {
+      retakeBtn.addEventListener("click", () => {
+        setKycSelfiePreview("");
+        openKycCamera();
+      });
+    }
+
+    const DOC_LABELS = {
+      cni: "CNI",
+      passport: "Passeport",
+      residence: "Titre de séjour",
+      driving: "Permis de conduire"
+    };
+
     const kycBtn = document.getElementById("start-kyc");
     if (kycBtn) {
       kycBtn.addEventListener("click", async () => {
+        const docType = (document.getElementById("kyc-doc-type") || {}).value || "";
         const idFile = document.getElementById("kyc-id-file");
-        const selfieFile = document.getElementById("kyc-selfie-file");
         const hasId = idFile && idFile.files && idFile.files[0];
-        const hasSelfie = selfieFile && selfieFile.files && selfieFile.files[0];
-        if (!hasId || !hasSelfie) {
-          alert(
-            "Pour soumettre un KYC, ajoutez au moins une pièce d'identité et un selfie. Sans documents, le statut reste « Non démarré »."
-          );
+        if (!docType) {
+          alert("Choisissez le type de pièce d'identité (CNI, passeport, etc.).");
+          return;
+        }
+        if (!hasId) {
+          alert("Ajoutez la photo ou le scan de votre " + (DOC_LABELS[docType] || "pièce") + ".");
+          return;
+        }
+        if (!kycSelfieDataUrl) {
+          alert("Prenez un selfie avec la caméra avant de soumettre.");
           return;
         }
         DCS.user.kyc = "pending";
+        DCS.user.kycDocType = docType;
         try {
-          localStorage.setItem("dcs_kyc_docs_" + (DCS.user.id || ""), "1");
+          localStorage.setItem(
+            "dcs_kyc_docs_" + (DCS.user.id || ""),
+            JSON.stringify({
+              docType: docType,
+              idName: idFile.files[0].name,
+              selfie: true,
+              at: Date.now()
+            })
+          );
         } catch (e) {}
         if (window.DCS && DCS.auth) await DCS.auth.persistCurrentUser();
         renderProfile();
         alert(
-          "Dossier KYC soumis avec documents — statut : en attente de vérification manuelle par l'équipe DCS."
+          "Dossier KYC soumis (" +
+            (DOC_LABELS[docType] || docType) +
+            " + selfie) — statut : en attente de vérification manuelle."
         );
       });
     }
@@ -1801,6 +2050,17 @@
         const ok = confirm("Remettre le KYC à « Non démarré » ?");
         if (!ok) return;
         DCS.user.kyc = "none";
+        DCS.user.kycDocType = "";
+        setKycSelfiePreview("");
+        const docSel = document.getElementById("kyc-doc-type");
+        if (docSel) docSel.value = "";
+        const idFile = document.getElementById("kyc-id-file");
+        if (idFile) idFile.value = "";
+        const idName = document.getElementById("kyc-id-name");
+        if (idName) {
+          idName.hidden = true;
+          idName.textContent = "";
+        }
         try {
           localStorage.removeItem("dcs_kyc_docs_" + (DCS.user.id || ""));
         } catch (e) {}

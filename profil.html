@@ -156,23 +156,39 @@
           <div class="kyc-steps" style="margin:1rem 0">
             <div class="kyc-step">
               <div class="num">1</div>
-              <div>
-                <strong>Pièce d'identité</strong>
-                <p style="font-size:0.82rem;color:var(--muted)">CNI, passeport ou titre de séjour</p>
-                <input id="kyc-id-file" class="form-control" type="file" accept="image/*,.pdf" style="margin-top:0.45rem" />
+              <div style="flex:1;min-width:0">
+                <strong>Type de pièce d'identité</strong>
+                <p style="font-size:0.82rem;color:var(--muted)">Choisissez le document à vérifier</p>
+                <select id="kyc-doc-type" class="form-control" style="margin-top:0.45rem" required>
+                  <option value="">— Sélectionner —</option>
+                  <option value="cni">Carte nationale d'identité (CNI)</option>
+                  <option value="passport">Passeport</option>
+                  <option value="residence">Titre de séjour</option>
+                  <option value="driving">Permis de conduire</option>
+                </select>
+                <label for="kyc-id-file" style="display:block;margin-top:0.65rem;font-size:0.82rem;color:var(--muted)">Photo / scan du document</label>
+                <input id="kyc-id-file" class="form-control" type="file" accept="image/*,.pdf" capture="environment" style="margin-top:0.35rem" />
+                <p id="kyc-id-name" class="kyc-file-name" hidden></p>
               </div>
             </div>
             <div class="kyc-step">
               <div class="num">2</div>
-              <div>
+              <div style="flex:1;min-width:0">
                 <strong>Selfie de vérification</strong>
-                <p style="font-size:0.82rem;color:var(--muted)">Photo de visage pour confirmer l'identité</p>
-                <input id="kyc-selfie-file" class="form-control" type="file" accept="image/*" style="margin-top:0.45rem" />
+                <p style="font-size:0.82rem;color:var(--muted)">Prenez une photo en direct avec la caméra (visage bien visible)</p>
+                <div class="kyc-selfie-row">
+                  <button class="btn btn-outline" type="button" id="kyc-open-camera">Ouvrir la caméra</button>
+                  <span id="kyc-selfie-status" class="kyc-file-name">Aucun selfie</span>
+                </div>
+                <div id="kyc-selfie-preview-wrap" class="kyc-selfie-preview" hidden>
+                  <img id="kyc-selfie-preview" alt="Aperçu selfie" />
+                  <button type="button" class="btn btn-outline" id="kyc-retake-selfie">Reprendre</button>
+                </div>
               </div>
             </div>
             <div class="kyc-step">
               <div class="num">3</div>
-              <div>
+              <div style="flex:1;min-width:0">
                 <strong>Justificatif de domicile</strong>
                 <p style="font-size:0.82rem;color:var(--muted)">Facture ou attestation récente (optionnel)</p>
                 <input id="kyc-address-file" class="form-control" type="file" accept="image/*,.pdf" style="margin-top:0.45rem" />
@@ -342,6 +358,29 @@
       </div>
     </div>
   </main>
+
+  <div id="kyc-camera-modal" class="article-modal kyc-camera-modal" hidden>
+    <div class="article-modal-card kyc-camera-card">
+      <button type="button" class="article-modal-close" id="kyc-camera-close" aria-label="Fermer">×</button>
+      <div class="kyc-camera-body">
+        <h3>Selfie KYC</h3>
+        <p style="font-size:0.85rem;color:var(--muted);margin:0.35rem 0 0.85rem">
+          Autorisez l'accès à la caméra, centrez votre visage, puis capturez.
+        </p>
+        <div class="kyc-camera-stage">
+          <video id="kyc-camera-video" playsinline autoplay muted></video>
+          <canvas id="kyc-camera-canvas" hidden></canvas>
+          <img id="kyc-camera-shot" alt="Capture" hidden />
+        </div>
+        <p id="kyc-camera-error" class="kyc-camera-error" hidden></p>
+        <div class="kyc-camera-actions">
+          <button type="button" class="btn btn-gold" id="kyc-camera-capture">Capturer</button>
+          <button type="button" class="btn btn-outline" id="kyc-camera-use" hidden>Utiliser cette photo</button>
+          <button type="button" class="btn btn-outline" id="kyc-camera-retry" hidden>Reprendre</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <footer class="site-footer">
     <div class="container footer-bottom" style="border:none;padding-top:0">
