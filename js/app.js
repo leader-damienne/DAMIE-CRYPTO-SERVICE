@@ -2543,8 +2543,12 @@
     try {
       localStorage.setItem("dcs_lang", lang);
     } catch (e) {}
-    document.documentElement.lang = lang;
-    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    if (window.DCS && DCS.i18n && typeof DCS.i18n.apply === "function") {
+      DCS.i18n.apply(lang);
+    } else {
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    }
     const select = document.getElementById("app-language");
     if (select) select.value = lang;
     const current = document.getElementById("lang-current-value");
@@ -2586,6 +2590,20 @@
           '<span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span>';
       }
     });
+    /* Preserve founder-footer label start when translated */
+    document.querySelectorAll(".founder-footer").forEach((el) => {
+      const strong = el.querySelector("strong");
+      const leaderEl = el.querySelector("[data-leader-title]");
+      if (!strong || !leaderEl) return;
+      const prefix =
+        window.DCS && DCS.i18n ? DCS.i18n.t("footer.founderLine", lang) + " " : "Fondatrice : ";
+      el.innerHTML =
+        prefix +
+        "<strong>" +
+        strong.textContent +
+        "</strong> · " +
+        leaderEl.outerHTML;
+    });
   }
 
   function setupLanguage() {
@@ -2596,23 +2614,26 @@
     if (!select) return;
 
     if (saveBtn) {
-      saveBtn.addEventListener("click", () => {
-        applyLanguage(select.value);
-        alert(
-          select.value === "fr"
-            ? "Langue enregistrée : Français."
-            : select.value === "en"
-              ? "Language saved: English."
-              : select.value === "pt"
-                ? "Idioma guardado: Português."
-                : "تم حفظ اللغة: العربية."
-        );
+      saveBtn.addEventListener("click", async () => {
+        const lang = select.value;
+        applyLanguage(lang);
+        if (window.DCS && DCS.auth && typeof DCS.auth.persistCurrentUser === "function") {
+          try {
+            await DCS.auth.persistCurrentUser();
+          } catch (e) {}
+        }
+        const msg =
+          window.DCS && DCS.i18n
+            ? DCS.i18n.savedMessage(lang)
+            : lang === "fr"
+              ? "Langue enregistrée : Français."
+              : "Language saved.";
+        alert(msg);
       });
     }
 
     select.addEventListener("change", () => {
-      const current = document.getElementById("lang-current-value");
-      if (current) current.textContent = LANG_LABELS[select.value] || select.value;
+      applyLanguage(select.value);
     });
   }
 
