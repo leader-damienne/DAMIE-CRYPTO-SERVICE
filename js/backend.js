@@ -466,6 +466,102 @@
       return gate.client.auth.signOut();
     },
 
+    uploadAvatar: function (file) {
+      var self = this;
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) {
+        return Promise.resolve({ ok: false, error: "Non connecté." });
+      }
+      if (!file) {
+        return Promise.resolve({ ok: false, error: "Aucun fichier." });
+      }
+
+      function resizeToDataUrl(blobFile) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onerror = function () {
+            reject(new Error("Lecture impossible."));
+          };
+          reader.onload = function () {
+            var img = new Image();
+            img.onerror = function () {
+              reject(new Error("Image invalide."));
+            };
+            img.onload = function () {
+              var max = 400;
+              var w = img.width;
+              var h = img.height;
+              if (w > max || h > max) {
+                var r = Math.min(max / w, max / h);
+                w = Math.round(w * r);
+                h = Math.round(h * r);
+              }
+              var canvas = document.createElement("canvas");
+              canvas.width = w;
+              canvas.height = h;
+              var ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, w, h);
+              resolve(canvas.toDataURL("image/jpeg", 0.82));
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(blobFile);
+        });
+      }
+
+      var ext = (file.name && file.name.split(".").pop()) || "jpg";
+      ext = String(ext).toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      if (ext === "jpeg") ext = "jpg";
+      var path = DCS.user.id + "/avatar." + (ext === "png" ? "png" : "jpg");
+
+      return resizeToDataUrl(file)
+        .then(function (dataUrl) {
+          /* Convertir dataURL → Blob pour Storage */
+          var parts = dataUrl.split(",");
+          var mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/jpeg";
+          var bin = atob(parts[1]);
+          var arr = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          var blob = new Blob([arr], { type: mime });
+
+          return gate.client.storage
+            .from("avatars")
+            .upload(path, blob, { upsert: true, contentType: mime })
+            .then(function (up) {
+              if (!up.error) {
+                var pub = gate.client.storage.from("avatars").getPublicUrl(path);
+                var url =
+                  (pub.data && pub.data.publicUrl ? pub.data.publicUrl : "") +
+                  "?t=" +
+                  Date.now();
+                DCS.user.avatar = url;
+                return self.persistProfile().then(function (p) {
+                  if (!p.ok) return { ok: false, error: p.error || "Profil non enregistré." };
+                  return { ok: true, url: url };
+                });
+              }
+              /* Fallback : enregistrer l'image compressée dans le profil (sans Storage) */
+              DCS.user.avatar = dataUrl;
+              return self.persistProfile().then(function (p) {
+                if (!p.ok) {
+                  return {
+                    ok: false,
+                    error:
+                      (up.error && up.error.message) ||
+                      p.error ||
+                      "Impossible d'enregistrer la photo."
+                  };
+                }
+                return { ok: true, url: dataUrl, fallback: true };
+              });
+            });
+        })
+        .catch(function (err) {
+          return { ok: false, error: (err && err.message) || "Upload impossible." };
+        });
+    },
+
     persistProfile: function () {
       var gate = this.requireClient();
       if (!gate.ok || !DCS.user.id) return Promise.resolve({ ok: false });

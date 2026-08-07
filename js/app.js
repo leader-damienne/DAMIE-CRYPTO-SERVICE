@@ -1464,13 +1464,33 @@
   function setupProfileForms() {
     const photoInput = document.getElementById("avatar-input");
     if (photoInput) {
-      photoInput.addEventListener("change", () => {
+      photoInput.addEventListener("change", async () => {
         const file = photoInput.files && photoInput.files[0];
         if (!file) return;
-        const url = URL.createObjectURL(file);
-        DCS.user.avatar = url;
+        if (!file.type || file.type.indexOf("image/") !== 0) {
+          alert("Choisissez une image (JPG, PNG…).");
+          photoInput.value = "";
+          return;
+        }
+        if (file.size > 8 * 1024 * 1024) {
+          alert("Image trop lourde (max. 8 Mo).");
+          photoInput.value = "";
+          return;
+        }
+        const label = document.querySelector('label[for="avatar-input"]');
+        if (label) {
+          label.setAttribute("data-old", label.textContent);
+          label.textContent = "Envoi…";
+        }
+        const res = await DCS.backend.uploadAvatar(file);
+        if (label) label.textContent = label.getAttribute("data-old") || "Uploader";
+        photoInput.value = "";
+        if (!res.ok) {
+          alert(res.error || "Impossible d'enregistrer la photo.");
+          return;
+        }
         renderProfile();
-        if (window.DCS && DCS.auth) DCS.auth.persistCurrentUser();
+        alert("Photo de profil enregistrée.");
       });
     }
 
