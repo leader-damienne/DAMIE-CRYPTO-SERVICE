@@ -246,18 +246,42 @@
   function setupDeposit() {
     const addressEl = document.getElementById("deposit-address");
     const copyBtn = document.getElementById("copy-deposit-address");
+    const hint = document.getElementById("deposit-hint");
     if (!addressEl || !copyBtn) return;
 
-    const PI_DEPOSIT_ADDRESS = "DCS-PI-WALLET-7X9K2M";
-    addressEl.value = PI_DEPOSIT_ADDRESS;
+    async function loadAddress() {
+      let addr = "";
+      if (window.DCS && DCS.backend && DCS.backend.ensureDepositAddress) {
+        const res = await DCS.backend.ensureDepositAddress();
+        addr = (res && res.address) || "";
+      }
+      if (!addr && DCS.user && DCS.user.id) {
+        addr =
+          "DCS-PI-" +
+          String(DCS.user.id).replace(/-/g, "").toUpperCase().slice(0, 16);
+      }
+      addressEl.value = addr || "Connexion requise";
+      if (hint) {
+        hint.innerHTML = addr
+          ? "ID de dépôt <strong>DCS</strong> personnel. Ce n’est pas encore une adresse Pi Network Mainnet : les dépôts on-chain seront activés quand le wallet Pi officiel sera branché. En attendant, utilisez cet ID pour créditer votre solde DCS (ops / support)."
+          : "Connectez-vous pour obtenir votre ID de dépôt.";
+      }
+    }
 
     copyBtn.addEventListener("click", () => {
+      const val = addressEl.value;
+      if (!val || val === "Connexion requise") {
+        alert("Aucune adresse à copier.");
+        return;
+      }
       addressEl.select();
-      navigator.clipboard.writeText(PI_DEPOSIT_ADDRESS).then(
-        () => alert("Adresse PI COIN copiée."),
-        () => alert(PI_DEPOSIT_ADDRESS)
+      navigator.clipboard.writeText(val).then(
+        () => alert("ID de dépôt copié :\n" + val),
+        () => alert(val)
       );
     });
+
+    loadAddress();
   }
 
   function renderHistory() {

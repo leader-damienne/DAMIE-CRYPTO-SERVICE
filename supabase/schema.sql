@@ -24,6 +24,7 @@ create table if not exists public.profiles (
   phone_linked boolean default false,
   google_auth boolean default false,
   language text default 'fr',
+  deposit_pi_address text unique,
   created_at timestamptz default now()
 );
 

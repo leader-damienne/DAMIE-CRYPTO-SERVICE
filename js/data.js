@@ -462,7 +462,8 @@ DCS.user = {
   joined: "",
   language: "fr",
   loggedIn: false,
-  referredBy: ""
+  referredBy: "",
+  depositPiAddress: ""
 };
 
 DCS.buildShareLinks = function () {

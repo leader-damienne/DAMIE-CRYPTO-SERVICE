@@ -78,6 +78,7 @@
         : "",
       language: row.language || "fr",
       referredBy: row.referred_by || "",
+      depositPiAddress: row.deposit_pi_address || "",
       loggedIn: true
     };
   }
@@ -606,6 +607,36 @@
       DCS.history = [];
       if (!gate.ok) return Promise.resolve();
       return gate.client.auth.signOut();
+    },
+
+    ensureDepositAddress: function () {
+      var self = this;
+      if (!DCS.user || !DCS.user.id) {
+        return Promise.resolve({ ok: false, address: "" });
+      }
+      if (DCS.user.depositPiAddress) {
+        return Promise.resolve({ ok: true, address: DCS.user.depositPiAddress });
+      }
+      var addr =
+        "DCS-PI-" +
+        String(DCS.user.id)
+          .replace(/-/g, "")
+          .toUpperCase()
+          .slice(0, 16);
+      DCS.user.depositPiAddress = addr;
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve({ ok: true, address: addr });
+      return gate.client
+        .from("profiles")
+        .update({ deposit_pi_address: addr })
+        .eq("id", DCS.user.id)
+        .then(function (res) {
+          if (res.error) {
+            console.warn(res.error);
+            return { ok: true, address: addr, saved: false };
+          }
+          return { ok: true, address: addr, saved: true };
+        });
     },
 
     uploadAvatar: function (file) {
