@@ -1712,7 +1712,7 @@
 
     /* CTAs hero / modules : orienter les invités vers l'inscription */
     if (!logged) {
-      document.querySelectorAll(".hero-ctas a.btn-gold, a.module-card").forEach((a) => {
+      document.querySelectorAll(".hero-ctas a.btn-gold, a.module-link").forEach((a) => {
         const href = a.getAttribute("href") || "";
         if (/wallet|swap|transfer|marketplace|parrainage|profil|academy|learning|community/i.test(href)) {
           a.setAttribute("href", "signup.html?next=" + encodeURIComponent(normalizePage(href.split("#")[0] || "index.html")));
