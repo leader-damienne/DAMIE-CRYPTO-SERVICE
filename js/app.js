@@ -2000,6 +2000,21 @@
     if (copySite) copySite.addEventListener("click", () => copyField("share-site-link", "Lien du site"));
   }
 
+  function isSyntheticPiEmail(val) {
+    return /@auth\.dcs(\.app)?$/i.test(String(val || "")) || /^pi\.[a-f0-9]{8,}@/i.test(String(val || ""));
+  }
+
+  function displayUserLabel(u) {
+    if (!u) return "—";
+    if (u.piUsername) return "@" + u.piUsername;
+    if (u.displayName && !isSyntheticPiEmail(u.displayName)) return u.displayName;
+    if (u.username && !/^pi\./i.test(u.username) && !isSyntheticPiEmail(u.username)) return "@" + u.username;
+    if (u.email && !isSyntheticPiEmail(u.email)) return u.email;
+    return u.displayName && !isSyntheticPiEmail(u.displayName)
+      ? u.displayName
+      : u.username || "Pioneer";
+  }
+
   function renderProfile() {
     if (!window.DCS || !DCS.user) return;
     const u = DCS.user;
@@ -2011,19 +2026,28 @@
       const el = document.getElementById(id);
       if (el) el.value = val || "";
     };
-    set("profile-username", u.email || u.displayName || "—");
-    set("profile-displayname", u.displayName);
+    const label = displayUserLabel(u);
+    set("profile-displayname", u.displayName || u.piUsername || u.username || "—");
+    set("profile-username", label);
     set("profile-joined", "Membre depuis " + u.joined);
     set("profile-invite", u.inviteCode);
     const session = document.getElementById("session-label");
-    if (session) session.textContent = u.loggedIn ? "Connecté · " + (u.email || u.displayName) : "Déconnecté";
+    if (session) session.textContent = u.loggedIn ? "Connecté · " + label : "Déconnecté";
     const loc = [u.city, u.country].filter(Boolean).join(", ");
     set("profile-location", loc || "Localisation non renseignée");
 
     setVal("edit-firstname", u.firstName);
     setVal("edit-lastname", u.lastName);
     setVal("edit-displayname", u.displayName);
-    setVal("edit-email", u.email);
+    const emailField = document.getElementById("edit-email");
+    if (emailField) {
+      if (isSyntheticPiEmail(u.email)) {
+        emailField.value = u.piUsername ? "Compte Pi · @" + u.piUsername : "Compte Pi (sans e-mail)";
+        emailField.readOnly = true;
+      } else {
+        emailField.value = u.email || "";
+      }
+    }
     setVal("edit-birthdate", u.birthDate);
     setVal("edit-gender", u.gender);
     setVal("edit-country", u.country);
@@ -2034,15 +2058,25 @@
     const avatarImg = document.getElementById("profile-avatar");
     const avatarFb = document.getElementById("profile-avatar-fallback");
     if (avatarImg && avatarFb) {
-      if (u.avatar) {
-        avatarImg.src = u.avatar;
-        avatarImg.hidden = false;
-        avatarFb.hidden = true;
-      } else {
+      const showFallback = () => {
+        avatarImg.removeAttribute("src");
         avatarImg.hidden = true;
         avatarFb.hidden = false;
         const initials = ((u.firstName || "")[0] || "") + ((u.lastName || "")[0] || "");
-        avatarFb.textContent = (initials || u.displayName || u.username).slice(0, 2).toUpperCase();
+        avatarFb.textContent = (initials || u.piUsername || u.displayName || u.username || "PI")
+          .replace(/^@/, "")
+          .slice(0, 2)
+          .toUpperCase();
+      };
+      if (u.avatar && !String(u.avatar).startsWith("blob:")) {
+        avatarImg.onload = function () {
+          avatarImg.hidden = false;
+          avatarFb.hidden = true;
+        };
+        avatarImg.onerror = showFallback;
+        avatarImg.src = u.avatar;
+      } else {
+        showFallback();
       }
     }
 
@@ -3247,15 +3281,33 @@
         /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
         /\.pinet\.com$/i.test(location.hostname) ||
         /pinet\.com/i.test(location.hostname);
-      if (isPi) {
+      /* Aussi sur mobile étroit : même correctifs anti-décalage */
+      const narrow =
+        (window.visualViewport && visualViewport.width < 900) ||
+        window.innerWidth < 900 ||
+        /Android|iPhone|iPad|Mobile/i.test(ua);
+      if (isPi || narrow) {
         document.documentElement.classList.add("pi-webview");
-        document.body.classList.add("is-pi-browser");
+        if (document.body) document.body.classList.add("is-pi-browser");
       }
-      /* Toujours recentrer la largeur utile (évite le mode “desktop scaled” du WebView) */
       document.documentElement.style.width = "100%";
-      document.body.style.width = "100%";
-      document.body.style.maxWidth = "100%";
-      document.body.style.overflowX = "hidden";
+      document.documentElement.style.maxWidth = "100%";
+      document.documentElement.style.overflowX = "hidden";
+      if (document.body) {
+        document.body.style.width = "100%";
+        document.body.style.maxWidth = "100%";
+        document.body.style.overflowX = "hidden";
+        document.body.style.margin = "0";
+      }
+      if (!document.querySelector("style[data-dcs-overflow-fix]")) {
+        const style = document.createElement("style");
+        style.setAttribute("data-dcs-overflow-fix", "1");
+        style.textContent =
+          "input,select,textarea,.form-control,#profile-username,#session-label{min-width:0!important;max-width:100%!important;overflow-wrap:anywhere!important;word-break:break-word!important}" +
+          ".btn{justify-content:center!important;text-align:center!important;direction:ltr!important}" +
+          "html,body{overflow-x:hidden!important;max-width:100%!important}";
+        (document.head || document.documentElement).appendChild(style);
+      }
     } catch (e) {}
   }
 

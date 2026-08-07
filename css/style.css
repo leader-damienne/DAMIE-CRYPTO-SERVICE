@@ -291,7 +291,16 @@ ul {
   border-radius: 6px;
   font-weight: 700;
   font-size: 0.82rem;
+  text-align: center;
   transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s, background 0.2s;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.btn[style*="width:100%"],
+.btn[style*="width: 100%"] {
+  width: 100% !important;
+  justify-content: center !important;
 }
 
 .btn:hover {
@@ -1101,6 +1110,13 @@ ul {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
   gap: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.grid-2 > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .balance-big {
@@ -1148,6 +1164,8 @@ ul {
 
 .form-control {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.75rem 0.9rem;
   background: rgba(20, 20, 20, 0.65);
   border: 1px solid var(--border-soft);
@@ -1155,6 +1173,9 @@ ul {
   outline: none;
   transition: border-color 0.2s;
   color: var(--white);
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .form-control:focus {
@@ -1544,26 +1565,100 @@ select.form-control {
   }
 }
 
-/* ——— Pi Browser / WebView : centrage forcé ——— */
-html.pi-webview body,
-body.is-pi-browser {
+/* ——— Anti-décalage Pi Browser ——— */
+html, body {
   width: 100% !important;
-  max-width: 100vw !important;
+  max-width: 100% !important;
   overflow-x: hidden !important;
 }
 
-html.pi-webview .container,
-html.pi-webview .header-inner,
-body.is-pi-browser .container,
-body.is-pi-browser .header-inner {
+.panel,
+.auth-panel,
+.profile-head,
+.form-group,
+.form-row-2,
+.status-row,
+.container,
+.header-inner,
+main,
+.support-form,
+.logout-box,
+.grid-2 {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+input,
+select,
+textarea,
+.form-control {
+  min-width: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  float: none !important;
-  left: auto !important;
-  right: auto !important;
-  transform: none !important;
+  box-sizing: border-box !important;
+}
+
+.btn,
+p,
+h1, h2, h3, h4,
+#profile-username,
+#profile-displayname,
+#session-label {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  white-space: normal !important;
+  direction: ltr !important;
+}
+
+/* Pi Browser : forcer le menu hamburger même si le WebView se croit “desktop” */
+html.pi-webview .menu-toggle,
+body.is-pi-browser .menu-toggle {
+  display: flex !important;
+}
+
+html.pi-webview .nav,
+body.is-pi-browser .nav {
+  display: none;
+  position: absolute;
+  top: calc(var(--nav-h) + 36px);
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  background: rgba(26, 26, 26, 0.96);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 0.75rem;
+  gap: 0.15rem;
+  z-index: 200;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html.pi-webview .nav.open,
+body.is-pi-browser .nav.open {
+  display: flex !important;
+}
+
+html.pi-webview .header-actions .btn-outline,
+body.is-pi-browser .header-actions .btn-outline {
+  display: none;
+}
+
+html.pi-webview .grid-2,
+body.is-pi-browser .grid-2,
+html.pi-webview .form-row-2,
+body.is-pi-browser .form-row-2 {
+  grid-template-columns: 1fr !important;
 }
 
 @media (max-width: 560px) {
@@ -1924,6 +2019,24 @@ body.is-pi-browser .header-inner {
   align-items: center;
   gap: 1.25rem;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.profile-head > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#profile-username,
+#profile-displayname,
+#session-label,
+.form-control {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .avatar-wrap {
@@ -1946,6 +2059,11 @@ body.is-pi-browser .header-inner {
   background: var(--gold-grad);
 }
 
+.avatar-wrap img[hidden],
+.avatar-fallback[hidden] {
+  display: none !important;
+}
+
 .avatar-fallback {
   display: grid;
   place-items: center;
@@ -1953,6 +2071,9 @@ body.is-pi-browser .header-inner {
   font-size: 1.6rem;
   font-weight: 700;
   color: #111;
+  line-height: 1;
+  text-align: center;
+  overflow: hidden;
 }
 
 .avatar-upload {
