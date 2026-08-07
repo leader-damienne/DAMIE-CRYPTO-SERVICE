@@ -637,33 +637,13 @@ select * from (values
 ) as v(title, tag, body, published_at)
 where not exists (select 1 from public.learning_articles limit 1);
 
-insert into public.marketplace_listings (seller_id, seller_name, title, price_pi, category, excerpt, content, photos)
-select null, v.seller, v.title, v.price, v.cat, v.excerpt, v.content, v.photos::jsonb
-from (values
-  ('Amina K.', 'Stratégie DCA avec PI COIN', 5, 'Trading',
-   'Comment accumuler sans stress grâce à PI COIN sur DCS.',
-   'Guide DCA basé sur PI COIN stable à $314,159. Planifiez vos apports et convertissez vers XOF/XAF selon vos besoins.',
-   '["assets/coins/pi.png","assets/logo.png"]'),
-  ('Jean-Marc D.', 'Corridors XOF → XAF expliqués', 8, 'Transfer',
-   'Frais et délais des transferts UEMOA / CEMAC.',
-   'Tour d''horizon des corridors XOF/XAF sur DCS et bonnes pratiques de transfert.',
-   '["assets/coins/xof.svg","assets/coins/xaf.svg"]'),
-  ('Fatou S.', 'Lancer une boutique payable en PI COIN', 12, 'Business',
-   'Checklist pour publier et monétiser vos articles.',
-   'De l''inscription vendeur à la première vente : prix, photos, contenu et service client.',
-   '["assets/logo.png","assets/coins/pi.png"]'),
-  ('Omar B.', 'Sécurité wallet : checklist Afrique', 6, 'Sécurité',
-   'Protéger PI, XOF et XAF.',
-   'Anti-phishing, 2FA et réflexes pour les transferts en Afrique de l''Ouest et Centrale.',
-   '["assets/coins/btc.svg","assets/coins/eth.svg"]')
-) as v(seller, title, price, cat, excerpt, content, photos)
-where not exists (select 1 from public.marketplace_listings limit 1);
+-- Seed marketplace désactivé (vendeurs fictifs retirés)
+-- Les annonces viennent uniquement des vrais vendeurs connectés.
 
 insert into public.community_posts (author_id, author_name, body)
 select null, v.author, v.body
 from (values
-  ('DCS Officiel', 'Bienvenue sur DCS Community — partagez vos questions et expériences (PI COIN, swap, transfer, marketplace).'),
-  ('Amina K.', 'PI COIN reste stable à 314 159 $ — idéal pour vendre du contenu sans risque de change.')
+  ('DCS Officiel', 'Bienvenue sur DCS Community — partagez vos questions et expériences.')
 ) as v(author, body)
 where not exists (select 1 from public.community_posts limit 1);
 

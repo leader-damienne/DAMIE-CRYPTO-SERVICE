@@ -235,74 +235,7 @@ DCS.articles = [
   }
 ];
 
-DCS.marketplace = [
-  {
-    id: 1,
-    title: "Stratégie DCA avec PI COIN",
-    author: "Amina K.",
-    pricePi: 5,
-    category: "Trading",
-    excerpt: "Comment accumuler sans stress de volatilité grâce à PI COIN sur DCS.",
-    content:
-      "Ce guide détaille une stratégie d'achat programmé (DCA) basée sur PI COIN, stable à $314,159 sur DCS. Vous apprendrez à planifier vos apports, éviter le timing de marché et convertir ensuite vers XOF ou XAF selon vos besoins.",
-    photos: ["assets/coins/pi.png", "assets/logo.png"]
-  },
-  {
-    id: 2,
-    title: "Corridors XOF → XAF expliqués",
-    author: "Jean-Marc D.",
-    pricePi: 8,
-    category: "Transfer",
-    excerpt: "Comprendre les frais et délais des transferts UEMOA / CEMAC.",
-    content:
-      "Tour d'horizon des corridors UEMOA (XOF) et CEMAC (XAF) sur DCS : délais indicatifs, conversion 1:1, bonnes pratiques pour sécuriser un transfert transfrontalier et lier votre wallet PI COIN.",
-    photos: ["assets/coins/xof.svg", "assets/coins/xaf.svg"]
-  },
-  {
-    id: 3,
-    title: "Lancer une boutique payable en PI COIN",
-    author: "Fatou S.",
-    pricePi: 12,
-    category: "Business",
-    excerpt: "Checklist pour publier et monétiser vos articles sur DCS.",
-    content:
-      "De l'inscription vendeur à la première vente : fixer un prix en PI COIN, ajouter des photos attractives, rédiger un contenu clair et répondre aux acheteurs. Inclut un modèle de fiche produit.",
-    photos: ["assets/logo.png", "assets/coins/pi.png", "assets/coins/usdt.svg"]
-  },
-  {
-    id: 4,
-    title: "Sécurité wallet : checklist Afrique",
-    author: "Omar B.",
-    pricePi: 6,
-    category: "Sécurité",
-    excerpt: "Bonnes pratiques pour protéger PI, XOF et XAF.",
-    content:
-      "Checklist anti-phishing, 2FA Google Authenticator, sauvegarde des accès et réflexes pour les transferts XOF/XAF. Destinée aux utilisateurs DCS en Afrique de l'Ouest et Centrale.",
-    photos: ["assets/coins/btc.svg", "assets/coins/eth.svg"]
-  },
-  {
-    id: 5,
-    title: "Swap PI COIN → XOF pas à pas",
-    author: "Amina K.",
-    pricePi: 4,
-    category: "Transfer",
-    excerpt: "Tutoriel illustré pour convertir PI COIN en francs CFA Ouest.",
-    content:
-      "Capture d'écran mentale du parcours Swap DCS : choisir PI COIN, montant, destination XOF, vérifier le taux indicatif ≈ 600 XOF / $ puis confirmer. Idéal pour les débutants.",
-    photos: ["assets/coins/pi.png", "assets/coins/xof.svg"]
-  },
-  {
-    id: 6,
-    title: "Pack formation trading débutant",
-    author: "Jean-Marc D.",
-    pricePi: 15,
-    category: "Formation",
-    excerpt: "Les bases du trading crypto adaptées au marché africain.",
-    content:
-      "Modules : lecture d'un carnet d'ordres, gestion du risque, psychologie et utilisation de PI COIN comme unité de compte stable sur DCS avant d'entrer sur des actifs volatils.",
-    photos: ["assets/coins/bnb.svg", "assets/coins/sol.svg", "assets/logo.png"]
-  }
-];
+DCS.marketplace = [];
 
 DCS.purchases = [];
 
@@ -310,24 +243,9 @@ DCS.sellerReports = [];
 
 DCS.community = [
   {
-    author: "Amina K.",
-    time: "Il y a 12 min",
-    text: "PI COIN reste stable à 314 159 $ — parfait pour vendre mes articles en PI COIN sans risque de change."
-  },
-  {
-    author: "Jean-Marc D.",
-    time: "Il y a 1 h",
-    text: "Swap PI → XOF réussi, puis transfer vers le Sénégal. Corridor UEMOA fluide."
-  },
-  {
-    author: "Fatou S.",
-    time: "Il y a 3 h",
-    text: "Je viens de m'inscrire vendeur Marketplace — paiement 100 % en PI COIN."
-  },
-  {
     author: "DCS Officiel",
-    time: "Hier",
-    text: "Annonce : XOF et XAF disponibles pour swaps et transferts transfrontaliers."
+    time: "Bienvenue",
+    text: "Bienvenue sur DCS Community — partagez vos questions et expériences."
   }
 ];
 

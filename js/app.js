@@ -708,7 +708,7 @@
           <button type="button" class="seller-report-btn" data-report-seller="${s.name}" title="Signaler ${s.name}">Signaler</button>
         </div>`
       )
-      .join("");
+      .join("") || `<p style="color:var(--muted);font-size:0.85rem;margin:0.5rem 0 0">Aucun vendeur pour le moment. Soyez le premier via « Devenir vendeur ».</p>`;
 
     document.querySelectorAll(".seller-chip").forEach((btn) => {
       const name = btn.getAttribute("data-seller") || "all";

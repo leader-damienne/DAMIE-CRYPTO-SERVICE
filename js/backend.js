@@ -941,7 +941,7 @@
       var gate = this.requireClient();
       var self = this;
       if (!gate.ok) {
-        return Promise.resolve(DCS.marketplace || []);
+        return Promise.resolve([]);
       }
       return gate.client
         .from("marketplace_listings")
@@ -950,10 +950,12 @@
         .order("created_at", { ascending: false })
         .limit(100)
         .then(function (res) {
-          if (res.error || !res.data || !res.data.length) {
-            return DCS.marketplace || [];
+          if (res.error) {
+            console.warn(res.error);
+            DCS.marketplace = [];
+            return [];
           }
-          DCS.marketplace = res.data.map(function (row) {
+          DCS.marketplace = (res.data || []).map(function (row) {
             return {
               id: row.id,
               title: row.title,
