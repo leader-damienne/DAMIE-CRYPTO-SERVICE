@@ -1,10 +1,41 @@
-/* Redirection auth immédiate — avant CSS/images lourds */
+/* Redirection auth + correctif viewport Pi Browser / WebView */
 (function () {
+  /* Pi Browser / Android WebView : forcer un vrai viewport mobile */
+  try {
+    var content =
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) {
+      vp = document.createElement("meta");
+      vp.setAttribute("name", "viewport");
+      (document.head || document.documentElement).appendChild(vp);
+    }
+    vp.setAttribute("content", content);
+    document.documentElement.style.width = "100%";
+    document.documentElement.style.maxWidth = "100%";
+    document.documentElement.style.overflowX = "hidden";
+    if (document.body) {
+      document.body.style.width = "100%";
+      document.body.style.maxWidth = "100%";
+      document.body.style.overflowX = "hidden";
+      document.body.style.margin = "0";
+    } else {
+      document.addEventListener("DOMContentLoaded", function () {
+        document.body.style.width = "100%";
+        document.body.style.maxWidth = "100%";
+        document.body.style.overflowX = "hidden";
+        document.body.style.margin = "0";
+      });
+    }
+  } catch (e) {}
+
   var PUBLIC = {
     "signup.html": 1,
     "signin.html": 1,
     "join.html": 1,
-    "contact.html": 1
+    "contact.html": 1,
+    "privacy.html": 1,
+    "terms.html": 1
   };
   var path = (location.pathname || "").replace(/\/+$/, "");
   path = (path.split("/").pop() || "index.html").split("?")[0].toLowerCase();

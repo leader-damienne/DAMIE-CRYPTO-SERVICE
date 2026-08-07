@@ -3239,7 +3239,28 @@
     return p;
   }
 
+  function detectPiBrowser() {
+    try {
+      const ua = navigator.userAgent || "";
+      const isPi =
+        !!window.Pi ||
+        /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
+        /\.pinet\.com$/i.test(location.hostname) ||
+        /pinet\.com/i.test(location.hostname);
+      if (isPi) {
+        document.documentElement.classList.add("pi-webview");
+        document.body.classList.add("is-pi-browser");
+      }
+      /* Toujours recentrer la largeur utile (évite le mode “desktop scaled” du WebView) */
+      document.documentElement.style.width = "100%";
+      document.body.style.width = "100%";
+      document.body.style.maxWidth = "100%";
+      document.body.style.overflowX = "hidden";
+    } catch (e) {}
+  }
+
   async function boot() {
+    detectPiBrowser();
     if (window.DCS && DCS.backend) await DCS.backend.init();
     if (window.DCS && DCS.auth) await DCS.auth.hydrate();
     applyEcosystemCompliance();
