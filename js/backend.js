@@ -1153,40 +1153,79 @@
     loadCourses: function () {
       var gate = this.requireClient();
       var self = this;
-      if (!gate.ok) return Promise.resolve(DCS.courses || []);
-      return gate.client
-        .from("courses")
-        .select("id, title, level, price_pi, description, content, sort_order")
-        .eq("active", true)
-        .order("sort_order", { ascending: true })
-        .then(function (res) {
-          if (res.error || !res.data || !res.data.length) return DCS.courses || [];
-          DCS.courses = res.data.map(function (c) {
-            return {
-              id: c.id,
-              title: c.title,
-              level: c.level,
-              pricePi: Number(c.price_pi),
-              desc: c.description,
-              content: c.content || "",
-              enrolled: false
-            };
-          });
-          if (!DCS.user.id) return DCS.courses;
-          return gate.client
-            .from("course_enrollments")
-            .select("course_id")
-            .eq("user_id", DCS.user.id)
-            .then(function (en) {
-              var set = {};
-              (en.data || []).forEach(function (e) {
-                set[e.course_id] = true;
+      /* Prix canoniques des 5 cours (évite les anciens prix DB type 10/25 PI) */
+      var priceByTitle = {
+        "introduction à la blockchain": 0.00003,
+        "trading crypto pour débutants": 0.00008,
+        "analyse technique avancée": 0.00016,
+        "sécurité des actifs numériques": 0.00006,
+        "gestion des risques": 0.0001
+      };
+      function resolvePrice(title, dbPrice) {
+        var key = String(title || "")
+          .trim()
+          .toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(priceByTitle, key)) {
+          return priceByTitle[key];
+        }
+        var n = Number(dbPrice);
+        return isFinite(n) && n > 0 ? n : 0;
+      }
+      if (!gate.ok) {
+        (DCS.courses || []).forEach(function (c) {
+          c.pricePi = resolvePrice(c.title, c.pricePi);
+        });
+        return Promise.resolve(DCS.courses || []);
+      }
+      var fetchCourses = function () {
+        return gate.client
+          .from("courses")
+          .select("id, title, level, price_pi, description, content, sort_order")
+          .eq("active", true)
+          .order("sort_order", { ascending: true })
+          .then(function (res) {
+            if (res.error || !res.data || !res.data.length) {
+              (DCS.courses || []).forEach(function (c) {
+                c.pricePi = resolvePrice(c.title, c.pricePi);
               });
-              DCS.courses.forEach(function (c) {
-                c.enrolled = !!set[c.id];
-              });
-              return DCS.courses;
+              return DCS.courses || [];
+            }
+            DCS.courses = res.data.map(function (c) {
+              return {
+                id: c.id,
+                title: c.title,
+                level: c.level,
+                pricePi: resolvePrice(c.title, c.price_pi),
+                desc: c.description,
+                content: c.content || "",
+                enrolled: false
+              };
             });
+            if (!DCS.user.id) return DCS.courses;
+            return gate.client
+              .from("course_enrollments")
+              .select("course_id")
+              .eq("user_id", DCS.user.id)
+              .then(function (en) {
+                var set = {};
+                (en.data || []).forEach(function (e) {
+                  set[e.course_id] = true;
+                });
+                DCS.courses.forEach(function (c) {
+                  c.enrolled = !!set[c.id];
+                });
+                return DCS.courses;
+              });
+          });
+      };
+      /* Aligne les prix en base si la fonction SQL est déployée */
+      return gate.client
+        .rpc("dcs_sync_academy_prices")
+        .then(function () {
+          return fetchCourses();
+        })
+        .catch(function () {
+          return fetchCourses();
         });
     },
 
