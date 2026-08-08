@@ -6,5 +6,8 @@
 /join     /join.html     200
 /contact  /contact.html  200
 
+# Lien d'invitation : /=pseudo
+/=*       /join.html     200
+
 # Ancienne copie imbriquée
 /DamieCryptoService/*  /:splat  301
