@@ -102,12 +102,17 @@
 
   function initPi() {
     if (initPromise) return initPromise;
-    initPromise = ensurePiSdk().then(function (Pi) {
-      var sandbox = cfg().piSandbox !== false;
-      return Promise.resolve(Pi.init({ version: "2.0", sandbox: sandbox })).then(function () {
-        return Pi;
+    initPromise = ensurePiSdk()
+      .then(function (Pi) {
+        var sandbox = cfg().piSandbox !== false;
+        return Promise.resolve(Pi.init({ version: "2.0", sandbox: sandbox })).then(function () {
+          return Pi;
+        });
+      })
+      .catch(function (err) {
+        initPromise = null;
+        throw err;
       });
-    });
     return initPromise;
   }
 
@@ -118,7 +123,7 @@
     return callPiBackend("approve", {
       paymentId: paymentId,
       amount: amount,
-      memo: (payment.memo || "DCS incomplete")
+      memo: payment.memo || "DCS incomplete"
     }).then(function (apr) {
       if (!apr.ok) return;
       if (payment.transaction && payment.transaction.txid) {
@@ -133,6 +138,9 @@
 
   function authenticate() {
     return initPi().then(function (Pi) {
+      if (!Pi || typeof Pi.authenticate !== "function") {
+        throw new Error("Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi.");
+      }
       return Pi.authenticate(["username", "payments"], onIncompletePaymentFound);
     });
   }
@@ -173,7 +181,7 @@
               };
             }
             if (!DCS.backend || !DCS.backend.client) {
-              return { ok: false, error: "Backend DCS non prêt." };
+              return { ok: false, error: "Backend DCS non prêt. Rechargez la page." };
             }
             return DCS.backend.client.auth
               .setSession({
@@ -195,15 +203,14 @@
       })
       .catch(function (err) {
         var msg = (err && err.message) || String(err);
-        if (/Pi Browser|not available|undefined/i.test(msg) || !global.Pi) {
+        if (/Pi Browser|indisponible|not available|undefined|sdk\.minepi/i.test(msg) || !global.Pi) {
           return {
             ok: false,
-            error:
-              "Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi."
-            };
-          }
-          return { ok: false, error: msg };
-        });
+            error: "Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi."
+          };
+        }
+        return { ok: false, error: msg };
+      });
   }
 
   function depositWithPi(amount) {
