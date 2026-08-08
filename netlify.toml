@@ -23,6 +23,12 @@
   to = "/join.html"
   status = 200
 
+# Lien d'invitation PiNet : https://…pinet.com/=pseudo
+[[redirects]]
+  from = "/=*"
+  to = "/join.html"
+  status = 200
+
 [[redirects]]
   from = "/contact"
   to = "/contact.html"

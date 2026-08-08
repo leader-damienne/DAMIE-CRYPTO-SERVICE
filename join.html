@@ -77,15 +77,27 @@
 <script>
     (function () {
       var params = new URLSearchParams(location.search);
-      var ref = params.get("ref") || (window.DCS && DCS.user && DCS.user.inviteCode) || "—";
-      var u = params.get("u") || "";
+      var ref = params.get("ref") || params.get("") || "";
+      if (!ref) {
+        var pm = String(location.pathname || "").match(/\/=([^\/?#]+)/);
+        if (pm) ref = decodeURIComponent(pm[1]);
+      }
+      if (!ref) {
+        var hm = String(location.href || "").match(/\.pinet\.com=([^\/?#&]+)/i);
+        if (hm) ref = decodeURIComponent(hm[1]);
+      }
+      if (!ref && window.DCS && DCS.user && DCS.user.inviteCode) ref = DCS.user.inviteCode;
+      if (!ref) ref = "—";
+      var u = params.get("u") || (ref !== "—" ? ref : "");
       var codeEl = document.getElementById("join-code");
       var userEl = document.getElementById("join-username");
       if (codeEl) codeEl.textContent = ref;
       if (userEl) userEl.textContent = u ? "@" + String(u).replace(/^@+/, "") : "Invité DCS";
       try {
-        localStorage.setItem("dcs_ref", ref);
-        if (u) localStorage.setItem("dcs_ref_user", u);
+        if (ref && ref !== "—") {
+          localStorage.setItem("dcs_ref", ref);
+          if (u) localStorage.setItem("dcs_ref_user", String(u).replace(/^@+/, ""));
+        }
       } catch (e) {}
     })();
   </script>

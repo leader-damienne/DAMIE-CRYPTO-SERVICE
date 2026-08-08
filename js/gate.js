@@ -28,6 +28,33 @@
     }
   } catch (e) {}
 
+  /* Capturer parrainage : /=pseudo · ?ref= · ?=pseudo · host=pseudo */
+  try {
+    var ref = "";
+    var params = new URLSearchParams(location.search || "");
+    ref = params.get("ref") || params.get("u") || params.get("") || "";
+    if (!ref && location.search) {
+      var sm = String(location.search).match(/^[?&]=([^&#]+)/);
+      if (sm) ref = decodeURIComponent(sm[1]);
+    }
+    if (!ref) {
+      var pm = String(location.pathname || "").match(/\/=([^\/?#]+)/);
+      if (pm) ref = decodeURIComponent(pm[1]);
+    }
+    if (!ref) {
+      var href = String(location.href || "");
+      var hm = href.match(/\.pinet\.com=([^\/?#&]+)/i);
+      if (hm) ref = decodeURIComponent(hm[1]);
+    }
+    ref = String(ref || "")
+      .trim()
+      .replace(/^@+/, "");
+    if (ref && ref !== "—") {
+      localStorage.setItem("dcs_ref", ref);
+      localStorage.setItem("dcs_ref_user", ref);
+    }
+  } catch (eRef) {}
+
   var PUBLIC = {
     "signup.html": 1,
     "signin.html": 1,

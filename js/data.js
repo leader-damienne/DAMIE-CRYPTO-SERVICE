@@ -422,8 +422,8 @@ DCS.buildShareLinks = function () {
     .replace(/\/+$/, "");
   if (!origin) origin = "https://damiecrypto3760.pinet.com";
   var code = DCS.primaryInviteCode(DCS.user);
-  /* Format demandé : https://damiecrypto3760.pinet.com=pseudo */
-  var join = origin + "=" + code;
+  /* /=pseudo : le pseudo reste collé au lien une fois publié (messengers / Pi) */
+  var join = origin + "/=" + code;
   if (DCS.user) {
     DCS.user.siteLink = origin + "/";
     DCS.user.referralLink = join;
