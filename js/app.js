@@ -782,16 +782,30 @@
       return;
     }
     el.innerHTML = list
-      .map(
-        (a) => `<article class="course-item">
-          <div>
-            <h4>${a.title}</h4>
-            <p>${a.tag || ""} · ${a.date || ""}</p>
-            <div class="article-body" data-article-body="${a.id || ""}" hidden style="margin-top:0.65rem;font-size:0.88rem;white-space:pre-wrap">${a.body || ""}</div>
-          </div>
-          <button class="trade-btn" type="button" data-read="${a.id || ""}">Lire</button>
-        </article>`
-      )
+      .map(function (a) {
+        return (
+          '<article class="course-item">' +
+          "<div>" +
+          "<h4>" +
+          escapeHtml(a.title) +
+          "</h4>" +
+          "<p>" +
+          escapeHtml(a.tag || "") +
+          " · " +
+          escapeHtml(a.date || "") +
+          "</p>" +
+          '<div class="article-body" data-article-body="' +
+          escapeHtml(a.id || "") +
+          '" hidden style="margin-top:0.65rem;font-size:0.88rem;white-space:pre-wrap">' +
+          escapeHtml(a.body || "") +
+          "</div>" +
+          "</div>" +
+          '<button class="trade-btn" type="button" data-read="' +
+          escapeHtml(a.id || "") +
+          '">Lire</button>' +
+          "</article>"
+        );
+      })
       .join("");
     el.querySelectorAll("[data-read]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -808,6 +822,22 @@
     });
   }
 
+  function escapeHtml(raw) {
+    return String(raw == null ? "" : raw)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function safeUrl(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return "";
+    if (/^(https?:|data:image\/)/i.test(s)) return s;
+    return "";
+  }
+
   function renderCommunity() {
     const el = document.getElementById("community-feed");
     if (!el || !window.DCS) return;
@@ -817,12 +847,20 @@
       return;
     }
     el.innerHTML = list
-      .map(
-        (p) => `<article class="feed-post">
-          <div class="meta">${p.author} · ${p.time}</div>
-          <p>${p.text}</p>
-        </article>`
-      )
+      .map(function (p) {
+        return (
+          '<article class="feed-post">' +
+          '<div class="meta">' +
+          escapeHtml(p.author) +
+          " · " +
+          escapeHtml(p.time) +
+          "</div>" +
+          "<p>" +
+          escapeHtml(p.text) +
+          "</p>" +
+          "</article>"
+        );
+      })
       .join("");
   }
 
@@ -1002,27 +1040,31 @@
       return;
     }
     el.innerHTML = items
-      .map((a) => {
+      .map(function (a) {
         const photos = a.photos || [];
         const owned = isPurchased(a.id);
-        const cover = photos[0]
-          ? '<img class="market-cover" src="' + photos[0] + '" alt="" />'
+        const coverSrc = safeUrl(photos[0]);
+        const cover = coverSrc
+          ? '<img class="market-cover" src="' + escapeHtml(coverSrc) + '" alt="" />'
           : '<div class="market-cover placeholder">PI</div>';
         const thumbs =
           photos.length > 1
             ? '<div class="article-photos compact">' +
               photos
                 .slice(0, 4)
-                .map(
-                  (src, i) =>
+                .map(function (src, i) {
+                  var u = safeUrl(src);
+                  if (!u) return "";
+                  return (
                     '<button type="button" class="article-photo" data-full="' +
-                    src +
+                    escapeHtml(u) +
                     '" title="Photo ' +
                     (i + 1) +
                     '"><img src="' +
-                    src +
+                    escapeHtml(u) +
                     '" alt="" loading="lazy" /></button>'
-                )
+                  );
+                })
                 .join("") +
               "</div>"
             : "";
@@ -1033,15 +1075,15 @@
           '<div class="market-article-body">' +
           "<div>" +
           '<div class="ref-badge">' +
-          (a.category || "Divers") +
+          escapeHtml(a.category || "Divers") +
           "</div>" +
           "<h4>" +
-          a.title +
+          escapeHtml(a.title) +
           "</h4>" +
           "<p>par <strong>" +
-          a.author +
+          escapeHtml(a.author) +
           "</strong> — " +
-          (a.excerpt || "") +
+          escapeHtml(a.excerpt || "") +
           "</p>" +
           (owned
             ? '<p class="tx-status is-confirmed" style="margin-top:0.45rem"><span class="status-dot on"></span>Déjà acheté</p>'
@@ -1049,18 +1091,18 @@
           "</div>" +
           '<div class="market-article-buy">' +
           '<div class="price-pi">' +
-          a.pricePi +
+          escapeHtml(a.pricePi) +
           " π</div>" +
           '<button class="btn btn-outline" type="button" data-visit="' +
-          a.id +
+          escapeHtml(a.id) +
           '" style="margin-top:0.4rem;width:100%">Consulter</button>' +
           (owned
             ? '<button class="btn btn-outline" type="button" disabled style="margin-top:0.4rem;width:100%">Acheté</button>'
             : '<button class="btn btn-gold" type="button" data-buy="' +
-              a.id +
+              escapeHtml(a.id) +
               '" style="margin-top:0.4rem;width:100%">Acheter</button>') +
           '<button class="btn btn-outline btn-report" type="button" data-report="' +
-          a.id +
+          escapeHtml(a.id) +
           '" style="margin-top:0.4rem;width:100%">Signaler</button>' +
           "</div></div></div>" +
           thumbs +

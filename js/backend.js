@@ -749,26 +749,25 @@
       var gate = this.requireClient();
       if (!gate.ok || !DCS.user.id) return Promise.resolve({ ok: false });
       var u = DCS.user;
+      var patch = {
+        display_name: u.displayName || "",
+        first_name: u.firstName || "",
+        last_name: u.lastName || "",
+        birth_date: u.birthDate || "",
+        gender: u.gender || "",
+        country: u.country || "",
+        city: u.city || "",
+        address: u.address || "",
+        bio: u.bio || "",
+        phone: u.phone || "",
+        avatar: u.avatar || "",
+        language: u.language || "fr"
+      };
+      /* KYC verified uniquement côté ops ; le client peut seulement demander pending */
+      if (u.kyc === "pending") patch.kyc = "pending";
       return gate.client
         .from("profiles")
-        .update({
-          display_name: u.displayName || "",
-          first_name: u.firstName || "",
-          last_name: u.lastName || "",
-          birth_date: u.birthDate || "",
-          gender: u.gender || "",
-          country: u.country || "",
-          city: u.city || "",
-          address: u.address || "",
-          bio: u.bio || "",
-          phone: u.phone || "",
-          avatar: u.avatar || "",
-          kyc: u.kyc || "none",
-          gmail_linked: !!u.gmailLinked,
-          phone_linked: !!u.phoneLinked,
-          google_auth: !!u.googleAuth,
-          language: u.language || "fr"
-        })
+        .update(patch)
         .eq("id", u.id)
         .then(function (res) {
           if (res.error) return { ok: false, error: res.error.message };
@@ -1346,13 +1345,19 @@
         };
       }
 
-      return gate.client
-        .from("profiles")
-        .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
-        .in("referred_by", aliases)
-        .order("created_at", { ascending: false })
-        .then(function (l1res) {
-          var l1 = l1res.data || [];
+      function fetchByCodes(codes) {
+        if (!codes || !codes.length) return Promise.resolve([]);
+        return gate.client.rpc("dcs_list_referrals_by_codes", { p_codes: codes }).then(function (res) {
+          if (res.error) {
+            console.warn(res.error);
+            return [];
+          }
+          return res.data || [];
+        });
+      }
+
+      return fetchByCodes(aliases)
+        .then(function (l1) {
           empty.level1 = l1.map(function (r) {
             return mapMember(r);
           });
@@ -1366,39 +1371,27 @@
               viaMap[a] = label;
             });
           });
-          return gate.client
-            .from("profiles")
-            .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
-            .in("referred_by", codes)
-            .order("created_at", { ascending: false })
-            .then(function (l2res) {
-              var l2 = l2res.data || [];
-              empty.level2 = l2.map(function (r) {
-                return mapMember(r, viaMap[r.referred_by] || "");
-              });
-              if (!l2.length) return empty;
-              var codes2 = [];
-              var via2 = {};
-              l2.forEach(function (r) {
-                var label = pickHandle(r);
-                memberAliases(r).forEach(function (a) {
-                  codes2.push(a);
-                  via2[a] = label;
-                });
-              });
-              return gate.client
-                .from("profiles")
-                .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
-                .in("referred_by", codes2)
-                .order("created_at", { ascending: false })
-                .then(function (l3res) {
-                  var l3 = l3res.data || [];
-                  empty.level3 = l3.map(function (r) {
-                    return mapMember(r, via2[r.referred_by] || "");
-                  });
-                  return empty;
-                });
+          return fetchByCodes(codes).then(function (l2) {
+            empty.level2 = l2.map(function (r) {
+              return mapMember(r, viaMap[r.referred_by] || "");
             });
+            if (!l2.length) return empty;
+            var codes2 = [];
+            var via2 = {};
+            l2.forEach(function (r) {
+              var label = pickHandle(r);
+              memberAliases(r).forEach(function (a) {
+                codes2.push(a);
+                via2[a] = label;
+              });
+            });
+            return fetchByCodes(codes2).then(function (l3) {
+              empty.level3 = l3.map(function (r) {
+                return mapMember(r, via2[r.referred_by] || "");
+              });
+              return empty;
+            });
+          });
         })
         .then(function (tree) {
           return gate.client
@@ -1421,9 +1414,7 @@
                 fromIds.length === 0
                   ? Promise.resolve({})
                   : gate.client
-                      .from("profiles")
-                      .select("id, username, pi_username, display_name")
-                      .in("id", fromIds)
+                      .rpc("dcs_public_handles", { p_ids: fromIds })
                       .then(function (pres) {
                         var map = {};
                         (pres.data || []).forEach(function (p) {

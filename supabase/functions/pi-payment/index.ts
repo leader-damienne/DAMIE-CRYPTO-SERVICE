@@ -104,20 +104,39 @@ Deno.serve(async (req) => {
     if (action === "complete") {
       if (!txid) return json({ ok: false, error: "txid requis." }, 400);
 
-      const payment = await piFetch(`/payments/${paymentId}`, "GET");
-      const amount = Number(
-        (payment as { amount?: number }).amount ?? amountHint
-      );
-      if (!(amount > 0)) {
-        return json({ ok: false, error: "Montant Pi invalide." }, 400);
+      /* Le paiement doit déjà être lié à CE compte DCS (étape approve) */
+      const { data: existingPay } = await db
+        .from("pi_payments")
+        .select("user_id, status, amount")
+        .eq("payment_id", paymentId)
+        .maybeSingle();
+      if (existingPay && existingPay.user_id && existingPay.user_id !== user.id) {
+        return json({ ok: false, error: "Paiement lié à un autre compte." }, 403);
+      }
+      if (existingPay && existingPay.status === "completed") {
+        return json({ ok: true, action: "complete", already: true, amount: existingPay.amount });
       }
 
-      await piFetch(`/payments/${paymentId}/complete`, "POST", { txid });
+      const payment = await piFetch(`/payments/${paymentId}`, "GET");
+      const amount = Number((payment as { amount?: number }).amount);
+      if (!(amount > 0)) {
+        return json({ ok: false, error: "Montant Pi invalide (API)." }, 400);
+      }
 
-      const piUser =
+      const piUid =
         ((payment as { user_uid?: string }).user_uid as string) ||
         ((payment as { from_uid?: string }).from_uid as string) ||
         "";
+      const { data: profile } = await db
+        .from("profiles")
+        .select("pi_uid")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (profile?.pi_uid && piUid && String(profile.pi_uid) !== String(piUid)) {
+        return json({ ok: false, error: "Paiement Pi ≠ compte DCS." }, 403);
+      }
+
+      await piFetch(`/payments/${paymentId}/complete`, "POST", { txid });
 
       await db.from("pi_payments").upsert(
         {
@@ -126,7 +145,7 @@ Deno.serve(async (req) => {
           amount,
           status: "completed",
           txid,
-          pi_username: piUser,
+          pi_username: piUid,
           completed_at: new Date().toISOString(),
           meta: { payment },
         },
