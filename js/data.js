@@ -417,19 +417,19 @@ DCS.referralAliases = function (user) {
 
 DCS.buildShareLinks = function () {
   var cfg = window.DCS_CONFIG || {};
-  var base = String(cfg.piNetBaseUrl || "https://damiecrypto3760.pinet.com/").trim();
-  if (!base) base = "./";
-  if (base.slice(-1) !== "/") base += "/";
+  var origin = String(cfg.piNetBaseUrl || "https://damiecrypto3760.pinet.com/")
+    .trim()
+    .replace(/\/+$/, "");
+  if (!origin) origin = "https://damiecrypto3760.pinet.com";
   var code = DCS.primaryInviteCode(DCS.user);
-  var user = code;
-  var join =
-    base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
+  /* Format demandé : https://damiecrypto3760.pinet.com=pseudo */
+  var join = origin + "=" + code;
   if (DCS.user) {
-    DCS.user.siteLink = base + "index.html";
+    DCS.user.siteLink = origin + "/";
     DCS.user.referralLink = join;
   }
   return {
-    site: base + "index.html",
+    site: origin + "/",
     join: join
   };
 };
