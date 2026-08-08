@@ -2511,19 +2511,31 @@
         return;
       }
       el.innerHTML = list
-        .map(
-          (m) => `<div class="member">
-            <div>
-              <strong>${atHandle(m.username)}</strong>
-              <div style="font-size:0.75rem;color:var(--muted)">
-                Code ${m.code}${showVia && m.via ? " · via " + atHandle(m.via) : ""} · ${m.date}
-              </div>
-            </div>
-            <div style="text-align:right">
-              <span class="ref-badge">+${m.earned}</span>
-            </div>
-          </div>`
-        )
+        .map(function (m) {
+          var name = atHandle(m.username || m.piUsername || m.code);
+          var meta = [];
+          if (showVia && m.via) meta.push("via " + atHandle(m.via));
+          if (m.date) meta.push(m.date);
+          return (
+            '<div class="member">' +
+            "<div>" +
+            "<strong>" +
+            name +
+            "</strong>" +
+            (meta.length
+              ? '<div style="font-size:0.75rem;color:var(--muted)">' +
+                meta.join(" · ") +
+                "</div>"
+              : "") +
+            "</div>" +
+            '<div style="text-align:right">' +
+            '<span class="ref-badge">+' +
+            (m.earned || "—") +
+            "</span>" +
+            "</div>" +
+            "</div>"
+          );
+        })
         .join("");
     }
 
@@ -2535,6 +2547,25 @@
     const n2 = DCS.referrals.level2.length;
     const n3 = DCS.referrals.level3.length;
     const total = n1 + n2 + n3;
+
+    const allNames = []
+      .concat(DCS.referrals.level1 || [])
+      .concat(DCS.referrals.level2 || [])
+      .concat(DCS.referrals.level3 || [])
+      .map(function (m) {
+        return atHandle(m.username || m.piUsername || m.code);
+      })
+      .filter(Boolean);
+    const namesEl = document.getElementById("ref-usernames-list");
+    if (namesEl) {
+      namesEl.innerHTML = allNames.length
+        ? allNames
+            .map(function (n) {
+              return '<span class="ref-user-chip">' + n + "</span>";
+            })
+            .join("")
+        : '<span style="color:var(--muted);font-size:0.85rem">Aucun filleul inscrit pour le moment.</span>';
+    }
 
     function filleulLabel(n) {
       return n + " filleul" + (n > 1 ? "s" : "");
@@ -2561,17 +2592,31 @@
       const list = document.getElementById("ref-earnings-list");
       if (list && earnings.recent) {
         list.innerHTML = earnings.recent
-          .map(
-            (e) => `<div class="member">
-              <div>
-                <strong>@${e.from}</strong>
-                <div style="font-size:0.75rem;color:var(--muted)">${e.type} · N${e.level} · frais ${e.feePi} PI · ${e.date}</div>
-              </div>
-              <div style="text-align:right">
-                <span class="ref-badge">+${e.commissionPi} PI</span>
-              </div>
-            </div>`
-          )
+          .map(function (e) {
+            return (
+              '<div class="member">' +
+              "<div>" +
+              "<strong>" +
+              atHandle(e.from) +
+              "</strong>" +
+              '<div style="font-size:0.75rem;color:var(--muted)">' +
+              (e.type || "Frais") +
+              " · N" +
+              e.level +
+              " · frais " +
+              e.feePi +
+              " PI · " +
+              e.date +
+              "</div>" +
+              "</div>" +
+              '<div style="text-align:right">' +
+              '<span class="ref-badge">+' +
+              e.commissionPi +
+              " PI</span>" +
+              "</div>" +
+              "</div>"
+            );
+          })
           .join("");
       }
     }
@@ -3982,12 +4027,14 @@
 
   async function boot() {
     detectPiBrowser();
+    /* Timeouts courts : l'UI ne doit pas attendre des réseaux lents (PiNet / CDN) */
+    var BOOT_WAIT_MS = 3000;
     try {
       if (window.DCS && DCS.backend) {
         await Promise.race([
           DCS.backend.init(),
           new Promise(function (resolve) {
-            setTimeout(resolve, 8000);
+            setTimeout(resolve, BOOT_WAIT_MS);
           })
         ]);
       }
@@ -3997,7 +4044,7 @@
         await Promise.race([
           DCS.auth.hydrate(),
           new Promise(function (resolve) {
-            setTimeout(resolve, 8000);
+            setTimeout(resolve, BOOT_WAIT_MS);
           })
         ]);
       }

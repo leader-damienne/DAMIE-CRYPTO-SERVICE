@@ -284,21 +284,26 @@
                       return;
                     }
                     applyProfile(p2);
-                    self.syncSecurityFlags(session.user).then(function () {
-                      Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
-                        resolve(true);
-                      });
-                    });
+                    self
+                      .syncSecurityFlags(session.user)
+                      .then(function () {
+                        return Promise.all([self.loadWallet(), self.loadHistory()]);
+                      })
+                      .catch(function () {});
+                    resolve(true);
                   });
                 }, 600);
               });
             }
             applyProfile(profile);
-            return self.syncSecurityFlags(session.user).then(function () {
-              return Promise.all([self.loadWallet(), self.loadHistory()]).then(function () {
-                return true;
-              });
-            });
+            /* Ne pas bloquer l'ouverture : soldes / MFA en arrière-plan */
+            self
+              .syncSecurityFlags(session.user)
+              .then(function () {
+                return Promise.all([self.loadWallet(), self.loadHistory()]);
+              })
+              .catch(function () {});
+            return true;
           });
         });
       });
@@ -1302,14 +1307,39 @@
         return list;
       }
 
+      function pickHandle(row) {
+        var bare =
+          typeof DCS.bareInviteHandle === "function"
+            ? DCS.bareInviteHandle
+            : function (v) {
+                return String(v || "")
+                  .trim()
+                  .replace(/^@+/, "");
+              };
+        var candidates = [
+          row.pi_username,
+          row.username,
+          row.display_name,
+          row.invite_code
+        ];
+        var i;
+        for (i = 0; i < candidates.length; i++) {
+          var h = bare(candidates[i]);
+          if (!h) continue;
+          if (/^pi\.[a-f0-9]{6,}$/i.test(h)) continue;
+          return h;
+        }
+        return bare(row.invite_code || row.username) || "membre";
+      }
+
       function mapMember(row, via) {
-        var code =
-          (typeof DCS.bareInviteHandle === "function"
-            ? DCS.bareInviteHandle(row.pi_username || row.username || row.invite_code)
-            : row.pi_username || row.username || row.invite_code) || row.invite_code;
+        var handle = pickHandle(row);
         return {
-          username: row.pi_username || row.username,
-          code: code,
+          id: row.id,
+          username: handle,
+          piUsername: row.pi_username || "",
+          displayName: row.display_name || "",
+          code: handle,
           earned: "—",
           via: via || "",
           date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : ""
@@ -1318,8 +1348,9 @@
 
       return gate.client
         .from("profiles")
-        .select("id, username, pi_username, invite_code, created_at, referred_by")
+        .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
         .in("referred_by", aliases)
+        .order("created_at", { ascending: false })
         .then(function (l1res) {
           var l1 = l1res.data || [];
           empty.level1 = l1.map(function (r) {
@@ -1329,7 +1360,7 @@
           var codes = [];
           var viaMap = {};
           l1.forEach(function (r) {
-            var label = r.pi_username || r.username;
+            var label = pickHandle(r);
             memberAliases(r).forEach(function (a) {
               codes.push(a);
               viaMap[a] = label;
@@ -1337,8 +1368,9 @@
           });
           return gate.client
             .from("profiles")
-            .select("id, username, pi_username, invite_code, created_at, referred_by")
+            .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
             .in("referred_by", codes)
+            .order("created_at", { ascending: false })
             .then(function (l2res) {
               var l2 = l2res.data || [];
               empty.level2 = l2.map(function (r) {
@@ -1348,7 +1380,7 @@
               var codes2 = [];
               var via2 = {};
               l2.forEach(function (r) {
-                var label = r.pi_username || r.username;
+                var label = pickHandle(r);
                 memberAliases(r).forEach(function (a) {
                   codes2.push(a);
                   via2[a] = label;
@@ -1356,8 +1388,9 @@
               });
               return gate.client
                 .from("profiles")
-                .select("id, username, pi_username, invite_code, created_at, referred_by")
+                .select("id, username, pi_username, display_name, invite_code, created_at, referred_by")
                 .in("referred_by", codes2)
+                .order("created_at", { ascending: false })
                 .then(function (l3res) {
                   var l3 = l3res.data || [];
                   empty.level3 = l3.map(function (r) {
@@ -1377,29 +1410,54 @@
             .then(function (cres) {
               var rows = cres.data || [];
               var total = 0;
+              var fromIds = [];
               rows.forEach(function (r) {
                 total += Number(r.commission_pi) || 0;
+                if (r.from_user_id && fromIds.indexOf(r.from_user_id) < 0) {
+                  fromIds.push(r.from_user_id);
+                }
               });
-              tree.earnings = {
-                fromFeesPi: Math.round(total * 1000) / 1000,
-                recent: rows.map(function (r) {
-                  return {
-                    from: "membre",
-                    type: r.kind || "Frais",
-                    feePi: Number(r.fee_pi),
-                    commissionPi: Number(r.commission_pi),
-                    level: r.level,
-                    date: r.created_at ? new Date(r.created_at).toLocaleDateString("fr-FR") : ""
-                  };
-                })
-              };
-              DCS.referrals = {
-                level1: tree.level1,
-                level2: tree.level2,
-                level3: tree.level3
-              };
-              DCS.referralEarnings = tree.earnings;
-              return tree;
+              var namePromise =
+                fromIds.length === 0
+                  ? Promise.resolve({})
+                  : gate.client
+                      .from("profiles")
+                      .select("id, username, pi_username, display_name")
+                      .in("id", fromIds)
+                      .then(function (pres) {
+                        var map = {};
+                        (pres.data || []).forEach(function (p) {
+                          map[p.id] = pickHandle(p);
+                        });
+                        return map;
+                      })
+                      .catch(function () {
+                        return {};
+                      });
+              return namePromise.then(function (nameMap) {
+                tree.earnings = {
+                  fromFeesPi: Math.round(total * 1000) / 1000,
+                  recent: rows.map(function (r) {
+                    return {
+                      from: nameMap[r.from_user_id] || "membre",
+                      type: r.kind || "Frais",
+                      feePi: Number(r.fee_pi),
+                      commissionPi: Number(r.commission_pi),
+                      level: r.level,
+                      date: r.created_at
+                        ? new Date(r.created_at).toLocaleDateString("fr-FR")
+                        : ""
+                    };
+                  })
+                };
+                DCS.referrals = {
+                  level1: tree.level1,
+                  level2: tree.level2,
+                  level3: tree.level3
+                };
+                DCS.referralEarnings = tree.earnings;
+                return tree;
+              });
             });
         })
         .catch(function () {

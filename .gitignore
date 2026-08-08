@@ -15,6 +15,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+*_secret*
+*credentials*.json
+.supabase/
 _deploy_tools.txt
 assets/_logo-crop-check.png
 *.log
