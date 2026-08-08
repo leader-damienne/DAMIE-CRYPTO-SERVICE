@@ -56,7 +56,7 @@
         <div class="form-group">
           <label for="swap-from">Vous payez</label>
           <select id="swap-from" class="form-control">
-            <option value="PI" selected>PI — PI COIN</option>
+            <option value="PI" selected>PI — PI COIN (314 159 $)</option>
             <option value="XOF">XOF — Franc CFA Ouest (UEMOA)</option>
             <option value="XAF">XAF — Franc CFA Centre (CEMAC)</option>
             <option value="USDT">USDT — Tether</option>
@@ -67,10 +67,12 @@
             <option value="XLM">XLM — Stellar</option>
             <option value="TRX">TRX — TRON</option>
           </select>
+          <p id="swap-from-balance" class="tr-balance" aria-live="polite">Solde disponible : —</p>
         </div>
         <div class="form-group">
           <label for="swap-amount">Montant</label>
           <input id="swap-amount" class="form-control" type="number" min="0" step="any" value="1" placeholder="0.00" />
+          <p id="swap-amount-usd" class="tr-balance" aria-live="polite"></p>
         </div>
         <button type="button" class="swap-arrow" id="swap-flip" aria-label="Inverser">⇅</button>
         <div class="form-group">
@@ -78,7 +80,7 @@
           <select id="swap-to" class="form-control">
             <option value="XOF" selected>XOF — Franc CFA Ouest (UEMOA)</option>
             <option value="XAF">XAF — Franc CFA Centre (CEMAC)</option>
-            <option value="PI">PI — PI COIN</option>
+            <option value="PI">PI — PI COIN (314 159 $)</option>
             <option value="USDT">USDT — Tether</option>
             <option value="BNB">BNB</option>
             <option value="ETH">ETH — Ethereum</option>
@@ -117,12 +119,12 @@
             <div class="pi-icon"><img src="assets/coins/pi.png" alt="PI COIN" /></div>
             <div class="pi-pair">Valeur fixe<small>Non volatil · 0,00 % 24h</small></div>
           </div>
-          <div class="pi-price" id="pi-price" style="font-size:2rem">$314,159</div>
+          <div class="pi-price" id="pi-price" style="font-size:2rem">314 159 $</div>
           <div class="pi-change" id="pi-change" style="margin-bottom:0"></div>
           <div class="pi-meta" style="margin-top:1rem">
             <div><span>1 PI en XOF</span><strong id="pi-xof">—</strong></div>
             <div><span>1 PI en XAF</span><strong id="pi-xaf">—</strong></div>
-            <div><span>USD/$</span><strong>314 159</strong></div>
+            <div><span>1 PI en USD</span><strong id="pi-usd-peg">314 159 $</strong></div>
           </div>
         </div>
         <div class="panel">

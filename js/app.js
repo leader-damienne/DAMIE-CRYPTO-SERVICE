@@ -23,8 +23,14 @@
       if (m.symbol === "XOF" || m.symbol === "XAF") {
         return (DCS.CFA_PER_USD || 600) + " / $1";
       }
-      if (m.stable && m.symbol === "PI") return fmt.usd(DCS.PI_PRICE || 314159, 0);
+      if (m.stable && m.symbol === "PI") return fmt.piUsd();
       return fmt.usd(m.price, m.price >= 1000 ? 2 : undefined);
+    },
+    piUsd(n) {
+      const peg = n != null ? Number(n) : Number((window.DCS && DCS.PI_PRICE) || 314159);
+      return (
+        peg.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " $"
+      );
     },
     vol(n) {
       if (n >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
@@ -238,19 +244,21 @@
     const highEl = document.getElementById("pi-high");
     const lowEl = document.getElementById("pi-low");
     const volEl = document.getElementById("pi-vol");
-    if (!priceEl || !window.DCS) return;
+    const usdPegEl = document.getElementById("pi-usd-peg");
+    if (!window.DCS) return;
     lockPiPrice();
     lockCfaParity();
-    const pi = DCS.markets.find((m) => m.id === "pi");
-    if (!pi) return;
     const peg = DCS.PI_PRICE || 314159;
-    priceEl.textContent = fmt.usd(peg, 0);
+    const pegLabel = fmt.piUsd(peg);
+    if (priceEl) priceEl.textContent = pegLabel;
+    if (usdPegEl) usdPegEl.textContent = pegLabel;
     if (changeEl) {
-      changeEl.innerHTML = `<span class="up">PI COIN</span><span style="color:var(--muted)">0,00 % 24h · Stable</span>`;
+      changeEl.innerHTML = `<span class="up">PI COIN</span><span style="color:var(--muted)">0,00 % 24h · Stable · ${pegLabel}</span>`;
     }
-    if (highEl) highEl.textContent = fmt.usd(peg, 0);
-    if (lowEl) lowEl.textContent = fmt.usd(peg, 0);
-    if (volEl) volEl.textContent = fmt.vol(pi.volume);
+    if (highEl) highEl.textContent = pegLabel;
+    if (lowEl) lowEl.textContent = pegLabel;
+    const pi = DCS.markets.find((m) => m.id === "pi");
+    if (volEl && pi) volEl.textContent = fmt.vol(pi.volume);
 
     const xofEl = document.getElementById("pi-xof");
     const xafEl = document.getElementById("pi-xaf");
@@ -1769,6 +1777,8 @@
     const confirmBtn = document.getElementById("swap-confirm");
     const slipInput = document.getElementById("swap-slippage");
     const minOutEl = document.getElementById("swap-min-out");
+    const balEl = document.getElementById("swap-from-balance");
+    const usdEl = document.getElementById("swap-amount-usd");
     if (!from || !to || !amount || !result) return;
 
     const params = new URLSearchParams(location.search);
@@ -1779,6 +1789,31 @@
     let lastOut = 0;
     let lastMinOut = 0;
     let lastSlip = 0.5;
+
+    function marketPrice(sym) {
+      lockPiPrice();
+      if (sym === "PI") return DCS.PI_PRICE || 314159;
+      const m = DCS.markets && DCS.markets.find((x) => x.symbol === sym);
+      return m && m.price > 0 ? m.price : 0;
+    }
+
+    function updateFromBalance() {
+      if (!balEl) return;
+      const sym = from.value;
+      const row = (DCS.wallet || []).find((w) => w.symbol === sym);
+      const qty = row ? Number(row.amount) || 0 : 0;
+      const digits = sym === "XOF" || sym === "XAF" ? 0 : 6;
+      let text =
+        "Solde disponible : " +
+        qty.toLocaleString("fr-FR", { maximumFractionDigits: digits }) +
+        " " +
+        sym;
+      if (sym === "PI") {
+        text += " · 1 PI = " + fmt.piUsd() + " · ≈ " + fmt.piUsd(qty * (DCS.PI_PRICE || 314159));
+      }
+      balEl.textContent = text;
+      balEl.classList.toggle("is-empty", !(qty > 0));
+    }
 
     function getSlippage() {
       const v = parseFloat(slipInput && slipInput.value);
@@ -1799,25 +1834,49 @@
         result.value = "";
         return;
       }
-      const fromM = DCS.markets.find((m) => m.symbol === from.value);
-      const toM = DCS.markets.find((m) => m.symbol === to.value);
+      lockPiPrice();
+      updateFromBalance();
+      const fromPrice = marketPrice(from.value);
+      const toPrice = marketPrice(to.value);
       const qty = parseFloat(String(amount.value).replace(",", ".")) || 0;
-      if (!fromM || !toM || !(fromM.price > 0) || !(toM.price > 0)) {
+      if (!(fromPrice > 0) || !(toPrice > 0)) {
         result.value = "";
         if (rateEl) rateEl.textContent = "";
         if (minOutEl) minOutEl.textContent = "";
+        if (usdEl) usdEl.textContent = "";
         return;
       }
-      const out = (qty * fromM.price) / toM.price;
+      const out = (qty * fromPrice) / toPrice;
       lastSlip = getSlippage();
       lastOut = out;
       lastMinOut = out * (1 - lastSlip / 100);
-      const digits = toM.symbol === "XOF" || toM.symbol === "XAF" ? 0 : 6;
+      const digits = to.value === "XOF" || to.value === "XAF" ? 0 : 6;
       if (qty > 0 && isFinite(out)) {
         result.value =
           out.toLocaleString("fr-FR", { maximumFractionDigits: digits }) + " " + to.value;
       } else {
         result.value = "";
+      }
+      if (usdEl) {
+        const usdValue = qty * fromPrice;
+        if (qty > 0 && isFinite(usdValue)) {
+          if (from.value === "PI") {
+            usdEl.textContent =
+              "Valeur : " + fmt.piUsd(usdValue) + " (1 PI = " + fmt.piUsd() + ")";
+          } else if (to.value === "PI") {
+            usdEl.textContent =
+              "≈ " +
+              out.toLocaleString("fr-FR", { maximumFractionDigits: 6 }) +
+              " PI · 1 PI = " +
+              fmt.piUsd();
+          } else {
+            usdEl.textContent =
+              "≈ " + usdValue.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " $";
+          }
+        } else {
+          usdEl.textContent =
+            from.value === "PI" || to.value === "PI" ? "1 PI = " + fmt.piUsd() : "";
+        }
       }
       if (minOutEl) {
         minOutEl.textContent =
@@ -1831,18 +1890,22 @@
             : "";
       }
       if (rateEl) {
-        const rate = fromM.price / toM.price;
-        const rateDigits = toM.symbol === "XOF" || toM.symbol === "XAF" ? 0 : 6;
-        rateEl.textContent =
+        const rate = fromPrice / toPrice;
+        const rateDigits = to.value === "XOF" || to.value === "XAF" ? 0 : 6;
+        let rateText =
           "1 " +
           from.value +
           " ≈ " +
           rate.toLocaleString("fr-FR", { maximumFractionDigits: rateDigits }) +
           " " +
           to.value;
+        if (from.value === "PI" || to.value === "PI") {
+          rateText += " · PI COIN = " + fmt.piUsd();
+        }
+        rateEl.textContent = rateText;
       }
 
-      const usdValue = qty * fromM.price;
+      const usdValue = qty * fromPrice;
       lastFee = calcTxFee("swap", usdValue);
       renderFeeBreakdown(feeBox, lastFee, "swap");
       syncSlipButtons();
@@ -1881,8 +1944,7 @@
           return;
         }
         if (!lastFee) calc();
-        const toM = DCS.markets.find((m) => m.symbol === to.value);
-        const digits = toM && (toM.symbol === "XOF" || toM.symbol === "XAF") ? 0 : 6;
+        const digits = to.value === "XOF" || to.value === "XAF" ? 0 : 6;
         const marketSlip = Math.random() * lastSlip;
         const executed = lastOut * (1 - marketSlip / 100);
         if (executed < lastMinOut - 1e-12) {
@@ -1912,7 +1974,8 @@
           marketSlip.toFixed(2) +
           "% · frais " +
           lastFee.percent +
-          "%";
+          "%" +
+          (from.value === "PI" || to.value === "PI" ? " · PI=" + fmt.piUsd() : "");
         const res = await DCS.backend.swap(
           from.value,
           to.value,
@@ -1926,6 +1989,7 @@
           alert(res.error || "Swap impossible.");
           return;
         }
+        updateFromBalance();
         if (typeof renderWallet === "function") renderWallet();
         if (typeof renderHistory === "function") renderHistory();
         pushTxNotice(
@@ -1946,7 +2010,8 @@
             " % (max " +
             lastSlip +
             " %)\nFrais : " +
-            formatPiFee(lastFee.feePi)
+            formatPiFee(lastFee.feePi) +
+            (from.value === "PI" || to.value === "PI" ? "\nPI COIN : " + fmt.piUsd() : "")
         );
       });
     }
@@ -3705,6 +3770,9 @@
       renderNotifications();
     }
     if (isSwap) {
+      try {
+        await DCS.backend.loadWallet();
+      } catch (e) {}
       renderPiSpotlight();
       setupSwap();
     }
