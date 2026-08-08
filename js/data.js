@@ -385,32 +385,23 @@ DCS.user = {
 };
 
 DCS.buildShareLinks = function () {
-  var base = "./";
-  try {
-    if (typeof location !== "undefined" && location.protocol && location.protocol !== "file:") {
-      var path = location.pathname || "/";
-      var dir = path.replace(/\/[^/]*$/, "/");
-      if (dir.indexOf(".") === -1 && dir.slice(-1) !== "/") dir += "/";
-      if (/\/[^/]+\.html$/i.test(path)) {
-        dir = path.replace(/\/[^/]+\.html$/i, "/");
-      }
-      if (!dir || dir === "") dir = "/";
-      base = location.origin + dir;
-      if (base.slice(-1) !== "/") base += "/";
-    }
-  } catch (e) {}
+  var cfg = window.DCS_CONFIG || {};
+  var base = String(cfg.piNetBaseUrl || "https://damiecrypto3760.pinet.com/").trim();
+  if (!base) base = "./";
+  if (base.slice(-1) !== "/") base += "/";
   var code = (DCS.user && DCS.user.inviteCode) || "DCS";
   var user = String(
     (DCS.user && (DCS.user.piUsername || DCS.user.username)) || "membre"
   ).replace(/^@+/, "");
+  var join =
+    base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
   if (DCS.user) {
     DCS.user.siteLink = base + "index.html";
-    DCS.user.referralLink =
-      base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
+    DCS.user.referralLink = join;
   }
   return {
     site: base + "index.html",
-    join: base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user)
+    join: join
   };
 };
 
