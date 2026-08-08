@@ -154,7 +154,15 @@
           body: JSON.stringify({
             accessToken: accessToken,
             uid: auth.user && auth.user.uid,
-            username: auth.user && auth.user.username
+            username: auth.user && auth.user.username,
+            referred_by: (function () {
+              try {
+                var r = localStorage.getItem("dcs_ref") || "";
+                return r && r !== "—" ? r.replace(/^@+/, "") : "";
+              } catch (e) {
+                return "";
+              }
+            })()
           })
         }).then(function (res) {
           return res.json().then(function (data) {

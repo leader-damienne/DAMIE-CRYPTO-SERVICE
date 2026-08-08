@@ -107,6 +107,12 @@ Deno.serve(async (req) => {
     const email = piEmail(piUser.uid);
     const password = await derivePassword(piUser.uid);
     const db = admin();
+    const referredBy = String(
+      payload.referred_by || payload.referredBy || ""
+    )
+      .trim()
+      .replace(/^@+/, "");
+    const referredMeta = referredBy && referredBy !== "—" ? referredBy : "";
 
     /* 1) Compte déjà lié à ce Pi uid */
     let existing = await db
@@ -165,6 +171,8 @@ Deno.serve(async (req) => {
           pi_username: piUser.username,
           username: piUser.username,
           auth_provider: "pi",
+          referred_by: referredMeta,
+          invite_code: piUser.username,
         },
       });
       if (created.error) {
@@ -209,6 +217,22 @@ Deno.serve(async (req) => {
         display_name: piUser.username,
       })
       .eq("id", authUserId);
+
+    /* Rattacher le parrain uniquement au 1er enregistrement (referred_by vide) */
+    if (referredMeta) {
+      const { data: profRef } = await db
+        .from("profiles")
+        .select("referred_by")
+        .eq("id", authUserId)
+        .maybeSingle();
+      const currentRef = String((profRef && profRef.referred_by) || "").trim();
+      if (!currentRef) {
+        await db
+          .from("profiles")
+          .update({ referred_by: referredMeta })
+          .eq("id", authUserId);
+      }
+    }
 
     const authClient = createClient(SUPABASE_URL, ANON_KEY || SERVICE_KEY);
     const signed = await authClient.auth.signInWithPassword({
