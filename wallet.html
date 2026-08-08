@@ -73,7 +73,8 @@
             <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.55rem">Payer avec Pi Network</div>
             <div class="form-group" style="margin-bottom:0.65rem">
               <label for="pi-deposit-amount">Montant (PI)</label>
-              <input id="pi-deposit-amount" class="form-control" type="number" min="0.01" step="any" value="1" placeholder="1" />
+              <input id="pi-deposit-amount" class="form-control" type="number" min="0.0000001" step="any" value="0.0000001" placeholder="0.0000001" />
+              <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Minimum : 0,0000001 PI</p>
             </div>
             <button type="button" class="btn btn-gold" id="pi-deposit-btn" style="width:100%">Déposer via Pi Browser</button>
             <p id="pi-deposit-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">
@@ -92,7 +93,8 @@
           <form id="deposit-request-form">
             <div class="form-group">
               <label for="deposit-req-amount">Montant PI à créditer (manuel)</label>
-              <input id="deposit-req-amount" class="form-control" type="number" min="0.0001" step="any" required placeholder="Ex. 10" />
+              <input id="deposit-req-amount" class="form-control" type="number" min="0.0000001" step="any" required placeholder="0.0000001" />
+              <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Minimum : 0,0000001 PI</p>
             </div>
             <div class="form-group">
               <label for="deposit-req-note">Référence / note (optionnel)</label>

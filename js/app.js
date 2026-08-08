@@ -457,6 +457,7 @@
   }
 
   function setupPiDeposit() {
+    const MIN_DEPOSIT_PI = 0.0000001;
     const btn = document.getElementById("pi-deposit-btn");
     const amountEl = document.getElementById("pi-deposit-amount");
     const status = document.getElementById("pi-deposit-status");
@@ -478,9 +479,9 @@
         return;
       }
       const amount = parseFloat(amountEl && amountEl.value) || 0;
-      if (amount <= 0) {
-        setStatus("Indiquez un montant PI valide.", true);
-        alert("Indiquez un montant PI valide.");
+      if (!(amount >= MIN_DEPOSIT_PI)) {
+        setStatus("Montant minimum : 0,0000001 PI.", true);
+        alert("Montant minimum de dépôt : 0,0000001 PI.");
         return;
       }
       const prevLabel = btn.textContent;
@@ -838,14 +839,15 @@
   }
 
   function setupDepositRequest() {
+    const MIN_DEPOSIT_PI = 0.0000001;
     const form = document.getElementById("deposit-request-form");
     if (!form) return;
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const amount = parseFloat(document.getElementById("deposit-req-amount").value) || 0;
       const note = (document.getElementById("deposit-req-note") || {}).value || "";
-      if (amount <= 0) {
-        alert("Indiquez le montant PI envoyé / à créditer.");
+      if (!(amount >= MIN_DEPOSIT_PI)) {
+        alert("Montant minimum de dépôt : 0,0000001 PI.");
         return;
       }
       const res = await DCS.backend.createDepositRequest(amount, note.trim());

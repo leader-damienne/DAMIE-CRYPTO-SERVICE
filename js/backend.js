@@ -949,7 +949,12 @@
       if (!gate.ok) return Promise.resolve(gate);
       if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
       var amt = Number(amountPi);
-      if (!(amt > 0)) return Promise.resolve({ ok: false, error: "Montant invalide." });
+      if (!(amt >= 0.0000001)) {
+        return Promise.resolve({
+          ok: false,
+          error: "Montant minimum de dépôt : 0,0000001 PI."
+        });
+      }
       return gate.client
         .from("deposit_requests")
         .insert({

@@ -207,9 +207,13 @@
   }
 
   function depositWithPi(amount) {
+    var MIN_DEPOSIT_PI = 0.0000001;
     var amt = Number(amount);
-    if (!(amt > 0)) {
-      return Promise.resolve({ ok: false, error: "Montant invalide." });
+    if (!(amt >= MIN_DEPOSIT_PI)) {
+      return Promise.resolve({
+        ok: false,
+        error: "Montant minimum de dépôt : 0,0000001 PI."
+      });
     }
     if (!DCS.user || !DCS.user.id) {
       return Promise.resolve({ ok: false, error: "Connectez-vous à DCS." });
