@@ -1283,15 +1283,75 @@
     });
   }
 
+  /** Icônes / illustrations du menu hamburger (modules) */
+  function navModuleSvg(kind) {
+    const stroke = 'fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
+    const map = {
+      home: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 11.5 12 5l8 6.5"/><path d="M7 10.5V19h10v-8.5"/></svg>`,
+      markets: `<svg viewBox="0 0 24 24" ${stroke}><path d="M5 19V9"/><path d="M10 19V5"/><path d="M15 19v-7"/><path d="M20 19V8"/></svg>`,
+      wallet: `<svg viewBox="0 0 24 24" ${stroke}><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14" r="1.25" fill="currentColor" stroke="none"/></svg>`,
+      swap: `<svg viewBox="0 0 24 24" ${stroke}><path d="M7 7h11l-2.5-2.5M17 17H6l2.5 2.5"/><path d="M7 7v4M17 17v-4"/></svg>`,
+      transfer: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 12h14"/><path d="M14 7l5 5-5 5"/></svg>`,
+      market: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 9h16l-1.2 10.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 9z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg>`,
+      referral: `<svg viewBox="0 0 24 24" ${stroke}><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 18.5c.8-3 2.8-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/></svg>`,
+      profil: `<svg viewBox="0 0 24 24" ${stroke}><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5c1.2-3.5 3.8-5 7-5s5.8 1.5 7 5"/></svg>`,
+      academy: `<svg viewBox="0 0 24 24" ${stroke}><path d="M3 9.5 12 5l9 4.5-9 4.5L3 9.5z"/><path d="M6.5 12.2v4.3c0 .8 2.4 2.5 5.5 2.5s5.5-1.7 5.5-2.5v-4.3"/></svg>`,
+      learning: `<svg viewBox="0 0 24 24" ${stroke}><path d="M5 5h10a2 2 0 0 1 2 2v12l-6-2.5L5 19V5z"/><path d="M17 7h2a2 2 0 0 1 2 2v10"/></svg>`,
+      community: `<svg viewBox="0 0 24 24" ${stroke}><path d="M5 16.5V7.8A1.8 1.8 0 0 1 6.8 6h7.4A1.8 1.8 0 0 1 16 7.8v5.2A1.8 1.8 0 0 1 14.2 14.8H9l-4 3.2z"/></svg>`,
+      contact: `<svg viewBox="0 0 24 24" ${stroke}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>`
+    };
+    return map[kind] || map.home;
+  }
+
+  function navKindFromHref(href) {
+    const raw = String(href || "").split("?")[0];
+    if (/#markets/i.test(raw)) return "markets";
+    const file = (raw.split("/").pop() || "index.html").toLowerCase();
+    if (file === "index.html" || file === "" || file === "/") return "home";
+    if (file.indexOf("wallet") === 0) return "wallet";
+    if (file.indexOf("swap") === 0) return "swap";
+    if (file.indexOf("transfer") === 0) return "transfer";
+    if (file.indexOf("marketplace") === 0) return "market";
+    if (file.indexOf("parrainage") === 0) return "referral";
+    if (file.indexOf("profil") === 0) return "profil";
+    if (file.indexOf("academy") === 0) return "academy";
+    if (file.indexOf("learning") === 0) return "learning";
+    if (file.indexOf("community") === 0) return "community";
+    if (file.indexOf("contact") === 0) return "contact";
+    return "home";
+  }
+
+  function decorateMainNavIllustrations() {
+    const nav = document.getElementById("main-nav");
+    if (!nav || nav.dataset.illust === "1") return;
+    nav.dataset.illust = "1";
+    nav.querySelectorAll("a").forEach(function (a) {
+      if (a.querySelector(".nav-illust")) return;
+      const href = a.getAttribute("href") || "";
+      const label = (a.textContent || "").trim() || "Menu";
+      const kind = navKindFromHref(href);
+      a.innerHTML =
+        '<span class="nav-illust" aria-hidden="true">' +
+        navModuleSvg(kind) +
+        '</span><span class="nav-label">' +
+        label.replace(/</g, "&lt;") +
+        "</span>";
+    });
+  }
+
   function setupNav() {
+    decorateMainNavIllustrations();
+
     const path = location.pathname.split("/").pop() || "index.html";
     const hash = location.hash || "";
     document.querySelectorAll(".nav a").forEach((a) => {
       const href = a.getAttribute("href") || "";
+      const labelEl = a.querySelector(".nav-label");
+      const label = (labelEl ? labelEl.textContent : a.textContent || "").trim();
       a.classList.remove("active");
       if (path === "index.html" || path === "" || path === "/") {
         if (hash === "#markets" && href.includes("#markets")) a.classList.add("active");
-        else if (!hash && (href === "index.html" || href === "./index.html") && a.textContent.trim() === "Accueil") {
+        else if (!hash && (href === "index.html" || href === "./index.html") && label === "Accueil") {
           a.classList.add("active");
         }
       } else if (href === path || href.endsWith("/" + path)) {
@@ -1300,7 +1360,8 @@
     });
     const toggle = document.getElementById("menu-toggle");
     const nav = document.getElementById("main-nav");
-    if (toggle && nav) {
+    if (toggle && nav && toggle.dataset.bound !== "1") {
+      toggle.dataset.bound = "1";
       toggle.addEventListener("click", () => nav.classList.toggle("open"));
     }
 
