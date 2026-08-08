@@ -550,20 +550,133 @@
     }
   }
 
+  function txStatusKind(status) {
+    const s = String(status || "").toLowerCase();
+    if (/attente|pending|queue|file|ouvert|processing|en cours/.test(s)) return "pending";
+    if (/confirm|envoy|reçu|recu|payé|paye|prélev|prelev|complet|success|ok|reçu/.test(s)) return "confirmed";
+    return "pending";
+  }
+
+  function txStatusLabel(status) {
+    return txStatusKind(status) === "confirmed" ? "Confirmé" : "En attente";
+  }
+
+  function txStatusBadge(status) {
+    const kind = txStatusKind(status);
+    const label = txStatusLabel(status);
+    const dot = kind === "confirmed" ? "on" : "off";
+    return (
+      '<span class="tx-status is-' +
+      kind +
+      '"><span class="status-dot ' +
+      dot +
+      '"></span>' +
+      label +
+      "</span>"
+    );
+  }
+
+  function isTransferHistoryRow(h) {
+    const t = String((h && h.type) || "").toLowerCase();
+    return /transfer|transfert|réception|reception|frais|payout|retrait/.test(t);
+  }
+
+  function isTransferNotification(n) {
+    const kind = String((n && n.kind) || "").toLowerCase();
+    const title = String((n && n.title) || "").toLowerCase();
+    const body = String((n && n.body) || "").toLowerCase();
+    if (/transfer|payout|retrait/.test(kind)) return true;
+    return /transfert|payout|retrait|réception|reception|mobile money/.test(title + " " + body);
+  }
+
   function renderHistory() {
     const el = document.getElementById("history-body");
     if (!el || !window.DCS) return;
-    el.innerHTML = DCS.history
+    const onTransferPage = !!document.getElementById("tr-asset");
+    const filterBtn = document.querySelector("#tr-history-filters .tx-filter-btn.active");
+    const filter = (filterBtn && filterBtn.getAttribute("data-filter")) || "all";
+    let rows = DCS.history || [];
+    if (onTransferPage) rows = rows.filter(isTransferHistoryRow);
+    if (onTransferPage && filter === "pending") {
+      rows = rows.filter((h) => txStatusKind(h.status) === "pending");
+    } else if (onTransferPage && filter === "confirmed") {
+      rows = rows.filter((h) => txStatusKind(h.status) === "confirmed");
+    }
+    if (!rows.length) {
+      el.innerHTML =
+        '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.25rem">' +
+        (onTransferPage ? "Aucun transfert pour ce filtre." : "Aucune opération.") +
+        "</td></tr>";
+      return;
+    }
+    el.innerHTML = rows
       .map(
         (h) => `<tr>
-          <td>${h.type}</td>
-          <td>${h.detail}</td>
-          <td>${h.amount}</td>
-          <td>${h.status}</td>
-          <td>${h.date}</td>
+          <td>${h.type || "—"}</td>
+          <td>${h.detail || "—"}</td>
+          <td>${h.amount || "—"}</td>
+          <td>${txStatusBadge(h.status)}</td>
+          <td>${h.date || "—"}</td>
         </tr>`
       )
       .join("");
+  }
+
+  function renderNotifications() {
+    const walletEl = document.getElementById("wallet-notifications");
+    const transferEl = document.getElementById("transfer-notifications");
+    if (!walletEl && !transferEl) return;
+    const list = DCS.notifications || [];
+
+    if (walletEl) {
+      if (!list.length) {
+        walletEl.innerHTML =
+          `<div class="feed-post"><div class="meta">Info</div><p>PI COIN : <strong style="color:var(--gold-bright)">$314,159</strong> · aucune notification récente.</p></div>`;
+      } else {
+        walletEl.innerHTML = list
+          .slice(0, 8)
+          .map((n) => {
+            const when = n.created_at ? new Date(n.created_at).toLocaleString("fr-FR") : "";
+            return `<div class="feed-post" style="margin-top:0.55rem"><div class="meta">${when}</div><p><strong>${n.title}</strong>${n.body ? " — " + n.body : ""}</p></div>`;
+          })
+          .join("");
+      }
+    }
+
+    if (transferEl) {
+      const nFilterBtn = document.querySelector("#tr-notif-filters .tx-filter-btn.active");
+      const nFilter = (nFilterBtn && nFilterBtn.getAttribute("data-nfilter")) || "all";
+      let rows = list.filter(isTransferNotification);
+      if (nFilter === "pending") {
+        rows = rows.filter((n) =>
+          /attente|pending|file|queue|payout|retrait/i.test(
+            String(n.title || "") + " " + String(n.body || "") + " " + String(n.kind || "")
+          )
+        );
+      } else if (nFilter === "confirmed") {
+        rows = rows.filter((n) =>
+          /confirm|envoy|reçu|recu|p2p|fonds reçus/i.test(
+            String(n.title || "") + " " + String(n.body || "")
+          )
+        );
+      }
+      if (!rows.length) {
+        transferEl.innerHTML =
+          '<div class="feed-post"><div class="meta">Info</div><p>Aucune notification de transfert pour ce filtre.</p></div>';
+      } else {
+        transferEl.innerHTML = rows
+          .slice(0, 12)
+          .map((n) => {
+            const when = n.created_at ? new Date(n.created_at).toLocaleString("fr-FR") : "";
+            const pending = /attente|pending|file|queue|payout|retrait/i.test(
+              String(n.title || "") + " " + String(n.body || "") + " " + String(n.kind || "")
+            );
+            const badge = txStatusBadge(pending ? "En attente" : "Confirmé");
+            return `<div class="feed-post" style="margin-top:0.55rem"><div class="meta">${when} · ${badge}</div><p><strong>${n.title}</strong>${n.body ? " — " + n.body : ""}</p></div>`;
+          })
+          .join("");
+      }
+    }
   }
 
   function renderCourses() {
@@ -699,26 +812,6 @@
       renderCommunity();
       alert("Publication en ligne.");
     });
-  }
-
-  function renderNotifications() {
-    const el = document.getElementById("wallet-notifications");
-    if (!el) return;
-    const list = DCS.notifications || [];
-    if (!list.length) {
-      el.innerHTML =
-        `<div class="feed-post"><div class="meta">Info</div><p>PI COIN : <strong style="color:var(--gold-bright)">$314,159</strong> · aucune notification récente.</p></div>`;
-      return;
-    }
-    el.innerHTML = list
-      .slice(0, 8)
-      .map((n) => {
-        const when = n.created_at
-          ? new Date(n.created_at).toLocaleString("fr-FR")
-          : "";
-        return `<div class="feed-post" style="margin-top:0.55rem"><div class="meta">${when}</div><p><strong>${n.title}</strong>${n.body ? " — " + n.body : ""}</p></div>`;
-      })
-      .join("");
   }
 
   function setupDepositRequest() {
@@ -1871,9 +1964,24 @@
     const feeBox = document.getElementById("tr-fee");
     const confirmBtn = document.getElementById("tr-confirm");
     const destInput = document.getElementById("tr-dest");
+    const balEl = document.getElementById("tr-balance");
     if (!asset || !country) return;
 
     let lastFee = null;
+
+    function formatAssetAmount(sym, qty) {
+      const digits = sym === "XOF" || sym === "XAF" ? 0 : 6;
+      return Number(qty || 0).toLocaleString("fr-FR", { maximumFractionDigits: digits });
+    }
+
+    function updateBalance() {
+      if (!balEl) return;
+      const sym = asset.value;
+      const row = (DCS.wallet || []).find((w) => w.symbol === sym);
+      const qty = row ? Number(row.amount) || 0 : 0;
+      balEl.textContent = "Solde disponible : " + formatAssetAmount(sym, qty) + " " + sym;
+      balEl.classList.toggle("is-empty", !(qty > 0));
+    }
 
     function countriesForAsset(sym) {
       if (sym === "XOF" || sym === "XAF") {
@@ -1919,6 +2027,7 @@
         .join("");
       if (prev && list.includes(prev)) country.value = prev;
       fillMethods();
+      updateBalance();
       updateHint();
     }
 
@@ -1957,7 +2066,7 @@
       }
       if (zoneHint) zoneHint.textContent = msg;
 
-      const qty = parseFloat(amount && amount.value) || 0;
+      const qty = parseFloat(String((amount && amount.value) || "").replace(",", ".")) || 0;
       if (receive && amount) {
         const fromM = DCS.markets.find((m) => m.symbol === sym);
         let outSym = sym;
@@ -1996,9 +2105,24 @@
     if (method) method.addEventListener("change", updateHint);
     if (amount) amount.addEventListener("input", updateHint);
 
+    document.querySelectorAll("#tr-history-filters .tx-filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#tr-history-filters .tx-filter-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderHistory();
+      });
+    });
+    document.querySelectorAll("#tr-notif-filters .tx-filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#tr-notif-filters .tx-filter-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderNotifications();
+      });
+    });
+
     if (confirmBtn) {
       confirmBtn.addEventListener("click", async () => {
-        const qty = parseFloat(amount && amount.value) || 0;
+        const qty = parseFloat(String((amount && amount.value) || "").replace(",", ".")) || 0;
         const dest = (destInput && destInput.value) || "";
         const payMethod = (method && method.value) || "";
         if (qty <= 0) {
@@ -2016,7 +2140,14 @@
         if (!lastFee) updateHint();
         const bal = (DCS.wallet || []).find((w) => w.symbol === asset.value);
         if (!bal || bal.amount < qty) {
-          alert("Solde " + asset.value + " insuffisant.");
+          alert(
+            "Solde " +
+              asset.value +
+              " insuffisant.\nDisponible : " +
+              formatAssetAmount(asset.value, bal ? bal.amount : 0) +
+              " " +
+              asset.value
+          );
           return;
         }
         if (!deductPiFee(lastFee.feePi)) return;
@@ -2044,18 +2175,20 @@
           alert(res.error || "Transfert impossible.");
           return;
         }
+        updateBalance();
         renderHistory();
         if (typeof renderWallet === "function") renderWallet();
+        if (typeof renderNotifications === "function") renderNotifications();
         const data = res.data || {};
         pushTxNotice(
-          data.p2p ? "Transfert P2P envoyé" : "Transfert enregistré",
+          data.p2p ? "Transfert P2P confirmé" : "Transfert en attente",
           qty + " " + asset.value + " · " + country.value,
-          "transfer"
+          data.p2p ? "transfer" : "payout"
         );
         alert(
           (data.p2p
-            ? "Transfert P2P instantané vers un membre DCS.\n"
-            : "Transfert débité — payout Mobile Money / banque en file d'attente ops.\n") +
+            ? "Transfert P2P confirmé vers un membre DCS.\n"
+            : "Transfert enregistré — statut : En attente (Mobile Money / banque).\n") +
             "Pays : " +
             country.value +
             "\nMoyen : " +
@@ -2068,6 +2201,7 @@
       });
     }
     fillCountries();
+    updateBalance();
   }
 
   function renderReferral() {
@@ -3575,8 +3709,14 @@
       setupSwap();
     }
     if (isTransfer) {
+      try {
+        await DCS.backend.loadWallet();
+        await DCS.backend.loadHistory();
+        await DCS.backend.loadNotifications();
+      } catch (e) {}
       setupTransfer();
       renderHistory();
+      renderNotifications();
     }
     if (isMarket) {
       await DCS.backend.loadListings();

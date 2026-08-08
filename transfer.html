@@ -61,6 +61,7 @@
             <option value="PI" selected>PI — PI COIN</option>
             <option value="USDT">USDT — Tether</option>
           </select>
+          <p id="tr-balance" class="tr-balance" aria-live="polite">Solde disponible : —</p>
         </div>
         <div class="form-group">
           <label for="tr-country">Pays destinataire</label>
@@ -78,7 +79,7 @@
         </div>
         <div class="form-group">
           <label for="tr-amount">Montant</label>
-          <input id="tr-amount" class="form-control" type="number" min="0" step="any" value="1" placeholder="0.00" />
+          <input id="tr-amount" class="form-control" type="number" min="0" step="any" value="" placeholder="0.00" />
         </div>
         <div class="form-group">
           <label for="tr-receive">Estimation reçue</label>
@@ -109,7 +110,12 @@
           <p style="font-size:0.78rem;color:var(--muted);margin-top:0.75rem">Frais débités en PI COIN. Les commissions N1–N3 sont prélevées sur ces frais.</p>
         </div>
         <div class="panel">
-          <h3>Suivi des opérations</h3>
+          <h3>Historique des transferts</h3>
+          <div class="tx-status-filters" id="tr-history-filters" role="tablist" aria-label="Filtrer par statut">
+            <button type="button" class="tx-filter-btn active" data-filter="all">Tous</button>
+            <button type="button" class="tx-filter-btn" data-filter="pending">En attente</button>
+            <button type="button" class="tx-filter-btn" data-filter="confirmed">Confirmé</button>
+          </div>
           <div class="markets-table-wrap" style="border:none;background:transparent">
             <table class="markets-table">
               <thead>
@@ -124,6 +130,15 @@
               <tbody id="history-body"></tbody>
             </table>
           </div>
+        </div>
+        <div class="panel">
+          <h3>Notifications transferts</h3>
+          <div class="tx-status-filters" id="tr-notif-filters" role="tablist" aria-label="Filtrer les notifications">
+            <button type="button" class="tx-filter-btn active" data-nfilter="all">Toutes</button>
+            <button type="button" class="tx-filter-btn" data-nfilter="pending">En attente</button>
+            <button type="button" class="tx-filter-btn" data-nfilter="confirmed">Confirmé</button>
+          </div>
+          <div id="transfer-notifications"></div>
         </div>
       </div>
     </div>

@@ -475,13 +475,13 @@ begin
   values (
     uid, 'Transfer', coalesce(p_detail, 'P2P → ' || dest_label),
     trim(to_char(p_amount, '9999999999990.########')) || ' ' || p_symbol,
-    'Envoyé'
+    'Confirmé'
   );
   insert into transactions (user_id, type, detail, amount, status)
   values (
     dest_id, 'Réception', 'Reçu de membre DCS',
     '+' || trim(to_char(p_amount, '9999999999990.########')) || ' ' || p_symbol,
-    'Reçu'
+    'Confirmé'
   );
   perform dcs_notify(uid, 'Transfert P2P envoyé', dest_label, 'transfer');
   perform dcs_notify(dest_id, 'Fonds reçus', trim(to_char(p_amount, '9999999999990.########')) || ' ' || p_symbol, 'transfer');
@@ -592,9 +592,17 @@ begin
 
   -- Sinon débit + file d'attente Mobile Money / banque
   res := dcs_transfer(p_symbol, p_amount, p_fee_pi, p_detail);
+  update public.transactions
+     set status = 'En attente'
+   where id = (
+     select id from public.transactions
+      where user_id = uid and type = 'Transfer'
+      order by created_at desc
+      limit 1
+   );
   insert into payout_requests (user_id, symbol, amount, country, method, destination, detail, status)
   values (uid, p_symbol, p_amount, coalesce(p_country, ''), coalesce(p_method, ''), p_destination, coalesce(p_detail, ''), 'pending');
-  perform dcs_notify(uid, 'Retrait en file d''attente', 'Votre payout sera traité par l''équipe DCS.', 'payout');
+  perform dcs_notify(uid, 'Transfert en attente', 'Votre payout Mobile Money / banque est en file d''attente DCS.', 'payout');
   return jsonb_build_object('ok', true, 'p2p', false, 'queued', true);
 end;
 $$;

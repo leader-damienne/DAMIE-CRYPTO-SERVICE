@@ -2235,6 +2235,61 @@ body.is-pi-browser .form-row-2 {
 .status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .status-dot.off { background: var(--muted-2); }
 
+.tr-balance {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+
+.tr-balance.is-empty {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tx-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+}
+
+.tx-filter-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tx-filter-btn.active {
+  color: #111;
+  background: var(--gold-grad);
+  border-color: transparent;
+}
+
+.tx-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tx-status.is-pending {
+  color: #f5d76e;
+}
+
+.tx-status.is-confirmed {
+  color: var(--green);
+}
+
 .kyc-steps {
   display: grid;
   gap: 0.75rem;
