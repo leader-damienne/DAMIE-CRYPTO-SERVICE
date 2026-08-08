@@ -1260,7 +1260,7 @@ select.form-control {
 .course-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   padding: 1rem;
   border: 1px solid var(--border-soft);
@@ -1281,6 +1281,22 @@ select.form-control {
 .course-item p {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.course-video-wrap {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #0a0a0a;
+  max-width: 100%;
+}
+
+.course-video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  background: #000;
 }
 
 .price-pi {

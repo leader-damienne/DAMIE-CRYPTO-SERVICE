@@ -1245,6 +1245,41 @@
         });
     },
 
+    /* URLs signées pour vidéos des cours débloqués (bucket academy) */
+    resolveCourseVideos: function (courses) {
+      var gate = this.requireClient();
+      var list = courses || DCS.courses || [];
+      if (!gate.ok) return Promise.resolve(list);
+      var jobs = list
+        .filter(function (c) {
+          return c && c.enrolled && c.videoPath;
+        })
+        .map(function (c) {
+          var path = String(c.videoPath || "").replace(/^\/+/, "");
+          if (/^https?:\/\//i.test(path)) {
+            c.videoUrl = path;
+            return Promise.resolve();
+          }
+          return gate.client.storage
+            .from("academy")
+            .createSignedUrl(path, 60 * 60 * 6)
+            .then(function (res) {
+              if (res.error) {
+                console.warn(res.error);
+                c.videoUrl = "";
+                return;
+              }
+              c.videoUrl = (res.data && res.data.signedUrl) || "";
+            })
+            .catch(function () {
+              c.videoUrl = "";
+            });
+        });
+      return Promise.all(jobs).then(function () {
+        return list;
+      });
+    },
+
     loadCourses: function () {
       var gate = this.requireClient();
       var self = this;
@@ -1275,7 +1310,7 @@
       var fetchCourses = function () {
         return gate.client
           .from("courses")
-          .select("id, title, level, price_pi, description, content, sort_order")
+          .select("id, title, level, price_pi, description, content, video_path, sort_order")
           .eq("active", true)
           .order("sort_order", { ascending: true })
           .then(function (res) {
@@ -1293,6 +1328,8 @@
                 pricePi: resolvePrice(c.title, c.price_pi),
                 desc: c.description,
                 content: c.content || "",
+                videoPath: String(c.video_path || "").trim(),
+                videoUrl: "",
                 enrolled: false
               };
             });
@@ -1309,7 +1346,7 @@
                 DCS.courses.forEach(function (c) {
                   c.enrolled = !!set[c.id];
                 });
-                return DCS.courses;
+                return self.resolveCourseVideos(DCS.courses);
               });
           });
       };

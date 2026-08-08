@@ -720,25 +720,55 @@
       return;
     }
     el.innerHTML = list
-      .map(
-        (c) => `<article class="course-item">
-          <div>
-            <h4>${c.title}</h4>
-            <p>${c.level} · ${c.desc || ""}</p>
-            ${
-              c.enrolled && c.content
-                ? `<p class="course-unlocked" style="margin-top:0.55rem;font-size:0.82rem;white-space:pre-wrap;color:var(--text)">${c.content}</p>`
-                : ""
-            }
-          </div>
-          <div style="text-align:right">
-            <div class="price-pi">${formatCoursePricePi(c.pricePi)}</div>
-            <button class="trade-btn" type="button" data-enroll="${c.id || ""}" ${c.enrolled ? "disabled" : ""}>
-              ${c.enrolled ? "Débloqué" : "Acheter"}
-            </button>
-          </div>
-        </article>`
-      )
+      .map(function (c) {
+        var body = "";
+        if (c.enrolled) {
+          if (c.videoUrl && safeUrl(c.videoUrl)) {
+            body +=
+              '<div class="course-video-wrap">' +
+              '<video class="course-video" controls playsinline preload="metadata" src="' +
+              escapeHtml(safeUrl(c.videoUrl)) +
+              '">Votre navigateur ne lit pas cette vidéo.</video>' +
+              "</div>";
+          } else if (c.videoPath) {
+            body +=
+              '<p class="panel-note" style="margin-top:0.55rem">Vidéo en cours de chargement ou indisponible. Rechargez la page.</p>';
+          }
+          if (c.content) {
+            body +=
+              '<p class="course-unlocked" style="margin-top:0.55rem;font-size:0.82rem;white-space:pre-wrap;color:var(--text)">' +
+              escapeHtml(c.content) +
+              "</p>";
+          }
+        }
+        return (
+          '<article class="course-item">' +
+          "<div>" +
+          "<h4>" +
+          escapeHtml(c.title) +
+          "</h4>" +
+          "<p>" +
+          escapeHtml(c.level) +
+          " · " +
+          escapeHtml(c.desc || "") +
+          "</p>" +
+          body +
+          "</div>" +
+          '<div style="text-align:right">' +
+          '<div class="price-pi">' +
+          formatCoursePricePi(c.pricePi) +
+          "</div>" +
+          '<button class="trade-btn" type="button" data-enroll="' +
+          escapeHtml(c.id || "") +
+          '" ' +
+          (c.enrolled ? "disabled" : "") +
+          ">" +
+          (c.enrolled ? "Débloqué" : "Acheter") +
+          "</button>" +
+          "</div>" +
+          "</article>"
+        );
+      })
       .join("");
     el.querySelectorAll("[data-enroll]").forEach((btn) => {
       btn.addEventListener("click", async () => {
