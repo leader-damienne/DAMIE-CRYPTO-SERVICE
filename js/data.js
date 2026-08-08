@@ -400,7 +400,9 @@ DCS.buildShareLinks = function () {
     }
   } catch (e) {}
   var code = (DCS.user && DCS.user.inviteCode) || "DCS";
-  var user = (DCS.user && DCS.user.username) || "membre";
+  var user = String(
+    (DCS.user && (DCS.user.piUsername || DCS.user.username)) || "membre"
+  ).replace(/^@+/, "");
   if (DCS.user) {
     DCS.user.siteLink = base + "index.html";
     DCS.user.referralLink =

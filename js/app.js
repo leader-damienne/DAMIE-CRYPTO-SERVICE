@@ -2457,7 +2457,7 @@
     const codeEl = document.getElementById("ref-code");
     const linkEl = document.getElementById("ref-link");
     const siteEl = document.getElementById("share-site-link");
-    if (userEl) userEl.textContent = "@" + DCS.user.username;
+    if (userEl) userEl.textContent = atHandle(primaryUsername(DCS.user) || displayUserLabel(DCS.user));
     if (codeEl) codeEl.value = DCS.user.inviteCode;
     if (linkEl) linkEl.value = DCS.user.referralLink;
     if (siteEl) siteEl.value = DCS.user.siteLink || DCS.user.referralLink;
@@ -2487,9 +2487,9 @@
         .map(
           (m) => `<div class="member">
             <div>
-              <strong>@${m.username}</strong>
+              <strong>${atHandle(m.username)}</strong>
               <div style="font-size:0.75rem;color:var(--muted)">
-                Code ${m.code}${showVia && m.via ? " · via @" + m.via : ""} · ${m.date}
+                Code ${m.code}${showVia && m.via ? " · via " + atHandle(m.via) : ""} · ${m.date}
               </div>
             </div>
             <div style="text-align:right">
@@ -2581,15 +2581,41 @@
     return /@auth\.dcs(\.app)?$/i.test(String(val || "")) || /^pi\.[a-f0-9]{8,}@/i.test(String(val || ""));
   }
 
+  /** Retire les @ en tête pour éviter @@ ou une lettre mangée */
+  function bareUsername(raw) {
+    return String(raw || "")
+      .trim()
+      .replace(/^@+/, "");
+  }
+
+  function atHandle(raw) {
+    var s = bareUsername(raw);
+    return s ? "@" + s : "—";
+  }
+
+  function primaryUsername(u) {
+    if (!u) return "";
+    if (u.piUsername) return bareUsername(u.piUsername);
+    if (u.username && !/^pi\./i.test(u.username) && !isSyntheticPiEmail(u.username)) {
+      return bareUsername(u.username);
+    }
+    if (u.displayName && !isSyntheticPiEmail(u.displayName) && !/\s/.test(u.displayName)) {
+      return bareUsername(u.displayName);
+    }
+    return bareUsername(u.username || u.piUsername || "");
+  }
+
   function displayUserLabel(u) {
     if (!u) return "—";
-    if (u.piUsername) return "@" + u.piUsername;
+    if (u.piUsername) return atHandle(u.piUsername);
     if (u.displayName && !isSyntheticPiEmail(u.displayName)) return u.displayName;
-    if (u.username && !/^pi\./i.test(u.username) && !isSyntheticPiEmail(u.username)) return "@" + u.username;
+    if (u.username && !/^pi\./i.test(u.username) && !isSyntheticPiEmail(u.username)) {
+      return atHandle(u.username);
+    }
     if (u.email && !isSyntheticPiEmail(u.email)) return u.email;
     return u.displayName && !isSyntheticPiEmail(u.displayName)
       ? u.displayName
-      : u.username || "Pioneer";
+      : atHandle(u.username || u.piUsername || "Pioneer");
   }
 
   function renderProfile() {

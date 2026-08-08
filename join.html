@@ -82,7 +82,7 @@
       var codeEl = document.getElementById("join-code");
       var userEl = document.getElementById("join-username");
       if (codeEl) codeEl.textContent = ref;
-      if (userEl) userEl.textContent = u ? "@" + u : "Invité DCS";
+      if (userEl) userEl.textContent = u ? "@" + String(u).replace(/^@+/, "") : "Invité DCS";
       try {
         localStorage.setItem("dcs_ref", ref);
         if (u) localStorage.setItem("dcs_ref_user", u);
