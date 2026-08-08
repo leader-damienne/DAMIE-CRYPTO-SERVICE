@@ -351,22 +351,89 @@
     },
 
     startTotpEnroll: function () {
+      var self = this;
       var gate = this.requireClient();
       if (!gate.ok) return Promise.resolve(gate);
-      return gate.client.auth.mfa
-        .enroll({ factorType: "totp", friendlyName: "DAMIE CRYPTO SERVICE" })
-        .then(function (res) {
-          if (res.error) {
-            return { ok: false, error: res.error.message || "Impossible de démarrer le 2FA." };
-          }
-          var d = res.data || {};
-          return {
-            ok: true,
-            factorId: d.id,
-            qr: (d.totp && d.totp.qr_code) || "",
-            secret: (d.totp && d.totp.secret) || ""
-          };
+
+      function friendlyMfaError(msg) {
+        var m = String(msg || "");
+        if (/already|exists|friendly name|duplicate/i.test(m)) {
+          return "Une configuration 2FA est déjà en cours ou active. Réessayez : on nettoie l'ancienne.";
+        }
+        return m || "Impossible de démarrer le 2FA.";
+      }
+
+      /* Nettoyer les facteurs TOTP non vérifiés (QR abandonné) qui bloquent un nouvel enroll */
+      return gate.client.auth.mfa.listFactors().then(function (listed) {
+        var totp = (listed.data && listed.data.totp) || [];
+        var verified = totp.find(function (f) {
+          return f.status === "verified";
         });
+        if (verified) {
+          DCS.user.googleAuth = true;
+          return {
+            ok: false,
+            error: "La 2FA est déjà active sur ce compte. Cliquez sur « Désactiver 2FA » pour la retirer."
+          };
+        }
+        var stale = totp.filter(function (f) {
+          return f.status !== "verified";
+        });
+        var clean = Promise.resolve();
+        stale.forEach(function (f) {
+          clean = clean.then(function () {
+            return gate.client.auth.mfa.unenroll({ factorId: f.id }).catch(function () {});
+          });
+        });
+        return clean.then(function () {
+          return gate.client.auth.mfa
+            .enroll({ factorType: "totp", friendlyName: "DAMIE CRYPTO SERVICE" })
+            .then(function (res) {
+              if (res.error) {
+                /* 2e tentative après un conflit de nom */
+                if (/already|exists|friendly name|duplicate/i.test(res.error.message || "")) {
+                  return gate.client.auth.mfa.listFactors().then(function (again) {
+                    var all = (again.data && again.data.totp) || [];
+                    var wipe = Promise.resolve();
+                    all.forEach(function (f) {
+                      if (f.status === "verified") return;
+                      wipe = wipe.then(function () {
+                        return gate.client.auth.mfa.unenroll({ factorId: f.id }).catch(function () {});
+                      });
+                    });
+                    return wipe.then(function () {
+                      return gate.client.auth.mfa
+                        .enroll({
+                          factorType: "totp",
+                          friendlyName: "DCS " + Date.now().toString(36)
+                        })
+                        .then(function (res2) {
+                          if (res2.error) {
+                            return { ok: false, error: friendlyMfaError(res2.error.message) };
+                          }
+                          var d2 = res2.data || {};
+                          return {
+                            ok: true,
+                            factorId: d2.id,
+                            qr: (d2.totp && d2.totp.qr_code) || "",
+                            secret: (d2.totp && d2.totp.secret) || ""
+                          };
+                        });
+                    });
+                  });
+                }
+                return { ok: false, error: friendlyMfaError(res.error.message) };
+              }
+              var d = res.data || {};
+              return {
+                ok: true,
+                factorId: d.id,
+                qr: (d.totp && d.totp.qr_code) || "",
+                secret: (d.totp && d.totp.secret) || ""
+              };
+            });
+        });
+      });
     },
 
     verifyTotpEnroll: function (factorId, code) {
@@ -406,18 +473,25 @@
         return gate.client.auth.mfa.unenroll({ factorId: id });
       }
       var p = factorId
-        ? Promise.resolve(factorId)
+        ? Promise.resolve([factorId])
         : gate.client.auth.mfa.listFactors().then(function (res) {
             var totp = (res.data && res.data.totp) || [];
-            var f = totp.find(function (x) {
-              return x.status === "verified";
-            });
-            return f && f.id;
+            /* Supprimer vérifiés ET non vérifiés (QR abandonnés) */
+            return totp
+              .map(function (x) {
+                return x && x.id;
+              })
+              .filter(Boolean);
           });
-      return p.then(function (id) {
-        if (!id) return { ok: false, error: "Aucun 2FA actif." };
-        return unenroll(id).then(function (res) {
-          if (res.error) return { ok: false, error: res.error.message };
+      return p.then(function (ids) {
+        if (!ids || !ids.length) return { ok: false, error: "Aucun 2FA actif." };
+        var chain = Promise.resolve();
+        ids.forEach(function (id) {
+          chain = chain.then(function () {
+            return unenroll(id).catch(function () {});
+          });
+        });
+        return chain.then(function () {
           DCS.user.googleAuth = false;
           return self.persistProfile().then(function () {
             return { ok: true };
