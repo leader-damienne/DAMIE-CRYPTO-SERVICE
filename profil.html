@@ -56,17 +56,21 @@
         <div class="panel">
           <h3>Identité</h3>
           <div class="profile-head">
-            <div class="avatar-wrap">
+            <label class="avatar-wrap" for="avatar-input" title="Changer la photo de profil" aria-label="Changer la photo de profil">
               <img id="profile-avatar" alt="" hidden />
               <div class="avatar-fallback" id="profile-avatar-fallback">DC</div>
+              <span class="avatar-upload" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2h6l2 2h3v11H4V8z"/><circle cx="12" cy="13" r="3.25"/></svg>
+              </span>
               <input id="avatar-input" type="file" accept="image/*" hidden />
-            </div>
+            </label>
             <div>
               <div style="font-family:var(--font-display);font-size:1.15rem" id="profile-displayname">—</div>
               <div style="color:var(--gold-bright);font-weight:700" id="profile-username">@—</div>
               <div style="font-size:0.8rem;color:var(--muted);margin-top:0.25rem" id="profile-joined"></div>
               <div style="font-size:0.8rem;color:var(--muted)">Code invite : <strong id="profile-invite">—</strong></div>
               <div style="font-size:0.8rem;color:var(--muted);margin-top:0.35rem" id="profile-location">—</div>
+              <p class="avatar-hint" id="avatar-hint">Touchez la photo pour la changer</p>
             </div>
           </div>
 
@@ -242,13 +246,6 @@
               <button type="button" class="btn btn-gold" id="mfa-verify">Valider le 2FA</button>
               <button type="button" class="btn btn-outline" id="mfa-cancel">Annuler</button>
             </div>
-          </div>
-          <div class="status-row">
-            <div>
-              <strong>Photo de profil</strong>
-              <div style="font-size:0.78rem;color:var(--muted)">Utilisez le bouton Uploader ci-contre</div>
-            </div>
-            <label class="btn btn-outline" for="avatar-input" style="cursor:pointer">Uploader</label>
           </div>
         </div>
 

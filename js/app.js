@@ -2386,20 +2386,24 @@
           photoInput.value = "";
           return;
         }
-        const label = document.querySelector('label[for="avatar-input"]');
-        if (label) {
-          label.setAttribute("data-old", label.textContent);
-          label.textContent = "Envoi…";
-        }
+        const wrap = photoInput.closest(".avatar-wrap") || document.querySelector(".avatar-wrap");
+        const hint = document.getElementById("avatar-hint");
+        const prevHint = hint ? hint.textContent : "";
+        if (wrap) wrap.classList.add("is-uploading");
+        if (hint) hint.textContent = "Envoi de la photo…";
         const res = await DCS.backend.uploadAvatar(file);
-        if (label) label.textContent = label.getAttribute("data-old") || "Uploader";
+        if (wrap) wrap.classList.remove("is-uploading");
+        if (hint) hint.textContent = prevHint || "Touchez la photo pour la changer";
         photoInput.value = "";
         if (!res.ok) {
           alert(res.error || "Impossible d'enregistrer la photo.");
           return;
         }
         renderProfile();
-        alert("Photo de profil enregistrée.");
+        if (hint) hint.textContent = "Photo mise à jour";
+        setTimeout(function () {
+          if (hint) hint.textContent = "Touchez la photo pour la changer";
+        }, 2200);
       });
     }
 

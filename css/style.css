@@ -2121,11 +2121,18 @@ body.is-pi-browser .form-row-2 {
 
 .avatar-wrap {
   position: relative;
+  display: block;
   width: 96px;
   height: 96px;
   flex-shrink: 0;
-  overflow: hidden;
   border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.avatar-wrap:focus-within {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
 }
 
 .avatar-wrap img,
@@ -2137,6 +2144,14 @@ body.is-pi-browser .form-row-2 {
   border: 3px solid var(--gold);
   box-shadow: var(--shadow-gold);
   background: var(--gold-grad);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.avatar-wrap:hover img,
+.avatar-wrap:hover .avatar-fallback,
+.avatar-wrap:active img,
+.avatar-wrap:active .avatar-fallback {
+  filter: brightness(0.88);
 }
 
 .avatar-wrap img[hidden],
@@ -2165,12 +2180,35 @@ body.is-pi-browser .form-row-2 {
   border-radius: 50%;
   background: var(--gold-grad);
   color: #111;
-  font-size: 0.85rem;
-  font-weight: 700;
   display: grid;
   place-items: center;
-  border: 2px solid #111;
-  cursor: pointer;
+  border: 2px solid var(--bg, #0d0d0d);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.avatar-wrap.is-uploading {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.avatar-wrap.is-uploading .avatar-upload {
+  animation: avatar-pulse 0.9s ease infinite alternate;
+}
+
+@keyframes avatar-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.08);
+  }
+}
+
+.avatar-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .status-row {
