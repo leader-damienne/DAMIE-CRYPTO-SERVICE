@@ -2471,11 +2471,9 @@
     const userEl = document.getElementById("ref-username");
     const codeEl = document.getElementById("ref-code");
     const linkEl = document.getElementById("ref-link");
-    const siteEl = document.getElementById("share-site-link");
     if (userEl) userEl.textContent = atHandle(primaryUsername(DCS.user) || displayUserLabel(DCS.user));
     if (codeEl) codeEl.value = DCS.user.inviteCode;
     if (linkEl) linkEl.value = DCS.user.referralLink;
-    if (siteEl) siteEl.value = DCS.user.siteLink || DCS.user.referralLink;
 
     const rates = document.getElementById("ref-rates");
     if (rates) {
@@ -2586,10 +2584,8 @@
     }
     const copyCode = document.getElementById("copy-ref-code");
     const copyLink = document.getElementById("copy-ref-link");
-    const copySite = document.getElementById("copy-share-site");
     if (copyCode) copyCode.addEventListener("click", () => copyField("ref-code", "Code d'invitation"));
     if (copyLink) copyLink.addEventListener("click", () => copyField("ref-link", "Lien d'invitation"));
-    if (copySite) copySite.addEventListener("click", () => copyField("share-site-link", "Lien du site"));
   }
 
   function isSyntheticPiEmail(val) {
