@@ -97,43 +97,22 @@
   function applyEcosystemCompliance() {
     if (!isEcosystemMode()) return;
 
-    /* Swap réactivé (PI ↔ XOF/XAF/cryptos). Transfer reste masqué en mode Ecosystem. */
+    /* Swap + Transfer réactivés. Auth reste Pi-only. */
     document.querySelectorAll("#main-nav a, .footer-col a, .footer-bottom a").forEach(function (a) {
       const href = (a.getAttribute("href") || "").toLowerCase();
-      if (/transfer\.html/.test(href)) {
-        a.style.display = "none";
-      }
       if (/signup\.html/.test(href)) {
         a.setAttribute("href", "signin.html");
         if (/inscri/i.test(a.textContent || "")) a.textContent = "Connexion Pi";
       }
     });
 
-    document.querySelectorAll('a[href="transfer.html"]').forEach(function (a) {
-      a.style.display = "none";
-    });
-
     document.querySelectorAll(".module-link").forEach(function (a) {
       const href = (a.getAttribute("href") || "").toLowerCase();
-      if (/transfer/.test(href)) a.style.display = "none";
       if (/profil/.test(href)) {
         const p = a.querySelector("p");
         if (p) p.textContent = "Profil Pioneer Pi, avatar et préférences.";
       }
     });
-
-    /* Transfer uniquement : message + redirection douce (swap reste opérationnel) */
-    const page = (location.pathname || "").split("/").pop() || "";
-    if (/^transfer\.html$/i.test(page)) {
-      const main = document.querySelector("main.container");
-      if (main) {
-        main.innerHTML =
-          '<div class="page-hero"><h1>Bientôt <span>disponible</span></h1>' +
-          "<p>Les transferts transfrontaliers seront réactivés prochainement. Utilisez le Swap en attendant.</p></div>" +
-          '<div class="panel"><p>Échangez PI, XOF, XAF et cryptos via le Swap DCS.</p>' +
-          '<a class="btn btn-gold" href="swap.html">Ouvrir le Swap</a></div>';
-      }
-    }
 
     /* Profil : masquer e-mail / téléphone / mot de passe / KYC (lignes, pas tout le panneau) */
     /* (appliqué plus bas après le wallet, pour garder l’upload avatar) */
@@ -3576,7 +3555,7 @@
       renderPiSpotlight();
       setupSwap();
     }
-    if (isTransfer && !isEcosystemMode()) {
+    if (isTransfer) {
       setupTransfer();
       renderHistory();
     }
