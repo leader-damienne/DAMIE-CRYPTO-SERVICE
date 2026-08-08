@@ -1435,8 +1435,20 @@ select.form-control {
   flex-wrap: wrap;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border-soft);
-  font-size: 0.75rem;
-  color: var(--muted-2);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.footer-bottom a,
+.legal-links a {
+  color: var(--gold-bright);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.footer-bottom a:hover,
+.legal-links a:hover {
+  color: var(--gold);
 }
 
 /* ——— Mobile ——— */

@@ -5,6 +5,8 @@
 /signup   /signup.html   200
 /join     /join.html     200
 /contact  /contact.html  200
+/terms    /terms.html    200
+/privacy  /privacy.html  200
 
 # Lien d'invitation : /=pseudo
 /=*       /join.html     200
