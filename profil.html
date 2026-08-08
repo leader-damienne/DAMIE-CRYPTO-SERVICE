@@ -48,7 +48,7 @@
   <main class="container">
     <div class="page-hero">
       <h1>Mon <span>Profil</span></h1>
-      <p>Identité, langue, KYC, sécurité, support et déconnexion.</p>
+      <p>Identité Pioneer, langue, sécurité, support et déconnexion.</p>
     </div>
 
     <div class="grid-2" style="padding-bottom:3rem">
@@ -288,13 +288,13 @@
           </form>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="forgot-password-panel" hidden>
           <h3>Mot de passe oublié</h3>
           <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Recevez un lien de réinitialisation sur votre e-mail lié.</p>
           <form id="forgot-password-form">
             <div class="form-group">
               <label for="forgot-email">E-mail / Gmail</label>
-              <input id="forgot-email" class="form-control" type="email" required placeholder="vous@gmail.com" />
+              <input id="forgot-email" class="form-control" type="email" placeholder="vous@gmail.com" />
             </div>
             <button class="btn btn-outline" type="submit">Envoyer le lien</button>
           </form>
@@ -302,18 +302,11 @@
 
         <div class="panel" id="profile-support">
           <h3>Service support</h3>
-          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Besoin d'aide ? Ouvrez un ticket ou contactez l'équipe DCS.</p>
-          <div class="status-row">
-            <div>
-              <strong>Canal prioritaire</strong>
-              <div style="font-size:0.78rem;color:var(--muted)">E-mail support · réponse sous 24–48 h</div>
-            </div>
-            <a class="btn btn-outline" href="mailto:support@damiecrypto.service">Écrire</a>
-          </div>
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">Besoin d'aide ? Ouvrez un ticket via le formulaire ci-dessous.</p>
           <div class="status-row">
             <div>
               <strong>Contact général</strong>
-              <div style="font-size:0.78rem;color:var(--muted)">Page Contact &amp; coordonnées</div>
+              <div style="font-size:0.78rem;color:var(--muted)">Page Contact</div>
             </div>
             <a class="btn btn-outline" href="contact.html">Ouvrir</a>
           </div>
@@ -322,12 +315,11 @@
               <label for="support-topic">Sujet</label>
               <select id="support-topic" class="form-control" required>
                 <option value="">— Choisir —</option>
-                <option value="wallet">Wallet / dépôt / retrait</option>
+                <option value="wallet">Wallet / dépôt</option>
                 <option value="swap">Swap / conversion</option>
-                <option value="transfer">Transfer UEMOA / CEMAC</option>
-                <option value="kyc">KYC / identité</option>
-                <option value="security">Sécurité / 2FA / mot de passe</option>
+                <option value="transfer">Transfer</option>
                 <option value="marketplace">Marketplace</option>
+                <option value="parrainage">Parrainage</option>
                 <option value="other">Autre</option>
               </select>
             </div>

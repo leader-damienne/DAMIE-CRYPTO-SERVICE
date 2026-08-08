@@ -199,11 +199,11 @@
           return {
             ok: false,
             error:
-              "Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi (exigence Ecosystem)."
-          };
-        }
-        return { ok: false, error: msg };
-      });
+              "Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi."
+            };
+          }
+          return { ok: false, error: msg };
+        });
   }
 
   function depositWithPi(amount) {
@@ -242,7 +242,10 @@
                   memo: memo
                 }).then(function (res) {
                   if (!res.ok) {
-                    resolve({ ok: false, error: res.error || "Approve échoué (vérifiez PI_API_KEY / JWT OFF)." });
+                    resolve({
+                      ok: false,
+                      error: res.error || "Paiement refusé. Réessayez dans le Pi Browser."
+                    });
                   }
                 }).catch(function (err) {
                   resolve({
@@ -290,11 +293,11 @@
           return {
             ok: false,
             error:
-              "Ouvrez DCS dans le Pi Browser (sandbox ou production) pour payer en Pi. Chrome classique ne peut pas signer les paiements Pi."
-          };
-        }
-        return { ok: false, error: msg };
-      });
+              "Ouvrez DCS dans le Pi Browser pour payer en Pi."
+            };
+          }
+          return { ok: false, error: msg };
+        });
   }
 
   DCS.pi = {

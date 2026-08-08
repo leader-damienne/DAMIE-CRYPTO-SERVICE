@@ -140,10 +140,7 @@
     isConfigured: isConfigured,
 
     setupMessage: function () {
-      return (
-        "DCS nécessite Supabase pour fonctionner. Ouvrez SETUP-SUPABASE.md, " +
-        "créez le projet, exécutez supabase/schema.sql, puis renseignez js/config.js."
-      );
+      return "Service temporairement indisponible. Réessayez dans quelques instants.";
     },
 
     init: function () {

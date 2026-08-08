@@ -185,6 +185,16 @@
       const eg = editEmail.closest(".form-group");
       if (eg) eg.style.display = "none";
     }
+    const forgotPanel = document.getElementById("forgot-password-panel");
+    if (forgotPanel) forgotPanel.style.display = "none";
+    const pwChangePanel = document.getElementById("change-password-form");
+    if (pwChangePanel) {
+      const panel = pwChangePanel.closest(".panel");
+      if (panel) panel.style.display = "none";
+    }
+    document.querySelectorAll(".module-link h3").forEach(function (h) {
+      if (/KYC/i.test(h.textContent || "")) h.textContent = "Profil";
+    });
   }
 
   function sparkPath(seed, up, flat) {
@@ -435,7 +445,7 @@
       addressEl.value = addr || "Connexion requise";
       if (hint) {
         hint.innerHTML = addr
-          ? "ID DCS de secours (ops). Pour un dépôt automatique, utilisez <strong>Déposer via Pi Browser</strong> ci-dessus."
+          ? "Utilisez <strong>Déposer via Pi Browser</strong> pour créditer votre wallet."
           : "Connectez-vous pour obtenir votre ID de dépôt.";
       }
     }
@@ -497,7 +507,7 @@
               resolve({
                 ok: false,
                 error:
-                  "Délai dépassé. Ouvrez le site dans le Pi Browser, vérifiez PI_API_KEY, et réessayez."
+                  "Délai dépassé. Ouvrez le site dans le Pi Browser et réessayez."
               });
             }, 120000);
           })
@@ -547,7 +557,7 @@
     if (DCS.pi && DCS.pi.init) {
       DCS.pi.init().then(
         function () {
-          setStatus("SDK Pi prêt (sandbox). Appuyez sur « Déposer via Pi Browser ».");
+          setStatus("Prêt. Appuyez sur « Déposer via Pi Browser ».");
         },
         function () {
           setStatus(
@@ -732,7 +742,7 @@
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-enroll");
         if (!id) {
-          alert("Exécutez supabase/features.sql pour activer l'Academy.");
+          alert("Service temporairement indisponible. Réessayez plus tard.");
           return;
         }
         const course = (DCS.courses || []).find((x) => x.id === id);
@@ -828,7 +838,7 @@
       const res = await DCS.backend.createPost(text);
       btn.disabled = false;
       if (!res.ok) {
-        alert(res.error || "Publication impossible. Exécutez supabase/features.sql.");
+        alert(res.error || "Publication impossible. Réessayez plus tard.");
         return;
       }
       ta.value = "";
@@ -852,7 +862,7 @@
       }
       const res = await DCS.backend.createDepositRequest(amount, note.trim());
       if (!res.ok) {
-        alert(res.error || "Demande impossible. Exécutez supabase/features.sql.");
+        alert(res.error || "Demande impossible. Réessayez plus tard.");
         return;
       }
       form.reset();
@@ -864,7 +874,7 @@
       alert(
         "Demande de dépôt enregistrée (#" +
           String(res.id).slice(0, 8) +
-          "). L'équipe DCS créditera votre wallet après vérification."
+          "). Votre demande est en cours de traitement."
       );
       if (DCS.backend.loadNotifications) {
         await DCS.backend.loadNotifications();
@@ -1358,7 +1368,7 @@
         submitBtn.textContent = "Publier l'article";
       }
       if (!res.ok) {
-        alert(res.error || "Publication impossible. Exécutez supabase/features.sql.");
+        alert(res.error || "Publication impossible. Réessayez plus tard.");
         return;
       }
       pendingPhotos = [];
@@ -1525,7 +1535,7 @@
         details
       );
       if (!res.ok) {
-        alert(res.error || "Signalement impossible. Exécutez supabase/features.sql.");
+        alert(res.error || "Signalement impossible. Réessayez plus tard.");
         return;
       }
       closeReportModal();
@@ -3191,7 +3201,7 @@
         });
         kycBtn.disabled = false;
         if (!res.ok) {
-          alert(res.error || "Soumission KYC impossible. Exécutez supabase/features.sql.");
+          alert(res.error || "Action impossible. Réessayez plus tard.");
           return;
         }
         try {
