@@ -183,31 +183,31 @@ DCS.courses = [
   {
     title: "Introduction à la blockchain",
     level: "Débutant",
-    pricePi: 10,
+    pricePi: 0.00003,
     desc: "Les bases de la blockchain et de l'écosystème Pi."
   },
   {
     title: "Trading crypto pour débutants",
     level: "Débutant",
-    pricePi: 25,
+    pricePi: 0.00008,
     desc: "Ordres, paires, lecture d'un carnet d'ordres."
   },
   {
     title: "Analyse technique avancée",
     level: "Avancé",
-    pricePi: 50,
+    pricePi: 0.00016,
     desc: "Indicateurs, tendances et gestion des positions."
   },
   {
     title: "Sécurité des actifs numériques",
     level: "Intermédiaire",
-    pricePi: 20,
+    pricePi: 0.00006,
     desc: "Wallets, phishing, bonnes pratiques."
   },
   {
     title: "Gestion des risques",
     level: "Intermédiaire",
-    pricePi: 30,
+    pricePi: 0.0001,
     desc: "Money management et psychologie du trader."
   }
 ];

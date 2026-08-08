@@ -611,22 +611,22 @@ $$;
 
 insert into public.courses (slug, title, level, price_pi, description, content, sort_order)
 values
-  ('intro-blockchain', 'Introduction à la blockchain', 'Débutant', 10,
+  ('intro-blockchain', 'Introduction à la blockchain', 'Débutant', 0.00003,
    'Les bases de la blockchain et de l''écosystème Pi.',
    'Module 1 — Qu''est-ce qu''une blockchain ?\nModule 2 — Wallets et clés.\nModule 3 — PI COIN sur DCS ($314,159).\nModule 4 — Bonnes pratiques de sécurité.', 1),
-  ('trading-debutants', 'Trading crypto pour débutants', 'Débutant', 25,
+  ('trading-debutants', 'Trading crypto pour débutants', 'Débutant', 0.00008,
    'Ordres, paires, lecture d''un carnet d''ordres.',
    'Module 1 — Marchés spot.\nModule 2 — Ordres market/limit.\nModule 3 — Gestion du risque.\nModule 4 — Utiliser PI COIN comme unité stable.', 2),
-  ('analyse-technique', 'Analyse technique avancée', 'Avancé', 50,
+  ('analyse-technique', 'Analyse technique avancée', 'Avancé', 0.00016,
    'Indicateurs, tendances et gestion des positions.',
    'Tendances, supports/résistances, RSI, MACD, et plan de trade adapté aux corridors CFA.', 3),
-  ('securite-actifs', 'Sécurité des actifs numériques', 'Intermédiaire', 20,
+  ('securite-actifs', 'Sécurité des actifs numériques', 'Intermédiaire', 0.00006,
    'Wallets, phishing, bonnes pratiques.',
    '2FA, anti-phishing, sauvegarde, et checklist Afrique pour PI / XOF / XAF.', 4),
-  ('gestion-risques', 'Gestion des risques', 'Intermédiaire', 30,
+  ('gestion-risques', 'Gestion des risques', 'Intermédiaire', 0.0001,
    'Money management et psychologie du trader.',
    'Taille de position, stop mental, discipline, et rôle de PI COIN stable sur DCS.', 5)
-on conflict (slug) do nothing;
+on conflict (slug) do update set price_pi = excluded.price_pi;
 
 insert into public.learning_articles (title, tag, body, published_at)
 select * from (values

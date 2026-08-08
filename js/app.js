@@ -687,6 +687,17 @@
     }
   }
 
+  function formatCoursePricePi(n) {
+    const v = Number(n);
+    if (!isFinite(v) || v <= 0) return "0,00 π";
+    return (
+      v.toLocaleString("fr-FR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      }) + " π"
+    );
+  }
+
   function renderCourses() {
     const el = document.getElementById("courses-list");
     if (!el || !window.DCS) return;
@@ -708,7 +719,7 @@
             }
           </div>
           <div style="text-align:right">
-            <div class="price-pi">${c.pricePi} π</div>
+            <div class="price-pi">${formatCoursePricePi(c.pricePi)}</div>
             <button class="trade-btn" type="button" data-enroll="${c.id || ""}" ${c.enrolled ? "disabled" : ""}>
               ${c.enrolled ? "Débloqué" : "Acheter"}
             </button>
@@ -727,7 +738,11 @@
         if (!course) return;
         if (
           !confirm(
-            "Acheter « " + course.title + " » pour " + course.pricePi + " PI COIN ?"
+            "Acheter « " +
+              course.title +
+              " » pour " +
+              formatCoursePricePi(course.pricePi) +
+              " ?"
           )
         )
           return;
