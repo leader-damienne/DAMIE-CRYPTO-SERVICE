@@ -2472,7 +2472,7 @@
     const codeEl = document.getElementById("ref-code");
     const linkEl = document.getElementById("ref-link");
     if (userEl) userEl.textContent = atHandle(primaryUsername(DCS.user) || displayUserLabel(DCS.user));
-    if (codeEl) codeEl.value = DCS.user.inviteCode;
+    if (codeEl) codeEl.value = typeof DCS.primaryInviteCode === "function" ? DCS.primaryInviteCode(DCS.user) : DCS.user.inviteCode;
     if (linkEl) linkEl.value = DCS.user.referralLink;
 
     const rates = document.getElementById("ref-rates");
@@ -2644,7 +2644,7 @@
     set("profile-displayname", u.displayName || u.piUsername || u.username || "—");
     set("profile-username", label);
     set("profile-joined", "Membre depuis " + u.joined);
-    set("profile-invite", u.inviteCode);
+    set("profile-invite", typeof DCS.primaryInviteCode === "function" ? DCS.primaryInviteCode(u) : u.inviteCode);
     const session = document.getElementById("session-label");
     if (session) session.textContent = u.loggedIn ? "Connecté · " + label : "Déconnecté";
     const loc = [u.city, u.country].filter(Boolean).join(", ");

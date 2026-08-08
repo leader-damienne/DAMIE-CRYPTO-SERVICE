@@ -32,12 +32,12 @@
   }
 
   function genInviteCode(username) {
-    var base = String(username || "DCS")
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .toUpperCase()
-      .slice(0, 6);
-    var rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return "DCS-" + (base || "MEM") + rnd;
+    var base = String(username || "membre")
+      .trim()
+      .replace(/^@+/, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .slice(0, 32);
+    return base || "membre";
   }
 
   function usernameFromEmail(email) {
@@ -1233,7 +1233,11 @@
 
     loadReferrals: function () {
       var gate = this.requireClient();
-      if (!gate.ok || !DCS.user.id || !DCS.user.inviteCode) {
+      var aliases =
+        typeof DCS.referralAliases === "function"
+          ? DCS.referralAliases(DCS.user)
+          : [DCS.user && DCS.user.inviteCode].filter(Boolean);
+      if (!gate.ok || !DCS.user.id || !aliases.length) {
         return Promise.resolve({
           level1: [],
           level2: [],
@@ -1241,13 +1245,30 @@
           earnings: { fromFeesPi: 0, recent: [] }
         });
       }
-      var code = DCS.user.inviteCode;
       var empty = { level1: [], level2: [], level3: [], earnings: { fromFeesPi: 0, recent: [] } };
 
+      function memberAliases(row) {
+        var list = [];
+        function add(v) {
+          var x = String(v || "")
+            .trim()
+            .replace(/^@+/, "");
+          if (x && list.indexOf(x) < 0) list.push(x);
+        }
+        add(row.pi_username);
+        add(row.username);
+        add(row.invite_code);
+        return list;
+      }
+
       function mapMember(row, via) {
+        var code =
+          (typeof DCS.bareInviteHandle === "function"
+            ? DCS.bareInviteHandle(row.pi_username || row.username || row.invite_code)
+            : row.pi_username || row.username || row.invite_code) || row.invite_code;
         return {
-          username: row.username,
-          code: row.invite_code,
+          username: row.pi_username || row.username,
+          code: code,
           earned: "—",
           via: via || "",
           date: row.created_at ? new Date(row.created_at).toLocaleDateString("fr-FR") : ""
@@ -1256,46 +1277,50 @@
 
       return gate.client
         .from("profiles")
-        .select("id, username, invite_code, created_at, referred_by")
-        .eq("referred_by", code)
+        .select("id, username, pi_username, invite_code, created_at, referred_by")
+        .in("referred_by", aliases)
         .then(function (l1res) {
           var l1 = l1res.data || [];
           empty.level1 = l1.map(function (r) {
             return mapMember(r);
           });
           if (!l1.length) return empty;
-          var codes = l1.map(function (r) {
-            return r.invite_code;
+          var codes = [];
+          var viaMap = {};
+          l1.forEach(function (r) {
+            var label = r.pi_username || r.username;
+            memberAliases(r).forEach(function (a) {
+              codes.push(a);
+              viaMap[a] = label;
+            });
           });
           return gate.client
             .from("profiles")
-            .select("id, username, invite_code, created_at, referred_by")
+            .select("id, username, pi_username, invite_code, created_at, referred_by")
             .in("referred_by", codes)
             .then(function (l2res) {
               var l2 = l2res.data || [];
-              var viaMap = {};
-              l1.forEach(function (r) {
-                viaMap[r.invite_code] = r.username;
-              });
               empty.level2 = l2.map(function (r) {
-                return mapMember(r, viaMap[r.referred_by]);
+                return mapMember(r, viaMap[r.referred_by] || "");
               });
               if (!l2.length) return empty;
-              var codes2 = l2.map(function (r) {
-                return r.invite_code;
+              var codes2 = [];
+              var via2 = {};
+              l2.forEach(function (r) {
+                var label = r.pi_username || r.username;
+                memberAliases(r).forEach(function (a) {
+                  codes2.push(a);
+                  via2[a] = label;
+                });
               });
               return gate.client
                 .from("profiles")
-                .select("id, username, invite_code, created_at, referred_by")
+                .select("id, username, pi_username, invite_code, created_at, referred_by")
                 .in("referred_by", codes2)
                 .then(function (l3res) {
                   var l3 = l3res.data || [];
-                  var via2 = {};
-                  l2.forEach(function (r) {
-                    via2[r.invite_code] = r.username;
-                  });
                   empty.level3 = l3.map(function (r) {
-                    return mapMember(r, via2[r.referred_by]);
+                    return mapMember(r, via2[r.referred_by] || "");
                   });
                   return empty;
                 });

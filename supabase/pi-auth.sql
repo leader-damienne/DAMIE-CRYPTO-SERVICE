@@ -39,9 +39,14 @@ begin
     n := n + 1;
     uname := base || n::text;
   end loop;
-  icode := coalesce(nullif(meta->>'invite_code', ''), 'DCS-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)));
+  icode := coalesce(
+    nullif(meta->>'invite_code', ''),
+    nullif(meta->>'pi_username', ''),
+    uname
+  );
   while exists(select 1 from public.profiles where invite_code = icode) loop
-    icode := 'DCS-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+    n := n + 1;
+    icode := uname || n::text;
   end loop;
 
   insert into public.profiles (

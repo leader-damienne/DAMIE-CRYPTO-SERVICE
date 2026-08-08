@@ -384,15 +384,44 @@ DCS.user = {
   depositPiAddress: ""
 };
 
+DCS.bareInviteHandle = function (raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^@+/, "");
+};
+
+/** Code d'invitation affiché / partagé : username Pi en priorité */
+DCS.primaryInviteCode = function (user) {
+  var u = user || DCS.user || {};
+  return (
+    DCS.bareInviteHandle(u.piUsername) ||
+    DCS.bareInviteHandle(u.username) ||
+    DCS.bareInviteHandle(u.inviteCode) ||
+    "DCS"
+  );
+};
+
+/** Alias pour retrouver filleuls (anciens codes DCS-… + username Pi) */
+DCS.referralAliases = function (user) {
+  var u = user || DCS.user || {};
+  var out = [];
+  function add(v) {
+    var s = DCS.bareInviteHandle(v);
+    if (s && out.indexOf(s) < 0) out.push(s);
+  }
+  add(u.piUsername);
+  add(u.username);
+  add(u.inviteCode);
+  return out;
+};
+
 DCS.buildShareLinks = function () {
   var cfg = window.DCS_CONFIG || {};
   var base = String(cfg.piNetBaseUrl || "https://damiecrypto3760.pinet.com/").trim();
   if (!base) base = "./";
   if (base.slice(-1) !== "/") base += "/";
-  var code = (DCS.user && DCS.user.inviteCode) || "DCS";
-  var user = String(
-    (DCS.user && (DCS.user.piUsername || DCS.user.username)) || "membre"
-  ).replace(/^@+/, "");
+  var code = DCS.primaryInviteCode(DCS.user);
+  var user = code;
   var join =
     base + "join.html?ref=" + encodeURIComponent(code) + "&u=" + encodeURIComponent(user);
   if (DCS.user) {
