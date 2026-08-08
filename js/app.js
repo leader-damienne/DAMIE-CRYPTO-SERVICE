@@ -97,15 +97,10 @@
   function applyEcosystemCompliance() {
     if (!isEcosystemMode()) return;
 
-    if (window.DCS && Array.isArray(DCS.markets)) {
-      DCS.markets = DCS.markets.filter(function (m) {
-        return m && (m.symbol === "PI" || m.id === "pi");
-      });
-    }
-
+    /* Swap réactivé (PI ↔ XOF/XAF/cryptos). Transfer reste masqué en mode Ecosystem. */
     document.querySelectorAll("#main-nav a, .footer-col a, .footer-bottom a").forEach(function (a) {
       const href = (a.getAttribute("href") || "").toLowerCase();
-      if (/swap\.html/.test(href) || /transfer\.html/.test(href)) {
+      if (/transfer\.html/.test(href)) {
         a.style.display = "none";
       }
       if (/signup\.html/.test(href)) {
@@ -114,48 +109,29 @@
       }
     });
 
-    document.querySelectorAll('a[href="swap.html"], a[href="transfer.html"]').forEach(function (a) {
+    document.querySelectorAll('a[href="transfer.html"]').forEach(function (a) {
       a.style.display = "none";
     });
 
-    document.querySelectorAll(".stats-strip, #pi-xof, #pi-xaf").forEach(function (el) {
-      const strip = el.classList && el.classList.contains("stats-strip") ? el : null;
-      if (strip) strip.style.display = "none";
-    });
-    const xof = document.getElementById("pi-xof");
-    const xaf = document.getElementById("pi-xaf");
-    if (xof && xof.parentElement) xof.parentElement.style.display = "none";
-    if (xaf && xaf.parentElement) xaf.parentElement.style.display = "none";
-
     document.querySelectorAll(".module-link").forEach(function (a) {
       const href = (a.getAttribute("href") || "").toLowerCase();
-      if (/swap|transfer/.test(href)) a.style.display = "none";
+      if (/transfer/.test(href)) a.style.display = "none";
       if (/profil/.test(href)) {
         const p = a.querySelector("p");
         if (p) p.textContent = "Profil Pioneer Pi, avatar et préférences.";
       }
     });
 
-    const heroTag = document.querySelector(".hero-tagline");
-    if (heroTag) {
-      heroTag.textContent =
-        "Wallet Pi, marketplace et formation — entièrement dans l’écosystème Pi Network.";
-    }
-    const footerNote = document.querySelector(".footer-bottom span:last-child");
-    if (footerNote && /XOF|XAF/.test(footerNote.textContent || "")) {
-      footerNote.textContent = "PI only · Pi Ecosystem";
-    }
-
-    /* Pages non conformes : message + redirection douce */
+    /* Transfer uniquement : message + redirection douce (swap reste opérationnel) */
     const page = (location.pathname || "").split("/").pop() || "";
-    if (/^swap\.html$/i.test(page) || /^transfer\.html$/i.test(page)) {
+    if (/^transfer\.html$/i.test(page)) {
       const main = document.querySelector("main.container");
       if (main) {
         main.innerHTML =
-          '<div class="page-hero"><h1>Pi <span>only</span></h1>' +
-          "<p>Conformité Pi Ecosystem : seules les transactions en Pi sont disponibles.</p></div>" +
-          '<div class="panel"><p>Utilisez le wallet pour déposer et gérer votre PI.</p>' +
-          '<a class="btn btn-gold" href="wallet.html">Ouvrir le Wallet Pi</a></div>';
+          '<div class="page-hero"><h1>Bientôt <span>disponible</span></h1>' +
+          "<p>Les transferts transfrontaliers seront réactivés prochainement. Utilisez le Swap en attendant.</p></div>" +
+          '<div class="panel"><p>Échangez PI, XOF, XAF et cryptos via le Swap DCS.</p>' +
+          '<a class="btn btn-gold" href="swap.html">Ouvrir le Swap</a></div>';
       }
     }
 
@@ -339,11 +315,7 @@
               <polyline fill="none" stroke="${stroke}" stroke-width="1.8" points="${sparkPath(m.symbol.charCodeAt(0), up, !!m.stable)}" />
             </svg>
           </td>
-          <td>${
-            isEcosystemMode()
-              ? `<a class="trade-btn" href="wallet.html" style="display:inline-block;text-decoration:none">Wallet</a>`
-              : `<button class="trade-btn" type="button" data-swap="${m.symbol}">Swap</button>`
-          }</td>
+          <td><button class="trade-btn" type="button" data-swap="${m.symbol}">Swap</button></td>
         </tr>`;
       })
       .join("");
@@ -390,9 +362,6 @@
         iconText: "",
         logo: "assets/coins/pi.png"
       });
-    }
-    if (isEcosystemMode()) {
-      assets = assets.filter((a) => a.symbol === "PI");
     }
     return assets;
   }
@@ -1612,12 +1581,8 @@
   }
 
   function startLiveMarkets() {
-    if (isEcosystemMode()) {
-      lockPiPrice();
-      if (document.getElementById("ticker-track")) renderTicker();
-      if (document.getElementById("pi-price")) renderPiSpotlight();
-      return;
-    }
+    /* PI reste stable (lock) ; les autres paires restent live pour le Swap */
+    lockPiPrice();
     refreshLiveMarketsRest();
     connectMarketsWebSocket();
     /* Affichage à chaque seconde (le flux WS arrive en continu) */
@@ -3607,7 +3572,7 @@
       } catch (e2) {}
       renderNotifications();
     }
-    if (isSwap && !isEcosystemMode()) {
+    if (isSwap) {
       renderPiSpotlight();
       setupSwap();
     }
