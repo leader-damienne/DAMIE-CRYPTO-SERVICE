@@ -1307,7 +1307,7 @@
   function navKindFromHref(href, label) {
     const raw = String(href || "");
     const lab = String(label || "");
-    if (/#markets/i.test(raw) || /march[eé]s/i.test(lab)) return "markets";
+    if (/#markets/i.test(raw) || /march[eé]s|markets|mercados|أسواق/i.test(lab)) return "markets";
     const file = (raw.split("?")[0].split("#")[0].split("/").pop() || "index.html").toLowerCase();
     if (file === "index.html" || file === "" || file === "/") return "home";
     if (file.indexOf("wallet") === 0) return "wallet";
@@ -3410,6 +3410,8 @@
       document.documentElement.lang = lang;
       document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     }
+    /* i18n peut toucher les liens nav : réinjecter les icônes (ex. Marchés) */
+    decorateMainNavIllustrations();
     const select = document.getElementById("app-language");
     if (select) select.value = lang;
     const current = document.getElementById("lang-current-value");

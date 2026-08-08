@@ -516,13 +516,33 @@
     });
   }
 
+  /* Ne jamais a.textContent = … : ça efface .nav-illust (icônes hamburger). */
+  function setNavAnchorText(a, text) {
+    var label = a.querySelector(".nav-label");
+    if (label) {
+      label.textContent = text;
+      return;
+    }
+    if (a.querySelector(".nav-illust") || a.childElementCount > 0) {
+      Array.prototype.forEach.call(a.childNodes, function (n) {
+        if (n.nodeType === 3) a.removeChild(n);
+      });
+      label = document.createElement("span");
+      label.className = "nav-label";
+      label.textContent = text;
+      a.appendChild(label);
+      return;
+    }
+    a.textContent = text;
+  }
+
   function translateNav(lang) {
     document.querySelectorAll("#main-nav a, .header-actions a, .footer-col a").forEach(function (a) {
       if (a.hasAttribute("data-i18n")) return;
       var href = (a.getAttribute("href") || "").split("?")[0];
       for (var i = 0; i < NAV_BY_HREF.length; i++) {
         if (NAV_BY_HREF[i].test.test(href)) {
-          a.textContent = t(NAV_BY_HREF[i].key, lang);
+          setNavAnchorText(a, t(NAV_BY_HREF[i].key, lang));
           return;
         }
       }
