@@ -870,15 +870,23 @@
       .map((name) => ({ name, count: map[name] }));
   }
 
+  function findArticle(id) {
+    return (DCS.marketplace || []).find((a) => String(a.id) === String(id));
+  }
+
+  function isPurchased(articleId) {
+    return (DCS.purchases || []).some((p) => String(p.articleId) === String(articleId));
+  }
+
   function filteredArticles() {
     const q = (marketFilter.query || "").trim().toLowerCase();
     return (DCS.marketplace || []).filter((a) => {
       if (marketFilter.seller !== "all" && a.author !== marketFilter.seller) return false;
       if (!q) return true;
       return (
-        a.title.toLowerCase().includes(q) ||
-        a.author.toLowerCase().includes(q) ||
-        a.category.toLowerCase().includes(q) ||
+        (a.title || "").toLowerCase().includes(q) ||
+        (a.author || "").toLowerCase().includes(q) ||
+        (a.category || "").toLowerCase().includes(q) ||
         (a.excerpt || "").toLowerCase().includes(q)
       );
     });
@@ -887,7 +895,10 @@
   function openLightbox(src) {
     const overlay = document.createElement("div");
     overlay.className = "photo-lightbox";
-    overlay.innerHTML = `<img src="${src}" alt="Aperçu" /><button type="button" class="photo-lightbox-close" aria-label="Fermer">×</button>`;
+    overlay.innerHTML =
+      '<img src="' +
+      src +
+      '" alt="Aperçu" /><button type="button" class="photo-lightbox-close" aria-label="Fermer">×</button>';
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay || e.target.classList.contains("photo-lightbox-close")) {
         overlay.remove();
@@ -902,17 +913,32 @@
     if (!list || !window.DCS) return;
     const sellers = getSellers();
     if (allCount) allCount.textContent = String((DCS.marketplace || []).length);
-    list.innerHTML = sellers
-      .map(
-        (s) => `<div class="seller-chip-wrap">
-          <button type="button" class="seller-chip" data-seller="${s.name}">
-            <span class="seller-avatar">${s.name.slice(0, 1)}</span>
-            <span class="seller-meta"><strong>${s.name}</strong><small>${s.count} article${s.count > 1 ? "s" : ""}</small></span>
-          </button>
-          <button type="button" class="seller-report-btn" data-report-seller="${s.name}" title="Signaler ${s.name}">Signaler</button>
-        </div>`
-      )
-      .join("") || `<p style="color:var(--muted);font-size:0.85rem;margin:0.5rem 0 0">Aucun vendeur pour le moment. Soyez le premier via « Devenir vendeur ».</p>`;
+    list.innerHTML =
+      sellers
+        .map(
+          (s) =>
+            '<div class="seller-chip-wrap">' +
+            '<button type="button" class="seller-chip" data-seller="' +
+            s.name.replace(/"/g, "&quot;") +
+            '">' +
+            '<span class="seller-avatar">' +
+            s.name.slice(0, 1).toUpperCase() +
+            "</span>" +
+            '<span class="seller-meta"><strong>' +
+            s.name +
+            "</strong><small>" +
+            s.count +
+            " article" +
+            (s.count > 1 ? "s" : "") +
+            "</small></span>" +
+            "</button>" +
+            '<button type="button" class="seller-report-btn" data-report-seller="' +
+            s.name.replace(/"/g, "&quot;") +
+            '" title="Signaler">Signaler</button>' +
+            "</div>"
+        )
+        .join("") ||
+      '<p class="panel-note" style="margin:0.5rem 0 0">Aucun vendeur pour le moment. Publiez depuis l’espace vendeur.</p>';
 
     document.querySelectorAll(".seller-chip").forEach((btn) => {
       const name = btn.getAttribute("data-seller") || "all";
@@ -939,50 +965,78 @@
     if (hint) {
       hint.textContent =
         marketFilter.seller === "all"
-          ? items.length + " article(s) — visitez puis achetez en PI COIN"
-          : "Boutique de " + marketFilter.seller + " · " + items.length + " article(s)";
+          ? items.length + " article(s) disponibles · paiement en PI COIN"
+          : "Boutique « " + marketFilter.seller + " » · " + items.length + " article(s)";
     }
     if (!items.length) {
-      el.innerHTML = `<p style="color:var(--muted);padding:1rem 0">Aucun article trouvé.</p>`;
+      el.innerHTML = '<p class="panel-note" style="padding:1rem 0">Aucun article trouvé.</p>';
       return;
     }
     el.innerHTML = items
       .map((a) => {
         const photos = a.photos || [];
+        const owned = isPurchased(a.id);
         const cover = photos[0]
-          ? `<img class="market-cover" src="${photos[0]}" alt="" />`
-          : `<div class="market-cover placeholder">π</div>`;
+          ? '<img class="market-cover" src="' + photos[0] + '" alt="" />'
+          : '<div class="market-cover placeholder">PI</div>';
         const thumbs =
           photos.length > 1
-            ? `<div class="article-photos compact">${photos
+            ? '<div class="article-photos compact">' +
+              photos
                 .slice(0, 4)
                 .map(
                   (src, i) =>
-                    `<button type="button" class="article-photo" data-full="${src}" title="Photo ${i + 1}">
-                      <img src="${src}" alt="" loading="lazy" />
-                    </button>`
+                    '<button type="button" class="article-photo" data-full="' +
+                    src +
+                    '" title="Photo ' +
+                    (i + 1) +
+                    '"><img src="' +
+                    src +
+                    '" alt="" loading="lazy" /></button>'
                 )
-                .join("")}</div>`
+                .join("") +
+              "</div>"
             : "";
-        return `<article class="market-article">
-          <div class="market-article-top">
-            ${cover}
-            <div class="market-article-body">
-              <div>
-                <div class="ref-badge">${a.category}</div>
-                <h4>${a.title}</h4>
-                <p>par <strong>${a.author}</strong> — ${a.excerpt}</p>
-              </div>
-              <div class="market-article-buy">
-                <div class="price-pi">${a.pricePi} π</div>
-                <button class="btn btn-outline" type="button" data-visit="${a.id}" style="margin-top:0.4rem;width:100%">Visiter</button>
-                <button class="btn btn-gold" type="button" data-buy="${a.id}" style="margin-top:0.4rem;width:100%">Acheter</button>
-                <button class="btn btn-outline btn-report" type="button" data-report="${a.id}" style="margin-top:0.4rem;width:100%">Signaler</button>
-              </div>
-            </div>
-          </div>
-          ${thumbs}
-        </article>`;
+        return (
+          '<article class="market-article">' +
+          '<div class="market-article-top">' +
+          cover +
+          '<div class="market-article-body">' +
+          "<div>" +
+          '<div class="ref-badge">' +
+          (a.category || "Divers") +
+          "</div>" +
+          "<h4>" +
+          a.title +
+          "</h4>" +
+          "<p>par <strong>" +
+          a.author +
+          "</strong> — " +
+          (a.excerpt || "") +
+          "</p>" +
+          (owned
+            ? '<p class="tx-status is-confirmed" style="margin-top:0.45rem"><span class="status-dot on"></span>Déjà acheté</p>'
+            : "") +
+          "</div>" +
+          '<div class="market-article-buy">' +
+          '<div class="price-pi">' +
+          a.pricePi +
+          " π</div>" +
+          '<button class="btn btn-outline" type="button" data-visit="' +
+          a.id +
+          '" style="margin-top:0.4rem;width:100%">Consulter</button>' +
+          (owned
+            ? '<button class="btn btn-outline" type="button" disabled style="margin-top:0.4rem;width:100%">Acheté</button>'
+            : '<button class="btn btn-gold" type="button" data-buy="' +
+              a.id +
+              '" style="margin-top:0.4rem;width:100%">Acheter</button>') +
+          '<button class="btn btn-outline btn-report" type="button" data-report="' +
+          a.id +
+          '" style="margin-top:0.4rem;width:100%">Signaler</button>' +
+          "</div></div></div>" +
+          thumbs +
+          "</article>"
+        );
       })
       .join("");
 
@@ -993,42 +1047,140 @@
       });
     });
     el.querySelectorAll("[data-visit]").forEach((btn) => {
-      btn.addEventListener("click", () => openArticle(Number(btn.getAttribute("data-visit"))));
+      btn.addEventListener("click", () => openArticle(btn.getAttribute("data-visit")));
     });
     el.querySelectorAll("[data-buy]").forEach((btn) => {
-      btn.addEventListener("click", () => buyArticle(Number(btn.getAttribute("data-buy"))));
+      btn.addEventListener("click", () => buyArticle(btn.getAttribute("data-buy")));
     });
     el.querySelectorAll("[data-report]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const id = Number(btn.getAttribute("data-report"));
-        const article = (DCS.marketplace || []).find((a) => a.id === id);
+        const article = findArticle(btn.getAttribute("data-report"));
         if (article) openReportSeller(article.author, article.id);
       });
     });
   }
 
+  function renderBuyerOrders() {
+    const body = document.getElementById("buyer-orders-body");
+    const countEl = document.getElementById("buyer-stat-count");
+    const piEl = document.getElementById("buyer-stat-pi");
+    if (!body) return;
+    const list = DCS.purchases || [];
+    const totalPi = list.reduce((sum, p) => sum + (Number(p.pricePi) || 0), 0);
+    if (countEl) countEl.textContent = String(list.length);
+    if (piEl) piEl.textContent = totalPi.toLocaleString("fr-FR") + " π";
+    if (!list.length) {
+      body.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.25rem">Aucun achat pour le moment. Parcourez le catalogue.</td></tr>';
+      return;
+    }
+    body.innerHTML = list
+      .map(
+        (p) =>
+          "<tr>" +
+          "<td>" +
+          (p.title || "Article") +
+          "</td>" +
+          "<td>" +
+          (p.author || "—") +
+          "</td>" +
+          "<td>" +
+          (p.pricePi || 0) +
+          " π</td>" +
+          '<td><span class="tx-status is-confirmed"><span class="status-dot on"></span>Confirmé</span></td>' +
+          "<td>" +
+          (p.date || "—") +
+          "</td>" +
+          "<td>" +
+          (p.articleId
+            ? '<button type="button" class="btn btn-outline" data-visit-order="' +
+              p.articleId +
+              '" style="padding:0.35rem 0.65rem;font-size:0.75rem">Ouvrir</button>'
+            : "—") +
+          "</td>" +
+          "</tr>"
+      )
+      .join("");
+    body.querySelectorAll("[data-visit-order]").forEach((btn) => {
+      btn.addEventListener("click", () => openArticle(btn.getAttribute("data-visit-order")));
+    });
+  }
+
+  function renderSellerDashboard() {
+    const box = document.getElementById("my-pubs");
+    const countEl = document.getElementById("seller-stat-listings");
+    const nameEl = document.getElementById("seller-stat-name");
+    const sellerInput = document.getElementById("seller-name");
+    if (!window.DCS) return;
+    const uid = DCS.user && DCS.user.id;
+    const mine = (DCS.marketplace || []).filter(
+      (a) => (uid && a.sellerId === uid) || false
+    );
+    const shopName =
+      (sellerInput && sellerInput.value.trim()) ||
+      (mine[0] && mine[0].author) ||
+      (DCS.user && (DCS.user.displayName || DCS.user.piUsername || DCS.user.username)) ||
+      "—";
+    if (countEl) countEl.textContent = String(mine.length);
+    if (nameEl) nameEl.textContent = shopName;
+    if (sellerInput && !sellerInput.value && shopName && shopName !== "—") {
+      sellerInput.value = shopName;
+    }
+    if (!box) return;
+    if (!mine.length) {
+      box.innerHTML =
+        '<p class="panel-note">Aucun article publié. Utilisez le formulaire pour mettre en vente.</p>';
+      return;
+    }
+    box.innerHTML = mine
+      .map(
+        (a) =>
+          '<div class="asset-row seller-listing-row">' +
+          "<div><strong>" +
+          a.title +
+          '</strong><div class="panel-note">' +
+          (a.category || "Divers") +
+          " · " +
+          a.pricePi +
+          " π</div></div>" +
+          '<span class="tx-status is-confirmed"><span class="status-dot on"></span>Actif</span>' +
+          "</div>"
+      )
+      .join("");
+  }
+
   function openArticle(id) {
-    const article = (DCS.marketplace || []).find((a) => a.id === id);
+    const article = findArticle(id);
     const modal = document.getElementById("article-modal");
     if (!article || !modal) return;
-    activeArticleId = id;
+    activeArticleId = article.id;
     document.getElementById("modal-title").textContent = article.title;
     document.getElementById("modal-author").textContent = article.author;
     document.getElementById("modal-category").textContent = article.category;
     document.getElementById("modal-price").textContent = article.pricePi + " π";
     document.getElementById("modal-excerpt").textContent = article.excerpt || "";
+    const owned = isPurchased(article.id);
     document.getElementById("modal-body").textContent =
       article.content || article.excerpt || "Contenu disponible après achat.";
+    const buyBtn = document.getElementById("modal-buy");
+    if (buyBtn) {
+      buyBtn.disabled = owned;
+      buyBtn.textContent = owned ? "Déjà acheté" : "Acheter en PI COIN";
+    }
     const gallery = document.getElementById("modal-gallery");
     const photos = article.photos || [];
     gallery.innerHTML = photos.length
       ? photos
           .map(
             (src) =>
-              `<button type="button" class="article-photo" data-full="${src}"><img src="${src}" alt="" /></button>`
+              '<button type="button" class="article-photo" data-full="' +
+              src +
+              '"><img src="' +
+              src +
+              '" alt="" /></button>'
           )
           .join("")
-      : `<div class="market-cover placeholder large">π</div>`;
+      : '<div class="market-cover placeholder large">PI</div>';
     gallery.querySelectorAll(".article-photo").forEach((btn) => {
       btn.addEventListener("click", () => openLightbox(btn.getAttribute("data-full")));
     });
@@ -1044,8 +1196,13 @@
   }
 
   async function buyArticle(id) {
-    const article = (DCS.marketplace || []).find((a) => a.id === id);
+    const article = findArticle(id);
     if (!article) return;
+    if (isPurchased(article.id)) {
+      alert("Vous avez déjà acheté cet article.");
+      openArticle(article.id);
+      return;
+    }
     const ok = confirm(
       "Acheter « " +
         article.title +
@@ -1053,12 +1210,12 @@
         article.pricePi +
         " PI COIN ?\n\nVendeur : " +
         article.author +
-        "\nPaiement exclusivement en PI COIN."
+        "\nPaiement exclusivement en PI COIN (314 159 $)."
     );
     if (!ok) return;
-    if (!article.id || typeof article.id !== "string") {
+    if (!article.id || typeof article.id === "number") {
       alert(
-        "Cet article seed n'est pas encore en base. Exécutez supabase/features.sql puis rechargez."
+        "Cet article n’est pas encore synchronisé avec la base. Rechargez après publication."
       );
       return;
     }
@@ -1073,14 +1230,15 @@
       "market"
     );
     alert(
-      "Achat réussi !\nVous avez payé " +
+      "Achat confirmé.\nVous avez payé " +
         article.pricePi +
         " PI COIN à " +
         article.author +
-        ".\nL'article est débloqué dans vos achats."
+        ".\nRetrouvez l’article dans « Mes achats »."
     );
     closeArticleModal();
     renderMarketplace();
+    renderBuyerOrders();
   }
 
   function setupMarketplaceForm() {
@@ -1099,10 +1257,17 @@
       }
       preview.innerHTML = pendingPhotos
         .map(
-          (p, i) => `<div class="photo-preview-item">
-            <img src="${p.url}" alt="Aperçu ${i + 1}" />
-            <button type="button" class="photo-remove" data-i="${i}" aria-label="Retirer">×</button>
-          </div>`
+          (p, i) =>
+            '<div class="photo-preview-item">' +
+            '<img src="' +
+            p.url +
+            '" alt="Aperçu ' +
+            (i + 1) +
+            '" />' +
+            '<button type="button" class="photo-remove" data-i="' +
+            i +
+            '" aria-label="Retirer">×</button>' +
+            "</div>"
         )
         .join("");
       preview.querySelectorAll(".photo-remove").forEach((btn) => {
@@ -1143,11 +1308,14 @@
       const content = (document.getElementById("article-content") || {}).value || excerpt;
       const category = document.getElementById("article-category").value;
       if (!name || !title || !excerpt) {
-        alert("Veuillez remplir tous les champs.");
+        alert("Veuillez remplir tous les champs obligatoires.");
         return;
       }
       const submitBtn = form.querySelector('button[type="submit"]');
-      if (submitBtn) submitBtn.disabled = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Publication…";
+      }
       const photoUrls = [];
       for (let i = 0; i < pendingPhotos.length; i++) {
         const item = pendingPhotos[i];
@@ -1168,7 +1336,10 @@
         content: content.trim(),
         photos: photoUrls
       });
-      if (submitBtn) submitBtn.disabled = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Publier l'article";
+      }
       if (!res.ok) {
         alert(res.error || "Publication impossible. Exécutez supabase/features.sql.");
         return;
@@ -1179,34 +1350,40 @@
       marketFilter.seller = "all";
       renderSellers();
       renderMarketplace();
+      renderSellerDashboard();
       form.reset();
-      alert("Article publié dans le catalogue ! Paiement en PI COIN.");
-      const buyTab = document.querySelector('#market-tabs [data-view="buy"]');
-      if (buyTab) openMarketView("buy");
+      if (document.getElementById("seller-name")) {
+        document.getElementById("seller-name").value = name;
+      }
+      alert("Article publié. Il apparaît dans le catalogue et dans vos publications.");
+      openMarketView("sell");
     });
   }
 
   function openMarketView(view) {
     const tabs = document.getElementById("market-tabs");
     if (!tabs) return;
-    const target = view === "sell" ? "sell" : "buy";
+    let target = "buy";
+    if (view === "sell" || view === "vendeur") target = "sell";
+    else if (view === "orders" || view === "achats") target = "orders";
     tabs.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-view") === target);
     });
     document.querySelectorAll("[data-view-panel]").forEach((panel) => {
       panel.hidden = panel.getAttribute("data-view-panel") !== target;
     });
+    document.querySelectorAll(".market-role-btn").forEach((btn) => {
+      const v = btn.getAttribute("data-open-view");
+      btn.classList.toggle("active", (target === "sell" ? "sell" : "buy") === v);
+    });
     const searchWrap = document.getElementById("buyer-search-wrap");
     if (searchWrap) searchWrap.style.display = target === "buy" ? "" : "none";
-    if (target === "sell") {
-      const form = document.getElementById("seller-form");
-      if (form) form.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      const catalog = document.getElementById("buyers-catalog");
-      if (catalog) catalog.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (target === "orders") renderBuyerOrders();
+    if (target === "sell") renderSellerDashboard();
     try {
-      history.replaceState(null, "", target === "sell" ? "#devenir-vendeur" : "#acheter");
+      const hash =
+        target === "sell" ? "#espace-vendeur" : target === "orders" ? "#mes-achats" : "#catalogue";
+      history.replaceState(null, "", hash);
     } catch (e) {}
   }
 
@@ -1225,6 +1402,8 @@
     const hash = (location.hash || "").toLowerCase();
     if (hash.includes("vendeur") || hash.includes("sell") || hash.includes("vendre")) {
       openMarketView("sell");
+    } else if (hash.includes("achat") || hash.includes("order")) {
+      openMarketView("orders");
     } else {
       openMarketView("buy");
     }
@@ -1252,7 +1431,7 @@
     if (reportBtn) {
       reportBtn.addEventListener("click", () => {
         if (activeArticleId == null) return;
-        const article = (DCS.marketplace || []).find((a) => a.id === activeArticleId);
+        const article = findArticle(activeArticleId);
         if (article) openReportSeller(article.author, article.id);
       });
     }
@@ -1262,6 +1441,8 @@
       });
     }
     setupReportSeller();
+    renderBuyerOrders();
+    renderSellerDashboard();
   }
 
   function openReportSeller(sellerName, articleId) {
