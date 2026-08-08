@@ -1288,7 +1288,8 @@
     const stroke = 'fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
     const map = {
       home: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 11.5 12 5l8 6.5"/><path d="M7 10.5V19h10v-8.5"/></svg>`,
-      markets: `<svg viewBox="0 0 24 24" ${stroke}><path d="M5 19V9"/><path d="M10 19V5"/><path d="M15 19v-7"/><path d="M20 19V8"/></svg>`,
+      /* Barres pleines : mieux visibles dans Pi Browser que des traits fins */
+      markets: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16.5" y="4" width="4" height="16" rx="1"/></svg>`,
       wallet: `<svg viewBox="0 0 24 24" ${stroke}><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14" r="1.25" fill="currentColor" stroke="none"/></svg>`,
       swap: `<svg viewBox="0 0 24 24" ${stroke}><path d="M7 7h11l-2.5-2.5M17 17H6l2.5 2.5"/><path d="M7 7v4M17 17v-4"/></svg>`,
       transfer: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 12h14"/><path d="M14 7l5 5-5 5"/></svg>`,
@@ -1303,10 +1304,11 @@
     return map[kind] || map.home;
   }
 
-  function navKindFromHref(href) {
-    const raw = String(href || "").split("?")[0];
-    if (/#markets/i.test(raw)) return "markets";
-    const file = (raw.split("/").pop() || "index.html").toLowerCase();
+  function navKindFromHref(href, label) {
+    const raw = String(href || "");
+    const lab = String(label || "");
+    if (/#markets/i.test(raw) || /march[eé]s/i.test(lab)) return "markets";
+    const file = (raw.split("?")[0].split("#")[0].split("/").pop() || "index.html").toLowerCase();
     if (file === "index.html" || file === "" || file === "/") return "home";
     if (file.indexOf("wallet") === 0) return "wallet";
     if (file.indexOf("swap") === 0) return "swap";
@@ -1323,13 +1325,13 @@
 
   function decorateMainNavIllustrations() {
     const nav = document.getElementById("main-nav");
-    if (!nav || nav.dataset.illust === "1") return;
-    nav.dataset.illust = "1";
+    if (!nav) return;
     nav.querySelectorAll("a").forEach(function (a) {
-      if (a.querySelector(".nav-illust")) return;
       const href = a.getAttribute("href") || "";
-      const label = (a.textContent || "").trim() || "Menu";
-      const kind = navKindFromHref(href);
+      const labelEl = a.querySelector(".nav-label");
+      const label = (labelEl ? labelEl.textContent : a.textContent || "").trim() || "Menu";
+      const kind = navKindFromHref(href, label);
+      /* Toujours (re)appliquer l’icône — corrige Marchés si déjà décoré sans bonne clé */
       a.innerHTML =
         '<span class="nav-illust" aria-hidden="true">' +
         navModuleSvg(kind) +
@@ -1337,6 +1339,7 @@
         label.replace(/</g, "&lt;") +
         "</span>";
     });
+    nav.dataset.illust = "1";
   }
 
   function setupNav() {
