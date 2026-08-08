@@ -23,7 +23,7 @@
       if (m.symbol === "XOF" || m.symbol === "XAF") {
         return (DCS.CFA_PER_USD || 600) + " / $1";
       }
-      if (m.stable && m.symbol === "PI") return fmt.usd(m.price, 0);
+      if (m.stable && m.symbol === "PI") return fmt.usd(DCS.PI_PRICE || 314159, 0);
       return fmt.usd(m.price, m.price >= 1000 ? 2 : undefined);
     },
     vol(n) {
@@ -239,19 +239,22 @@
     const lowEl = document.getElementById("pi-low");
     const volEl = document.getElementById("pi-vol");
     if (!priceEl || !window.DCS) return;
+    lockPiPrice();
+    lockCfaParity();
     const pi = DCS.markets.find((m) => m.id === "pi");
     if (!pi) return;
-    priceEl.textContent = fmt.usd(pi.price, 0);
+    const peg = DCS.PI_PRICE || 314159;
+    priceEl.textContent = fmt.usd(peg, 0);
     if (changeEl) {
-      changeEl.innerHTML = `<span class="up">PI COIN</span><span style="color:var(--muted)">0,00 % 24h</span>`;
+      changeEl.innerHTML = `<span class="up">PI COIN</span><span style="color:var(--muted)">0,00 % 24h · Stable</span>`;
     }
-    if (highEl) highEl.textContent = fmt.usd(pi.price, 0);
-    if (lowEl) lowEl.textContent = fmt.usd(pi.price, 0);
+    if (highEl) highEl.textContent = fmt.usd(peg, 0);
+    if (lowEl) lowEl.textContent = fmt.usd(peg, 0);
     if (volEl) volEl.textContent = fmt.vol(pi.volume);
 
     const xofEl = document.getElementById("pi-xof");
     const xafEl = document.getElementById("pi-xaf");
-    const cfa = (pi.price * (DCS.CFA_PER_USD || 600)).toLocaleString("fr-FR", { maximumFractionDigits: 0 });
+    const cfa = (peg * (DCS.CFA_PER_USD || 600)).toLocaleString("fr-FR", { maximumFractionDigits: 0 });
     if (xofEl) xofEl.textContent = cfa + " XOF";
     if (xafEl) xafEl.textContent = cfa + " XAF";
   }
@@ -1414,34 +1417,48 @@
     el.classList.toggle("is-offline", !ok);
   }
 
+  /** Peg PI COIN figé — jamais de volatilité ni de overwrite live */
+  var PI_STABLE_USD = 314159;
+
   function lockPiPrice() {
-    const pi = DCS.markets && DCS.markets.find((x) => x.id === "pi");
+    DCS.PI_PRICE = PI_STABLE_USD;
+    const pi = DCS.markets && DCS.markets.find((x) => x.id === "pi" || x.symbol === "PI");
     if (!pi) return;
-    pi.price = DCS.PI_PRICE || 314159;
+    pi.price = PI_STABLE_USD;
     pi.change24h = 0;
-    pi.high = pi.price;
-    pi.low = pi.price;
+    pi.high = PI_STABLE_USD;
+    pi.low = PI_STABLE_USD;
     pi.stable = true;
+    pi.featured = true;
   }
 
-  function applyCfaFromEur(eurUsd) {
-    if (!(eurUsd > 0) || !DCS.markets) return;
-    const xofPerUsd = 655.957 / eurUsd;
-    DCS.CFA_PER_USD = Math.round(xofPerUsd);
-    ["xof", "xaf"].forEach((id) => {
-      const m = DCS.markets.find((x) => x.id === id);
+  function lockCfaParity() {
+    /* Parité indicative figée : 1 USD = 600 XOF/XAF (peg PI stable aussi en CFA) */
+    DCS.CFA_PER_USD = 600;
+    ["xof", "xaf"].forEach(function (id) {
+      const m = DCS.markets && DCS.markets.find((x) => x.id === id);
       if (m) {
-        m.price = 1 / xofPerUsd;
+        m.price = 1 / 600;
         m.high = m.price;
         m.low = m.price;
         m.change24h = 0;
+        m.stable = true;
       }
     });
   }
 
+  function applyCfaFromEur(eurUsd) {
+    /* Ignoré : on conserve 600 XOF/XAF pour 1 USD afin de respecter le peg PI à $314,159 */
+    void eurUsd;
+    lockCfaParity();
+  }
+
   function applyTickerToMarket(sym, price, change, high, low, vol) {
+    if (sym === "PI") return;
     const m = DCS.markets.find((x) => x.symbol === sym);
     if (!m || !(price > 0)) return;
+    if (m.id === "pi" || m.symbol === "PI") return;
+    if (m.fiat) return;
     m.price = price;
     if (change != null && !isNaN(change)) m.change24h = change;
     if (high > 0) m.high = high;
@@ -1454,6 +1471,7 @@
     if (!marketsDirty || !window.DCS || !DCS.markets) return;
     marketsDirty = false;
     lockPiPrice();
+    lockCfaParity();
     DCS.marketsLiveAt = Date.now();
     setMarketsLiveStatus(true, new Date().toLocaleTimeString("fr-FR"));
     if (document.getElementById("ticker-track")) renderTicker();
@@ -1560,8 +1578,9 @@
   }
 
   function startLiveMarkets() {
-    /* PI reste stable (lock) ; les autres paires restent live pour le Swap */
+    /* PI reste stable à $314,159 ; cryptos live Binance ; CFA peg 600 */
     lockPiPrice();
+    lockCfaParity();
     refreshLiveMarketsRest();
     connectMarketsWebSocket();
     /* Affichage à chaque seconde (le flux WS arrive en continu) */
