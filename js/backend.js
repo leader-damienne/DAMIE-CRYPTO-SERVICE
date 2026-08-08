@@ -1371,38 +1371,81 @@
         });
       }
 
+      /* Codes du parrain courant — ne jamais les réutiliser pour N2/N3 */
+      var sponsorCodeSet = {};
+      aliases.forEach(function (a) {
+        sponsorCodeSet[String(a).toLowerCase()] = true;
+      });
+
+      var seenIds = {};
+      function takeNewMembers(rows) {
+        var out = [];
+        (rows || []).forEach(function (r) {
+          if (!r || !r.id || seenIds[r.id]) return;
+          /* Ne jamais se compter soi-même */
+          if (DCS.user.id && r.id === DCS.user.id) return;
+          seenIds[r.id] = true;
+          out.push(r);
+        });
+        return out;
+      }
+
+      function codesFromMembers(rows) {
+        var codes = [];
+        (rows || []).forEach(function (r) {
+          memberAliases(r).forEach(function (a) {
+            var key = String(a).toLowerCase();
+            /* Empêche de rappeler les filleuls N1 (même code que le parrain) */
+            if (sponsorCodeSet[key]) return;
+            if (codes.indexOf(a) < 0) codes.push(a);
+          });
+        });
+        return codes;
+      }
+
       return fetchByCodes(aliases)
-        .then(function (l1) {
+        .then(function (l1raw) {
+          var l1 = takeNewMembers(l1raw);
           empty.level1 = l1.map(function (r) {
             return mapMember(r);
           });
           if (!l1.length) return empty;
-          var codes = [];
+          var codes = codesFromMembers(l1);
           var viaMap = {};
           l1.forEach(function (r) {
             var label = pickHandle(r);
             memberAliases(r).forEach(function (a) {
-              codes.push(a);
               viaMap[a] = label;
+              viaMap[String(a).toLowerCase()] = label;
             });
           });
-          return fetchByCodes(codes).then(function (l2) {
+          if (!codes.length) return empty;
+          return fetchByCodes(codes).then(function (l2raw) {
+            var l2 = takeNewMembers(l2raw);
             empty.level2 = l2.map(function (r) {
-              return mapMember(r, viaMap[r.referred_by] || "");
+              return mapMember(
+                r,
+                viaMap[r.referred_by] || viaMap[String(r.referred_by || "").toLowerCase()] || ""
+              );
             });
             if (!l2.length) return empty;
-            var codes2 = [];
+            var codes2 = codesFromMembers(l2);
             var via2 = {};
             l2.forEach(function (r) {
               var label = pickHandle(r);
               memberAliases(r).forEach(function (a) {
-                codes2.push(a);
                 via2[a] = label;
+                via2[String(a).toLowerCase()] = label;
               });
             });
-            return fetchByCodes(codes2).then(function (l3) {
+            if (!codes2.length) return empty;
+            return fetchByCodes(codes2).then(function (l3raw) {
+              var l3 = takeNewMembers(l3raw);
               empty.level3 = l3.map(function (r) {
-                return mapMember(r, via2[r.referred_by] || "");
+                return mapMember(
+                  r,
+                  via2[r.referred_by] || via2[String(r.referred_by || "").toLowerCase()] || ""
+                );
               });
               return empty;
             });
