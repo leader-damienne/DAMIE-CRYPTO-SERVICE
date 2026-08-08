@@ -31,6 +31,21 @@
     } catch (e) {}
   }
 
+  /** Date de naissance calendaire YYYY-MM-DD — jamais via new Date() (décalage TZ) */
+  function normalizeBirthDate(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return "";
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[1] + "-" + iso[2] + "-" + iso[3];
+    var fr = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+    if (fr) {
+      var d = ("0" + fr[1]).slice(-2);
+      var m = ("0" + fr[2]).slice(-2);
+      return fr[3] + "-" + m + "-" + d;
+    }
+    return "";
+  }
+
   function genInviteCode(username) {
     var base = String(username || "membre")
       .trim()
@@ -60,7 +75,7 @@
       displayName: row.display_name || row.pi_username || row.username,
       firstName: row.first_name || "",
       lastName: row.last_name || "",
-      birthDate: row.birth_date || "",
+      birthDate: normalizeBirthDate(row.birth_date),
       gender: row.gender || "",
       country: row.country || "",
       city: row.city || "",
@@ -753,7 +768,7 @@
         display_name: u.displayName || "",
         first_name: u.firstName || "",
         last_name: u.lastName || "",
-        birth_date: u.birthDate || "",
+        birth_date: normalizeBirthDate(u.birthDate),
         gender: u.gender || "",
         country: u.country || "",
         city: u.city || "",

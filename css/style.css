@@ -2761,6 +2761,12 @@ body.is-pi-browser .form-row-2 {
   gap: 0.75rem;
 }
 
+.birthdate-row {
+  display: grid;
+  grid-template-columns: 0.85fr 1.35fr 1fr;
+  gap: 0.45rem;
+}
+
 @media (max-width: 640px) {
   .form-row-2 {
     grid-template-columns: 1fr;

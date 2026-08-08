@@ -2730,6 +2730,74 @@
       : atHandle(u.username || u.piUsername || "Pioneer");
   }
 
+  function normalizeBirthDateClient(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return "";
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return iso[1] + "-" + iso[2] + "-" + iso[3];
+    var fr = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);
+    if (fr) {
+      return fr[3] + "-" + ("0" + fr[2]).slice(-2) + "-" + ("0" + fr[1]).slice(-2);
+    }
+    return "";
+  }
+
+  function initBirthdateSelects() {
+    var dayEl = document.getElementById("edit-birth-day");
+    var yearEl = document.getElementById("edit-birth-year");
+    if (!dayEl || !yearEl) return;
+    if (dayEl.options.length <= 1) {
+      for (var d = 1; d <= 31; d++) {
+        var od = document.createElement("option");
+        od.value = ("0" + d).slice(-2);
+        od.textContent = String(d);
+        dayEl.appendChild(od);
+      }
+    }
+    if (yearEl.options.length <= 1) {
+      var yNow = new Date().getFullYear();
+      for (var y = yNow - 13; y >= yNow - 100; y--) {
+        var oy = document.createElement("option");
+        oy.value = String(y);
+        oy.textContent = String(y);
+        yearEl.appendChild(oy);
+      }
+    }
+  }
+
+  function fillBirthdateSelects(raw) {
+    initBirthdateSelects();
+    var dayEl = document.getElementById("edit-birth-day");
+    var monthEl = document.getElementById("edit-birth-month");
+    var yearEl = document.getElementById("edit-birth-year");
+    if (!dayEl || !monthEl || !yearEl) return;
+    var iso = normalizeBirthDateClient(raw);
+    if (!iso) {
+      dayEl.value = "";
+      monthEl.value = "";
+      yearEl.value = "";
+      return;
+    }
+    var parts = iso.split("-");
+    yearEl.value = parts[0] || "";
+    monthEl.value = parts[1] || "";
+    dayEl.value = parts[2] || "";
+  }
+
+  function readBirthdateFromSelects() {
+    var dayEl = document.getElementById("edit-birth-day");
+    var monthEl = document.getElementById("edit-birth-month");
+    var yearEl = document.getElementById("edit-birth-year");
+    if (!dayEl || !monthEl || !yearEl) return "";
+    var d = dayEl.value;
+    var m = monthEl.value;
+    var y = yearEl.value;
+    if (!d || !m || !y) return "";
+    var dim = new Date(Number(y), Number(m), 0).getDate();
+    if (Number(d) > dim) d = ("0" + dim).slice(-2);
+    return normalizeBirthDateClient(y + "-" + m + "-" + d);
+  }
+
   function renderProfile() {
     if (!window.DCS || !DCS.user) return;
     const u = DCS.user;
@@ -2763,12 +2831,12 @@
         emailField.value = u.email || "";
       }
     }
-    setVal("edit-birthdate", u.birthDate);
     setVal("edit-gender", u.gender);
     setVal("edit-country", u.country);
     setVal("edit-city", u.city);
     setVal("edit-address", u.address);
     setVal("edit-bio", u.bio);
+    fillBirthdateSelects(u.birthDate);
 
     const avatarImg = document.getElementById("profile-avatar");
     const avatarFb = document.getElementById("profile-avatar-fallback");
@@ -2852,6 +2920,7 @@
   }
 
   function setupProfileForms() {
+    initBirthdateSelects();
     const photoInput = document.getElementById("avatar-input");
     if (photoInput) {
       photoInput.addEventListener("change", async () => {
@@ -3391,7 +3460,7 @@
         const name = document.getElementById("edit-displayname").value.trim();
         DCS.user.firstName = firstName;
         DCS.user.lastName = lastName;
-        DCS.user.birthDate = document.getElementById("edit-birthdate").value;
+        DCS.user.birthDate = readBirthdateFromSelects();
         DCS.user.gender = document.getElementById("edit-gender").value;
         DCS.user.country = document.getElementById("edit-country").value;
         DCS.user.city = document.getElementById("edit-city").value.trim();
