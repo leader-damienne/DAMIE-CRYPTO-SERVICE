@@ -43,7 +43,7 @@
       return sign + n.toFixed(2) + "%";
     },
     amount(n) {
-      return Number(n).toLocaleString("fr-FR", { maximumFractionDigits: 4 });
+      return Number(n).toLocaleString("fr-FR", { maximumFractionDigits: 7 });
     }
   };
 
@@ -387,7 +387,9 @@
 
     if (piBalEl) {
       piBalEl.textContent =
-        Number(piAmount).toLocaleString("fr-FR", { maximumFractionDigits: 4 }) + " PI";
+        Number(piAmount).toLocaleString("fr-FR", {
+          maximumFractionDigits: 7
+        }) + " PI";
     }
     if (piUsdEl) {
       piUsdEl.textContent = "≈ " + fmt.usd(piUsd, 2);
