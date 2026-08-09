@@ -366,6 +366,46 @@
     return assets;
   }
 
+  function isBalanceHidden() {
+    try {
+      return localStorage.getItem("dcs_hide_balance") === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function setBalanceHidden(hidden) {
+    try {
+      localStorage.setItem("dcs_hide_balance", hidden ? "1" : "0");
+    } catch (e) {}
+  }
+
+  function syncBalanceToggleUi() {
+    const btn = document.getElementById("toggle-hide-balance");
+    const label = document.getElementById("toggle-hide-balance-label");
+    const icon = document.getElementById("toggle-hide-balance-icon");
+    const hidden = isBalanceHidden();
+    if (btn) {
+      btn.setAttribute("aria-pressed", hidden ? "true" : "false");
+      btn.setAttribute("aria-label", hidden ? "Afficher le solde" : "Masquer le solde");
+      btn.title = hidden ? "Afficher le solde" : "Masquer le solde";
+    }
+    if (label) label.textContent = hidden ? "Afficher" : "Masquer";
+    if (icon) icon.textContent = hidden ? "👁‍🗨" : "👁";
+  }
+
+  function setupWalletBalanceToggle() {
+    const btn = document.getElementById("toggle-hide-balance");
+    if (!btn || btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    syncBalanceToggleUi();
+    btn.addEventListener("click", function () {
+      setBalanceHidden(!isBalanceHidden());
+      syncBalanceToggleUi();
+      renderWallet();
+    });
+  }
+
   function renderWallet() {
     const list = document.getElementById("wallet-assets");
     const piBalEl = document.getElementById("wallet-pi-balance");
@@ -373,6 +413,9 @@
     const totalEl = document.getElementById("wallet-total");
     const countEl = document.getElementById("wallet-assets-count");
     if (!window.DCS) return;
+
+    const hide = isBalanceHidden();
+    syncBalanceToggleUi();
 
     const assets = getWalletAssets();
     const piFromWallet = (DCS.wallet || []).find((w) => w.symbol === "PI");
@@ -386,17 +429,19 @@
     const piUsd = piAmount * piPrice;
 
     if (piBalEl) {
-      piBalEl.textContent =
-        Number(piAmount).toLocaleString("fr-FR", {
-          maximumFractionDigits: 7
-        }) + " PI";
+      piBalEl.textContent = hide
+        ? "•••••• PI"
+        : Number(piAmount).toLocaleString("fr-FR", {
+            maximumFractionDigits: 7
+          }) + " PI";
+      piBalEl.classList.toggle("is-hidden-balance", hide);
     }
     if (piUsdEl) {
-      piUsdEl.textContent = "≈ " + fmt.usd(piUsd, 2);
+      piUsdEl.textContent = hide ? "≈ $••••" : "≈ " + fmt.usd(piUsd, 2);
     }
 
     if (!list) {
-      if (totalEl) totalEl.textContent = fmt.usd(piUsd, 2);
+      if (totalEl) totalEl.textContent = hide ? "$••••" : fmt.usd(piUsd, 2);
       return;
     }
 
@@ -411,20 +456,30 @@
           a.symbol === "XOF" || a.symbol === "XAF"
             ? Number(a.amount).toLocaleString("fr-FR", { maximumFractionDigits: 0 })
             : fmt.amount(a.amount);
-        return `<div class="asset-row">
-          <div class="coin-cell">
-            ${coinLogo(a)}
-            <div class="coin-name">${a.symbol}<small>${a.name}</small></div>
-          </div>
-          <div style="text-align:right">
-            <strong>${amountLabel} ${a.symbol}</strong>
-            <div style="font-size:0.75rem;color:var(--muted)">${fmt.usd(value, 2)}</div>
-          </div>
-        </div>`;
+        return (
+          '<div class="asset-row">' +
+          '<div class="coin-cell">' +
+          coinLogo(a) +
+          '<div class="coin-name">' +
+          a.symbol +
+          "<small>" +
+          a.name +
+          "</small></div>" +
+          "</div>" +
+          '<div style="text-align:right">' +
+          "<strong>" +
+          (hide ? "•••• " + a.symbol : amountLabel + " " + a.symbol) +
+          "</strong>" +
+          '<div style="font-size:0.75rem;color:var(--muted)">' +
+          (hide ? "$••••" : fmt.usd(value, 2)) +
+          "</div>" +
+          "</div>" +
+          "</div>"
+        );
       })
       .join("");
     if (countEl) countEl.textContent = assets.length + " jetons";
-    if (totalEl) totalEl.textContent = fmt.usd(total, 2);
+    if (totalEl) totalEl.textContent = hide ? "$••••" : fmt.usd(total, 2);
   }
 
   function setupDeposit() {
@@ -4228,6 +4283,7 @@
         await DCS.backend.loadWallet();
         await DCS.backend.loadHistory();
       } catch (e) {}
+      setupWalletBalanceToggle();
       renderWallet();
       if (!isEcosystemMode()) setupDeposit();
       setupPiDeposit();

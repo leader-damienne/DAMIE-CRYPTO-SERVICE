@@ -1160,6 +1160,45 @@ ul {
   margin: 0.5rem 0 0.15rem;
 }
 
+.balance-big.is-hidden-balance {
+  letter-spacing: 0.12em;
+}
+
+.wallet-balance-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.btn-balance-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  background: rgba(20, 20, 20, 0.55);
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.btn-balance-toggle:hover,
+.btn-balance-toggle[aria-pressed="true"] {
+  color: var(--gold-bright);
+  border-color: rgba(212, 175, 55, 0.45);
+}
+
+.balance-eye {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .balance-usd {
   font-family: var(--font-display);
   font-size: 1.15rem;
