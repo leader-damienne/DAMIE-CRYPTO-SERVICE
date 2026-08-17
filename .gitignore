@@ -18,6 +18,8 @@ Thumbs.db
 *_secret*
 *credentials*.json
 .supabase/
+PI_ISSUER_SECRET*
+PI_DISTRIBUTOR_SECRET*
 _deploy_tools.txt
 assets/_logo-crop-check.png
 *.log

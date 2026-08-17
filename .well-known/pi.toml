@@ -1,0 +1,12 @@
+# Métadonnées token Pi Testnet — accessible sur :
+# https://damie-crypto-service.netlify.app/.well-known/pi.toml
+#
+# Remplacez ISSUER_PUBLIC_KEY par la clé publique G… du wallet Issuer
+# après création du token (étape script).
+
+[[CURRENCIES]]
+code="DCS"
+issuer="ISSUER_PUBLIC_KEY_A_REMPLACER"
+name="Damie Crypto Service"
+desc="Jeton utilitaire DCS sur Pi Testnet — tests uniquement, aucune valeur réelle."
+image="https://damie-crypto-service.netlify.app/assets/logo.png"

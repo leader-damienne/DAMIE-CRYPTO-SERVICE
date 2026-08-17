@@ -44,6 +44,13 @@
   to = "/privacy.html"
   status = 200
 
+# pi.toml doit être servi en texte brut
+[[headers]]
+  for = "/.well-known/pi.toml"
+  [headers.values]
+    Content-Type = "text/plain; charset=utf-8"
+    Cache-Control = "public, max-age=300"
+
 # Ancienne arborescence imbriquée → site racine
 [[redirects]]
   from = "/DamieCryptoService/*"
