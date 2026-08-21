@@ -69,6 +69,21 @@
   if (!/\.html$/i.test(path)) path += ".html";
   if (PUBLIC[path]) return;
 
+  /* App Studio Verify / Pi Browser : NE PAS rediriger vers signin
+     (sinon on quitte l’URL ouverte par App Studio et Verify échoue). */
+  try {
+    var qpGate = new URLSearchParams(location.search || "");
+    var piUa = /PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "");
+    if (
+      piUa ||
+      qpGate.get("verify") === "1" ||
+      qpGate.get("stay") === "1" ||
+      qpGate.get("force_pi_auth") === "1"
+    ) {
+      return;
+    }
+  } catch (ePi) {}
+
   function hasSupabaseSession() {
     try {
       for (var i = 0; i < localStorage.length; i++) {

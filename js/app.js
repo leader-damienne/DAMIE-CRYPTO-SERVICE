@@ -3728,6 +3728,8 @@
     const p = normalizePage(page || "index.html");
     if (isPublicPage(p)) return true;
     if (isLoggedIn()) return true;
+    /* Pi / App Studio : rester sur l’URL ouverte — pas de redirect vers signin */
+    if (isEcosystemMode()) return false;
     const next = encodeURIComponent(p);
     window.location.replace("signin.html?next=" + next);
     return false;
@@ -3751,6 +3753,15 @@
       errEl.style.display = "block";
       errEl.style.color = "#f6465d";
       errEl.textContent = text;
+    }
+    /* Pas d’alert pendant le pont App Studio (ça sort du flux Verify) */
+    if (document.documentElement.getAttribute("data-dcs-app-studio") === "1") {
+      var st = document.getElementById("dcs-pi-auth-gate-status");
+      if (st) {
+        st.style.color = "#f6465d";
+        st.textContent = text;
+      }
+      return;
     }
     try {
       alert(text);
@@ -3783,18 +3794,18 @@
       }
       /*
        * App Studio Verify : détecte Pi.authenticate sur la page ouverte.
-       * Ordre critique — (1) Allow (2) laisser ~2s pour que Verify passe
-       * à « connecté » (3) session DCS (4) history.back vers App Studio.
-       * Un retour trop tôt = Allow OK mais Verify reste « pas connecté ».
+       * Ordre — (1) Allow (2) ~2s pour que Verify marque « connecté »
+       * (3) session DCS (4) retour App Studio (jamais de navigation DCS).
        */
       var stay = false;
+      var gateEl = document.getElementById("dcs-pi-auth-gate");
       try {
         var qp = new URLSearchParams(location.search || "");
         stay =
           qp.get("stay") === "1" ||
           qp.get("verify") === "1" ||
           qp.get("force_pi_auth") === "1" ||
-          !!document.getElementById("dcs-pi-auth-gate");
+          (gateEl && gateEl.getAttribute("data-app-studio") === "1");
       } catch (eStay) {}
 
       var result;
@@ -3804,11 +3815,10 @@
         typeof DCS.pi.authenticate === "function" &&
         typeof DCS.pi.sessionFromPiAuth === "function"
       ) {
-        var gateEl = document.getElementById("dcs-pi-auth-gate");
         function setGateMsg(title, sub) {
           if (!gateEl) return;
           gateEl.innerHTML =
-            '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
+            '<div style="max-width:20rem;width:100%;text-align:center;color:#fff;padding:1.25rem;font-family:system-ui,sans-serif">' +
             '<p style="font-size:1.1rem;font-weight:700;margin:0 0 .5rem">' +
             title +
             "</p>" +
@@ -3826,14 +3836,11 @@
           DCS.pi.authenticate(["username"]),
           new Promise(function (_, reject) {
             setTimeout(function () {
-              reject(new Error("Délai Allow dépassé. Réessayez Verify."));
+              reject(new Error("Délai Allow dépassé. Réessayez dans App Studio."));
             }, 90000);
           })
         ]);
-        setGateMsg(
-          "Auth Pi OK…",
-          "Patientez : App Studio enregistre la connexion."
-        );
+        setGateMsg("OK", "App Studio enregistre la connexion…");
         await new Promise(function (r) {
           setTimeout(r, 2200);
         });
@@ -3841,7 +3848,7 @@
         if (!result || !result.ok) {
           showPiLoginError(
             errEl,
-            (result && result.error) || "Session DCS impossible après Allow."
+            (result && result.error) || "Session impossible après Allow."
           );
           return result || { ok: false };
         }
@@ -3853,7 +3860,7 @@
         try {
           updateAuthNav();
         } catch (eNav) {}
-        setGateMsg("Connecté ✓", "Retour App Studio…");
+        setGateMsg("Connecté", "Retour App Studio…");
         setTimeout(function () {
           try {
             if (window.history && window.history.length > 1) {
@@ -3929,16 +3936,44 @@
       return;
     }
 
+    /* Pont App Studio : masquer le site, rester dans le flux Verify */
+    var appStudio = false;
+    try {
+      var q1 = new URLSearchParams(location.search || "");
+      appStudio =
+        q1.get("verify") === "1" ||
+        q1.get("stay") === "1" ||
+        q1.get("force_pi_auth") === "1" ||
+        (window.history && window.history.length > 1);
+    } catch (eAs) {
+      appStudio = true;
+    }
+    /* Verify ouvre souvent une WebView (history=1) : traiter comme App Studio */
+    if (!appStudio) appStudio = true;
+
+    try {
+      document.documentElement.setAttribute("data-dcs-app-studio", "1");
+      if (!document.getElementById("dcs-app-studio-hide")) {
+        var hideStyle = document.createElement("style");
+        hideStyle.id = "dcs-app-studio-hide";
+        hideStyle.textContent =
+          "html[data-dcs-app-studio='1'] body > *:not(#dcs-pi-auth-gate){visibility:hidden!important;pointer-events:none!important}" +
+          "html[data-dcs-app-studio='1'],html[data-dcs-app-studio='1'] body{background:#0b0d14!important;min-height:100%!important}";
+        (document.head || document.documentElement).appendChild(hideStyle);
+      }
+    } catch (eHide) {}
+
     const gate = document.createElement("div");
     gate.id = "dcs-pi-auth-gate";
+    gate.setAttribute("data-app-studio", "1");
     gate.setAttribute("role", "dialog");
     gate.style.cssText =
-      "position:fixed;inset:0;z-index:99999;background:rgba(8,10,18,.92);display:flex;align-items:center;justify-content:center;padding:1.25rem;box-sizing:border-box;";
+      "position:fixed;inset:0;z-index:99999;background:#0b0d14;display:flex;align-items:center;justify-content:center;padding:1.25rem;box-sizing:border-box;";
     gate.innerHTML =
-      '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;font-family:inherit">' +
-      "<p style=\"margin:0 0 .75rem;font-size:1.15rem;font-weight:700\">Autorisation Pi requise</p>" +
-      "<p style=\"margin:0 0 1.25rem;font-size:.92rem;opacity:.85;line-height:1.4\">Touchez le bouton pour ouvrir la demande d’autorisation Pi (Allow). Nécessaire pour App Studio Verify.</p>" +
-      '<button type="button" id="dcs-pi-auth-gate-btn" class="btn btn-gold" style="width:100%;min-height:3rem;font-size:1.05rem">Autoriser avec Pi</button>' +
+      '<div style="max-width:20rem;width:100%;text-align:center;color:#fff;font-family:system-ui,sans-serif">' +
+      "<p style=\"margin:0 0 .5rem;font-size:1.05rem;font-weight:700\">App Studio</p>" +
+      "<p style=\"margin:0 0 1.25rem;font-size:.9rem;opacity:.8;line-height:1.4\">Touchez Continuer, puis <strong>Allow</strong>.</p>" +
+      '<button type="button" id="dcs-pi-auth-gate-btn" style="width:100%;min-height:3rem;font-size:1.05rem;font-weight:700;border:0;border-radius:10px;background:#703dd6;color:#fff;cursor:pointer">Continuer</button>' +
       '<p id="dcs-pi-auth-gate-status" style="margin:1rem 0 0;font-size:.85rem;color:#f6465d;min-height:1.2em"></p>' +
       "</div>";
     document.body.appendChild(gate);
@@ -3949,10 +3984,9 @@
 
     btn.addEventListener("click", async function () {
       btn.disabled = true;
-      btn.textContent = "Ouverture Pi…";
+      btn.textContent = "Allow…";
       if (st) st.textContent = "";
       try {
-        /* Un seul flux : authenticate au TAP (consentement Allow) */
         const result = await runPiLoginFlow(errEl, btn);
         if (result && result.ok) {
           if (!result.stayed) gate.remove();
@@ -3961,19 +3995,18 @@
         if (st) {
           st.style.color = "#f0c14b";
           st.textContent =
-            "Si la fenêtre Pi s’est ouverte, acceptez Allow puis Verify dans App Studio. " +
-            ((result && result.error) || "");
+            (result && result.error) || "Autorisez avec Allow, puis réessayez.";
         }
         btn.disabled = false;
-        btn.textContent = "Autoriser avec Pi";
+        btn.textContent = "Continuer";
       } catch (e) {
         if (st) {
           st.style.color = "#f6465d";
           st.textContent =
-            (e && e.message) || "Échec. Touchez à nouveau pour autoriser.";
+            (e && e.message) || "Échec. Touchez Continuer à nouveau.";
         }
         btn.disabled = false;
-        btn.textContent = "Autoriser avec Pi";
+        btn.textContent = "Continuer";
         showPiLoginError(errEl, (e && e.message) || String(e));
       }
     });
