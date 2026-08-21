@@ -154,9 +154,20 @@
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
    */
   function loginWithPi() {
+    /* username + payments : dépôts Wallet après App Studio */
     var authPromise = global.__dcsPiAuthResult
       ? Promise.resolve(global.__dcsPiAuthResult)
-      : authenticate(["username"]);
+      : authenticate(["username", "payments"]);
+    /* Si early-auth n’avait que username, forcer re-auth avec payments pour le dépôt */
+    if (
+      global.__dcsPiAuthResult &&
+      !(
+        global.__dcsPiAuthScopes &&
+        String(global.__dcsPiAuthScopes).indexOf("payments") >= 0
+      )
+    ) {
+      authPromise = authenticate(["username", "payments"]);
+    }
     global.__dcsPiAuthResult = null;
     return authPromise
       .then(function (auth) {
@@ -235,6 +246,8 @@
     initPi()
       .then(function (Pi) {
         if (!Pi || typeof Pi.authenticate !== "function") return null;
+        /* username suffit pour App Studio Verify ; payments au dépôt / login complet */
+        global.__dcsPiAuthScopes = "username";
         return Pi.authenticate(["username"], onIncompletePaymentFound);
       })
       .then(function (auth) {

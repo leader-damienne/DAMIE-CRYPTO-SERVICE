@@ -24,7 +24,11 @@ function json(body: Record<string, unknown>, status = 200) {
 }
 
 async function piFetch(path: string, method = "GET", body?: Record<string, unknown>) {
-  if (!PI_API_KEY) throw new Error("PI_API_KEY manquant (secret Edge Function).");
+  if (!PI_API_KEY) {
+    throw new Error(
+      "PI_API_KEY manquant. Dans Supabase → Edge Functions → Secrets, ajoutez la Server API Key de l’app App Studio."
+    );
+  }
   const res = await fetch(`${PI_API_BASE}/v2${path}`, {
     method,
     headers: {
@@ -41,11 +45,18 @@ async function piFetch(path: string, method = "GET", body?: Record<string, unkno
     data = { raw: text };
   }
   if (!res.ok) {
-    throw new Error(
+    const apiMsg =
       (data as { error?: string; message?: string }).error ||
-        (data as { message?: string }).message ||
-        `Pi API ${res.status}`
-    );
+      (data as { message?: string }).message ||
+      `Pi API ${res.status}`;
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        "Clé Pi refusée (" +
+          apiMsg +
+          "). Mettez à jour PI_API_KEY avec la Server API Key de l’app App Studio (appdcs.com), puis redéployez pi-payment."
+      );
+    }
+    throw new Error(apiMsg);
   }
   return data;
 }
