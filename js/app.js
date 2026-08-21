@@ -3801,6 +3801,30 @@
         );
         return result || { ok: false };
       }
+      /*
+       * App Studio Verify ouvre déjà le site : ne PAS rediriger (sinon ça « quitte »
+       * App Studio / change d’onglet). Rester sur place pour que Verify détecte l’auth.
+       */
+      var stay = false;
+      try {
+        var qp = new URLSearchParams(location.search || "");
+        stay =
+          qp.get("stay") === "1" ||
+          qp.get("verify") === "1" ||
+          qp.get("force_pi_auth") === "1" ||
+          !!document.getElementById("dcs-pi-auth-gate");
+      } catch (eStay) {}
+      if (stay) {
+        var gateEl = document.getElementById("dcs-pi-auth-gate");
+        if (gateEl) {
+          gateEl.innerHTML =
+            '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
+            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Autorisation Pi OK</p>" +
+            "<p style=\"margin:0;opacity:.9;line-height:1.4\">Revenez à App Studio et terminez Verify. Ne fermez pas cette page tout de suite.</p>" +
+            "</div>";
+        }
+        return { ok: true, stayed: true };
+      }
       window.location.href = authNextUrl();
       return { ok: true };
     } catch (e) {
@@ -3864,7 +3888,7 @@
         /* Un seul flux : authenticate au TAP (consentement Allow) */
         const result = await runPiLoginFlow(errEl, btn);
         if (result && result.ok) {
-          gate.remove();
+          if (!result.stayed) gate.remove();
           return;
         }
         if (st) {
