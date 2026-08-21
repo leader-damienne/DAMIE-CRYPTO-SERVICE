@@ -4275,6 +4275,25 @@
 
   async function boot() {
     detectPiBrowser();
+    /* ?force_pi_auth=1 ou ?logout=1 : forcer nouvelle autorisation Pi (App Studio) */
+    try {
+      var qp = new URLSearchParams(location.search || "");
+      if (qp.get("logout") === "1" || qp.get("force_pi_auth") === "1") {
+        window.__dcsPiAutoAuthStarted = false;
+        window.__dcsEarlyPiAuthStarted = false;
+        window.__dcsEarlyPiAuthInFlight = null;
+        window.__dcsPiAuthResult = null;
+        try {
+          sessionStorage.clear();
+        } catch (eSs) {}
+        if (window.DCS && DCS.auth && typeof DCS.auth.logout === "function") {
+          await DCS.auth.logout().catch(function () {});
+        }
+        if (qp.get("logout") === "1") {
+          history.replaceState({}, "", location.pathname || "index.html");
+        }
+      }
+    } catch (eForce) {}
     /* Auth Pi immédiatement — avant hydrate (App Studio Verify) */
     try {
       if (window.DCS && DCS.pi && typeof DCS.pi.startEarlyPiAuth === "function") {

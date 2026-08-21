@@ -155,6 +155,11 @@
    */
   function loginWithPi() {
     /* Toujours appeler Pi.authenticate (App Studio Verify doit le détecter — pas de cache) */
+    try {
+      sessionStorage.removeItem("dcs_pi_auto_auth");
+    } catch (e0) {}
+    global.__dcsPiAuthResult = null;
+    global.__dcsEarlyPiAuthInFlight = null;
     return authenticate(["username"])
       .then(function (auth) {
         global.__dcsPiAuthResult = null;
