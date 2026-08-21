@@ -246,9 +246,9 @@
     initPi()
       .then(function (Pi) {
         if (!Pi || typeof Pi.authenticate !== "function") return null;
-        /* username suffit pour App Studio Verify ; payments au dépôt / login complet */
-        global.__dcsPiAuthScopes = "username";
-        return Pi.authenticate(["username"], onIncompletePaymentFound);
+        /* username + payments : validation Develop / App Studio + dépôts */
+        global.__dcsPiAuthScopes = "username,payments";
+        return Pi.authenticate(["username", "payments"], onIncompletePaymentFound);
       })
       .then(function (auth) {
         if (auth) global.__dcsPiAuthResult = auth;

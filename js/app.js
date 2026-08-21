@@ -3844,7 +3844,7 @@
         if (!DCS.pi || typeof DCS.pi.init !== "function") return;
         await DCS.pi.init();
         if (isLoggedIn()) {
-          await DCS.pi.authenticate(["username"]);
+          await DCS.pi.authenticate(["username", "payments"]);
           return;
         }
         await runPiLoginFlow(
