@@ -3815,14 +3815,34 @@
           !!document.getElementById("dcs-pi-auth-gate");
       } catch (eStay) {}
       if (stay) {
+        try {
+          if (DCS.auth && typeof DCS.auth.hydrate === "function") {
+            await DCS.auth.hydrate();
+          }
+        } catch (eHyd) {}
+        try {
+          updateAuthNav();
+        } catch (eNav) {}
         var gateEl = document.getElementById("dcs-pi-auth-gate");
         if (gateEl) {
           gateEl.innerHTML =
             '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
-            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Autorisation Pi OK</p>" +
-            "<p style=\"margin:0;opacity:.9;line-height:1.4\">Revenez à App Studio et terminez Verify. Ne fermez pas cette page tout de suite.</p>" +
+            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Connecté</p>" +
+            "<p style=\"margin:0;opacity:.9;line-height:1.4\">Auth Pi OK. Retour à App Studio pour terminer Verify…</p>" +
             "</div>";
         }
+        /* Recharger la MÊME URL (session active) — sans changer de domaine / quitter le flux */
+        setTimeout(function () {
+          try {
+            var u = new URL(location.href);
+            u.searchParams.delete("force_pi_auth");
+            u.searchParams.delete("logout");
+            u.searchParams.set("pi_ok", "1");
+            location.replace(u.pathname + u.search + u.hash);
+          } catch (eRel) {
+            location.reload();
+          }
+        }, 900);
         return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
@@ -3857,8 +3877,12 @@
   function showPiAuthGate(errEl) {
     if (!isEcosystemMode()) return;
     if (document.getElementById("dcs-pi-auth-gate")) return;
+    /* Déjà connecté + retour Verify : ne pas rebloquer */
+    try {
+      var q0 = new URLSearchParams(location.search || "");
+      if (q0.get("pi_ok") === "1" && isLoggedIn()) return;
+    } catch (e0) {}
     if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
-      /* hors Pi Browser : pas d’overlay */
       return;
     }
 
