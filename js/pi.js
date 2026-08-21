@@ -154,13 +154,11 @@
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
    */
   function loginWithPi() {
-    var authPromise = global.__dcsPiAuthResult
-      ? Promise.resolve(global.__dcsPiAuthResult)
-      : authenticate(["username"]);
-    global.__dcsPiAuthResult = null;
-    global.__dcsPiAuthScopes = null;
-    return authPromise
+    /* Toujours appeler Pi.authenticate (App Studio Verify doit le détecter — pas de cache) */
+    return authenticate(["username"])
       .then(function (auth) {
+        global.__dcsPiAuthResult = null;
+        global.__dcsPiAuthScopes = null;
         var accessToken = auth && (auth.accessToken || auth.access_token);
         if (!accessToken) {
           return { ok: false, error: "Jeton Pi manquant après authentification." };
@@ -226,24 +224,42 @@
   }
 
   /**
-   * App Studio Verify : appeler Pi.authenticate dès que possible (avant le boot UI).
-   * await Pi.init puis authenticate(["username"]).
+   * App Studio Verify : forcer Pi.authenticate (consentement utilisateur).
+   * Retries si le SDK n’est pas prêt tout de suite.
    */
   function startEarlyPiAuth() {
-    if (!ecosystemMode()) return;
-    if (global.__dcsEarlyPiAuthStarted) return;
+    if (!ecosystemMode()) return Promise.resolve(null);
+    if (global.__dcsEarlyPiAuthInFlight) return global.__dcsEarlyPiAuthInFlight;
+
+    function attempt(n) {
+      return initPi()
+        .then(function (Pi) {
+          if (!Pi || typeof Pi.authenticate !== "function") {
+            throw new Error("SDK Pi indisponible");
+          }
+          global.__dcsPiAuthScopes = "username";
+          return Pi.authenticate(["username"], onIncompletePaymentFound);
+        })
+        .then(function (auth) {
+          if (auth) global.__dcsPiAuthResult = auth;
+          return auth;
+        })
+        .catch(function (err) {
+          if (n < 4) {
+            return new Promise(function (resolve) {
+              setTimeout(function () {
+                resolve(attempt(n + 1));
+              }, 700 * n);
+            });
+          }
+          global.__dcsPiAuthLastError = (err && err.message) || String(err);
+          return null;
+        });
+    }
+
     global.__dcsEarlyPiAuthStarted = true;
-    initPi()
-      .then(function (Pi) {
-        if (!Pi || typeof Pi.authenticate !== "function") return null;
-        /* Scope username uniquement (exigence App Studio GenAI) */
-        global.__dcsPiAuthScopes = "username";
-        return Pi.authenticate(["username"], onIncompletePaymentFound);
-      })
-      .then(function (auth) {
-        if (auth) global.__dcsPiAuthResult = auth;
-      })
-      .catch(function () {});
+    global.__dcsEarlyPiAuthInFlight = attempt(1);
+    return global.__dcsEarlyPiAuthInFlight;
   }
 
   function depositWithPi(amount) {

@@ -3835,27 +3835,28 @@
     if (window.__dcsPiAutoAuthStarted) return;
     window.__dcsPiAutoAuthStarted = true;
 
-    /* Toujours tenter : App Studio fournit window.Pi même hors UA PiBrowser */
     setTimeout(async function () {
       try {
-        if (DCS.pi && typeof DCS.pi.startEarlyPiAuth === "function") {
-          DCS.pi.startEarlyPiAuth();
-        }
         if (!DCS.pi || typeof DCS.pi.init !== "function") return;
         await DCS.pi.init();
         if (isLoggedIn()) {
           await DCS.pi.authenticate(["username"]);
           return;
         }
+        /* runPiLoginFlow appelle toujours Pi.authenticate → fenêtre Allow */
         await runPiLoginFlow(
           errEl,
           document.getElementById("pi-login-btn") ||
             document.getElementById("pi-login-btn-header")
         );
       } catch (e) {
-        /* Annulation utilisateur — silencieux */
+        showPiLoginError(
+          errEl,
+          (e && e.message) ||
+            "Autorisation Pi non affichée. Touchez « Connexion Pi » puis Allow."
+        );
       }
-    }, 0);
+    }, 400);
   }
 
   function setupSignup() {
