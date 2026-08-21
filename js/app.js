@@ -3802,8 +3802,8 @@
         return result || { ok: false };
       }
       /*
-       * App Studio Verify ouvre déjà le site : ne PAS rediriger (sinon ça « quitte »
-       * App Studio / change d’onglet). Rester sur place pour que Verify détecte l’auth.
+       * App Studio Verify : après Allow, revenir IMMÉDIATEMENT à App Studio
+       * (history.back) — ne pas rester sur DCS ni rediriger vers wallet/home.
        */
       var stay = false;
       try {
@@ -3827,18 +3827,28 @@
         if (gateEl) {
           gateEl.innerHTML =
             '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
-            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Connecté ✓</p>" +
-            "<p style=\"margin:0 0 1rem;opacity:.9;line-height:1.4\">Auth Pi réussie. Revenez à <strong>App Studio</strong> (bouton retour Pi Browser) pour terminer Verify.</p>" +
-            '<button type="button" id="dcs-pi-auth-gate-close" class="btn btn-gold" style="width:100%">OK</button>' +
+            "<p style=\"font-size:1.1rem;font-weight:700;margin:0\">Retour App Studio…</p>" +
             "</div>";
-          var closeBtn = document.getElementById("dcs-pi-auth-gate-close");
-          if (closeBtn) {
-            closeBtn.addEventListener("click", function () {
-              gateEl.remove();
-            });
-          }
         }
-        /* Aucune navigation / reload — rester dans la même WebView */
+        /* Laisser le SDK signaler l’auth, puis revenir à App Studio */
+        setTimeout(function () {
+          try {
+            if (window.history && window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+          } catch (eBack) {}
+          try {
+            window.close();
+          } catch (eClose) {}
+          if (gateEl) {
+            gateEl.innerHTML =
+              '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
+              "<p style=\"font-size:1.05rem;font-weight:700;margin:0 0 .75rem\">Connecté ✓</p>" +
+              "<p style=\"margin:0;opacity:.9;line-height:1.4\">Utilisez le bouton retour du Pi Browser pour App Studio.</p>" +
+              "</div>";
+          }
+        }, 250);
         return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
