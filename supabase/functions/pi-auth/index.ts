@@ -56,6 +56,7 @@ function piEmail(piUid: string) {
   return `pi.${safe || "user"}@auth.dcs.app`;
 }
 
+/** Valide le accessToken Pi : GET https://api.minepi.com/v2/me (Bearer) — pas de PI_API_KEY. */
 async function verifyPiUser(accessToken: string) {
   const res = await fetch(`${PI_API_BASE}/v2/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },

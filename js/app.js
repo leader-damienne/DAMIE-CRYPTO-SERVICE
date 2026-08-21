@@ -3675,20 +3675,27 @@
       gold.textContent = "Wallet";
       frag.appendChild(name);
       frag.appendChild(gold);
+    } else if (isEcosystemMode()) {
+      /* Bouton manuel Pi Auth (App Studio) — id unique si la page n’en a pas déjà un */
+      const signin = document.createElement("button");
+      signin.type = "button";
+      signin.className = "btn btn-gold";
+      signin.id = document.getElementById("pi-login-btn")
+        ? "pi-login-btn-header"
+        : "pi-login-btn";
+      signin.textContent = "Connexion Pi";
+      frag.appendChild(signin);
     } else {
       const signin = document.createElement("a");
-      signin.className = "btn btn-gold";
+      signin.className = "btn btn-outline";
       signin.href = "signin.html";
-      signin.textContent = isEcosystemMode() ? "Connexion Pi" : "Connexion";
+      signin.textContent = "Connexion";
       frag.appendChild(signin);
-      if (!isEcosystemMode()) {
-        const signup = document.createElement("a");
-        signup.className = "btn btn-gold";
-        signup.href = "signup.html";
-        signup.textContent = "Inscription";
-        signin.className = "btn btn-outline";
-        frag.appendChild(signup);
-      }
+      const signup = document.createElement("a");
+      signup.className = "btn btn-gold";
+      signup.href = "signup.html";
+      signup.textContent = "Inscription";
+      frag.appendChild(signup);
     }
     Array.from(actions.children).forEach((el) => {
       if (!el.classList.contains("menu-toggle")) el.remove();
@@ -3736,77 +3743,120 @@
     return "index.html";
   }
 
-  function setupPiLoginButton(errEl) {
-    const btn = document.getElementById("pi-login-btn");
-    if (!btn || btn.dataset.piLoginBound === "1") return;
-    btn.dataset.piLoginBound = "1";
-
-    function showErr(msg) {
-      const text =
-        msg || "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser.";
-      if (errEl) {
-        errEl.hidden = false;
-        errEl.style.display = "block";
-        errEl.style.color = "#f6465d";
-        errEl.textContent = text;
-      }
-      try {
-        alert(text);
-      } catch (e) {}
+  function showPiLoginError(errEl, msg) {
+    const text =
+      msg || "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser.";
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.style.display = "block";
+      errEl.style.color = "#f6465d";
+      errEl.textContent = text;
     }
+    try {
+      alert(text);
+    } catch (e) {}
+  }
 
-    btn.addEventListener("click", async (ev) => {
-      if (ev && ev.preventDefault) ev.preventDefault();
-      if (errEl) {
-        errEl.hidden = true;
-        errEl.textContent = "";
-        errEl.style.color = "";
+  async function runPiLoginFlow(errEl, btn) {
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+      errEl.style.color = "";
+    }
+    if (!window.DCS || !DCS.auth || typeof DCS.auth.loginWithPi !== "function") {
+      showPiLoginError(errEl, "Module de connexion non prêt. Rechargez la page.");
+      return { ok: false };
+    }
+    const target =
+      btn ||
+      document.getElementById("pi-login-btn") ||
+      document.getElementById("pi-login-btn-header");
+    const prev = target ? target.textContent : "";
+    if (target) {
+      target.disabled = true;
+      target.textContent = "Connexion Pi…";
+    }
+    try {
+      /* Await Pi.init fully before authenticate (App Studio) */
+      if (DCS.pi && typeof DCS.pi.init === "function") {
+        await DCS.pi.init();
       }
-      if (!window.DCS || !DCS.auth || typeof DCS.auth.loginWithPi !== "function") {
-        showErr("Module de connexion non prêt. Rechargez la page.");
-        return;
+      const result = await Promise.race([
+        DCS.auth.loginWithPi(),
+        new Promise(function (resolve) {
+          setTimeout(function () {
+            resolve({
+              ok: false,
+              error:
+                "Délai dépassé. Ouvrez DCS dans le Pi Browser, autorisez l’app, puis réessayez."
+            });
+          }, 90000);
+        })
+      ]);
+      if (!result || !result.ok) {
+        showPiLoginError(
+          errEl,
+          (result && result.error) ||
+            "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser."
+        );
+        return result || { ok: false };
       }
-      btn.disabled = true;
-      const prev = btn.textContent;
-      btn.textContent = "Connexion Pi…";
-      try {
-        if (DCS.pi && typeof DCS.pi.init === "function") {
-          await Promise.race([
-            DCS.pi.init().catch(function () {
-              return null;
-            }),
-            new Promise(function (resolve) {
-              setTimeout(resolve, 5000);
-            })
-          ]);
-        }
-        const result = await Promise.race([
-          DCS.auth.loginWithPi(),
-          new Promise(function (resolve) {
-            setTimeout(function () {
-              resolve({
-                ok: false,
-                error:
-                  "Délai dépassé. Ouvrez DCS dans le Pi Browser, autorisez l’app, puis réessayez."
-              });
-            }, 90000);
-          })
-        ]);
-        if (!result || !result.ok) {
-          showErr(
-            (result && result.error) ||
-              "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser."
-          );
-          return;
-        }
-        window.location.href = authNextUrl();
-      } catch (e) {
-        showErr((e && e.message) || String(e));
-      } finally {
-        btn.disabled = false;
-        btn.textContent = prev || "Continuer avec Pi";
+      window.location.href = authNextUrl();
+      return { ok: true };
+    } catch (e) {
+      showPiLoginError(errEl, (e && e.message) || String(e));
+      return { ok: false, error: (e && e.message) || String(e) };
+    } finally {
+      if (target) {
+        target.disabled = false;
+        target.textContent = prev || "Continuer avec Pi";
       }
+    }
+  }
+
+  function setupPiLoginButton(errEl) {
+    const buttons = [
+      document.getElementById("pi-login-btn"),
+      document.getElementById("pi-login-btn-header")
+    ].filter(Boolean);
+    buttons.forEach(function (btn) {
+      if (btn.dataset.piLoginBound === "1") return;
+      btn.dataset.piLoginBound = "1";
+      btn.addEventListener("click", function (ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        runPiLoginFlow(errEl, btn);
+      });
     });
+  }
+
+  /** Auth Pi auto au chargement (App Studio) — une fois / session si Pi Browser. */
+  function maybeAutoPiLogin(errEl) {
+    if (!isEcosystemMode() || isLoggedIn()) return;
+    if (
+      !document.getElementById("pi-login-btn") &&
+      !document.getElementById("pi-login-btn-header")
+    ) {
+      return;
+    }
+    try {
+      if (sessionStorage.getItem("dcs_pi_auto_auth") === "1") return;
+    } catch (e) {}
+    var ua = navigator.userAgent || "";
+    var inPi =
+      /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
+      !!(window.Pi && typeof window.Pi.init === "function");
+    if (!inPi) return;
+    try {
+      sessionStorage.setItem("dcs_pi_auto_auth", "1");
+    } catch (e2) {}
+    setTimeout(function () {
+      if (isLoggedIn()) return;
+      runPiLoginFlow(
+        errEl,
+        document.getElementById("pi-login-btn") ||
+          document.getElementById("pi-login-btn-header")
+      );
+    }, 600);
   }
 
   function setupSignup() {
@@ -3821,6 +3871,7 @@
       }
       const err = document.getElementById("signup-error") || document.getElementById("signin-error");
       setupPiLoginButton(err);
+      maybeAutoPiLogin(err);
       return;
     }
     const form = document.getElementById("signup-form");
@@ -3992,6 +4043,7 @@
       const switchEl = document.querySelector(".auth-switch");
       if (switchEl) switchEl.hidden = true;
       setupPiLoginButton(err);
+      maybeAutoPiLogin(err);
       const setupBanner = document.getElementById("auth-setup-banner");
       if (setupBanner && window.DCS && DCS.auth && !DCS.auth.isConfigured()) {
         setupBanner.hidden = false;
@@ -4272,6 +4324,16 @@
 
     if (isSignup) setupSignup();
     if (isSignin || document.getElementById("pi-login-btn")) setupSignin();
+
+    /* Bouton + auto-auth Pi sur toutes les pages (invité / ecosystem) */
+    if (isEcosystemMode() && !isLoggedIn()) {
+      const piErr =
+        document.getElementById("signin-error") ||
+        document.getElementById("signup-error") ||
+        null;
+      setupPiLoginButton(piErr);
+      if (!isSignin && !isSignup) maybeAutoPiLogin(piErr);
+    }
 
     if (isHome && document.getElementById("markets-body")) {
       renderPiSpotlight();

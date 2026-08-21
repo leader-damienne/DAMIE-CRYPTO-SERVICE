@@ -136,18 +136,25 @@
     });
   }
 
-  function authenticate() {
+  /** Auth Pi — scopes défaut: username (App Studio). Paiements: passer ["username","payments"]. */
+  function authenticate(scopes) {
+    var sc =
+      scopes && scopes.length ? scopes : ["username"];
     return initPi().then(function (Pi) {
       if (!Pi || typeof Pi.authenticate !== "function") {
         throw new Error("Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi.");
       }
-      return Pi.authenticate(["username", "payments"], onIncompletePaymentFound);
+      return Pi.authenticate(sc, onIncompletePaymentFound);
     });
   }
 
-  /** Connexion DCS via Pi Authentication (listing Ecosystem). */
+  /**
+   * Connexion DCS via Pi Authentication.
+   * Le backend (pi-auth) valide le accessToken avec GET /v2/me
+   * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
+   */
   function loginWithPi() {
-    return authenticate()
+    return authenticate(["username"])
       .then(function (auth) {
         var accessToken = auth && (auth.accessToken || auth.access_token);
         if (!accessToken) {
@@ -226,7 +233,7 @@
       return Promise.resolve({ ok: false, error: "Connectez-vous à DCS." });
     }
 
-    return authenticate()
+    return authenticate(["username", "payments"])
       .then(function (auth) {
         var Pi = global.Pi;
         var memo = "DCS deposit " + String(DCS.user.id).slice(0, 8);
@@ -299,12 +306,11 @@
         if (/Pi Browser|not available|undefined/i.test(msg) || !global.Pi) {
           return {
             ok: false,
-            error:
-              "Ouvrez DCS dans le Pi Browser pour payer en Pi."
-            };
-          }
-          return { ok: false, error: msg };
-        });
+            error: "Ouvrez DCS dans le Pi Browser pour payer en Pi."
+          };
+        }
+        return { ok: false, error: msg };
+      });
   }
 
   DCS.pi = {
