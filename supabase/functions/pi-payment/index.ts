@@ -56,6 +56,11 @@ async function piFetch(path: string, method = "GET", body?: Record<string, unkno
           "). Mettez à jour PI_API_KEY avec la Server API Key de l’app App Studio (appdcs.com), puis redéployez pi-payment."
       );
     }
+    if (/payment_not_found/i.test(String(apiMsg))) {
+      throw new Error(
+        "payment_not_found : la PI_API_KEY Supabase n’est pas celle de l’app App Studio (appdcs.com). Remplacez le secret PI_API_KEY puis redéployez pi-payment."
+      );
+    }
     throw new Error(apiMsg);
   }
   return data;
