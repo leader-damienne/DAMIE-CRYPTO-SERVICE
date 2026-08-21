@@ -154,21 +154,11 @@
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
    */
   function loginWithPi() {
-    /* username + payments : dépôts Wallet après App Studio */
     var authPromise = global.__dcsPiAuthResult
       ? Promise.resolve(global.__dcsPiAuthResult)
-      : authenticate(["username", "payments"]);
-    /* Si early-auth n’avait que username, forcer re-auth avec payments pour le dépôt */
-    if (
-      global.__dcsPiAuthResult &&
-      !(
-        global.__dcsPiAuthScopes &&
-        String(global.__dcsPiAuthScopes).indexOf("payments") >= 0
-      )
-    ) {
-      authPromise = authenticate(["username", "payments"]);
-    }
+      : authenticate(["username"]);
     global.__dcsPiAuthResult = null;
+    global.__dcsPiAuthScopes = null;
     return authPromise
       .then(function (auth) {
         var accessToken = auth && (auth.accessToken || auth.access_token);
@@ -246,9 +236,9 @@
     initPi()
       .then(function (Pi) {
         if (!Pi || typeof Pi.authenticate !== "function") return null;
-        /* username + payments : validation Develop / App Studio + dépôts */
-        global.__dcsPiAuthScopes = "username,payments";
-        return Pi.authenticate(["username", "payments"], onIncompletePaymentFound);
+        /* Scope username uniquement (exigence App Studio GenAI) */
+        global.__dcsPiAuthScopes = "username";
+        return Pi.authenticate(["username"], onIncompletePaymentFound);
       })
       .then(function (auth) {
         if (auth) global.__dcsPiAuthResult = auth;
