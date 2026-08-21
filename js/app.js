@@ -3812,10 +3812,8 @@
   }
 
   /**
-   * Exigence App Studio Verify uniquement :
-   * Pi.init → Pi.authenticate → Allow/Decline natif.
-   * Puis obligatoirement rester dans App Studio (fermer la page Verify).
-   * Doc Pi : scopes ["username","payments"].
+   * Exigence App Studio : au TAP → Pi.authenticate → Allow/Decline natif.
+   * Sans TAP, Pi n’affiche souvent pas Allow/Decline.
    */
   async function runAppStudioSignIn(errEl) {
     if (!window.DCS || !DCS.pi) {
@@ -3824,30 +3822,15 @@
     }
     try {
       lockToAppStudio();
-      if (!document.getElementById("dcs-app-studio-hide")) {
-        var hideStyle = document.createElement("style");
-        hideStyle.id = "dcs-app-studio-hide";
-        hideStyle.textContent =
-          "html[data-dcs-app-studio='1'] body > *:not(#dcs-pi-auth-gate){visibility:hidden!important;pointer-events:none!important}" +
-          "html[data-dcs-app-studio='1'],html[data-dcs-app-studio='1'] body{background:#0b0d14!important}";
-        (document.head || document.documentElement).appendChild(hideStyle);
-      }
-      var gate = document.getElementById("dcs-pi-auth-gate");
-      if (!gate) {
-        gate = document.createElement("div");
-        gate.id = "dcs-pi-auth-gate";
-        gate.setAttribute("data-app-studio", "1");
-        gate.style.cssText =
-          "position:fixed;inset:0;z-index:99999;background:#0b0d14;";
-        document.body.appendChild(gate);
-      }
       await DCS.pi.init();
       var auth = await DCS.pi.authenticate(["username", "payments"]);
       if (DCS.pi.sessionFromPiAuth) {
         DCS.pi.sessionFromPiAuth(auth).catch(function () {});
       }
-      /* Obligatoire : ne pas rester sur DCS / autre onglet — revenir à App Studio */
-      returnToAppStudioTab();
+      /* Après Allow uniquement — laisser App Studio détecter, puis rester dans App Studio */
+      setTimeout(function () {
+        returnToAppStudioTab();
+      }, 1200);
       return { ok: true, stayed: true };
     } catch (e) {
       showPiLoginError(errEl, (e && e.message) || String(e));
@@ -3903,7 +3886,7 @@
         return result || { ok: false };
       }
       if (isAppStudioLock()) {
-        returnToAppStudioTab();
+        setTimeout(returnToAppStudioTab, 1200);
         return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
@@ -3934,10 +3917,13 @@
     });
   }
 
-  /** App Studio Verify : lancer tout de suite Pi.authenticate (Allow/Decline). */
+  /**
+   * Affiche un seul bouton : le TAP ouvre Allow / Decline (exigence Pi).
+   * Pas d’auth auto au chargement (sinon souvent pas de fenêtre Allow).
+   */
   function showPiAuthGate(errEl) {
     if (!isEcosystemMode()) return;
-    if (window.__dcsAppStudioSignInStarted) return;
+    if (document.getElementById("dcs-pi-auth-gate")) return;
     try {
       var q0 = new URLSearchParams(location.search || "");
       if (q0.get("pi_ok") === "1" && isLoggedIn()) return;
@@ -3945,9 +3931,69 @@
     if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
       return;
     }
-    window.__dcsAppStudioSignInStarted = true;
+
     lockToAppStudio();
-    runAppStudioSignIn(errEl);
+    if (!document.getElementById("dcs-app-studio-hide")) {
+      var hideStyle = document.createElement("style");
+      hideStyle.id = "dcs-app-studio-hide";
+      hideStyle.textContent =
+        "html[data-dcs-app-studio='1'] body > *:not(#dcs-pi-auth-gate){visibility:hidden!important;pointer-events:none!important}" +
+        "html[data-dcs-app-studio='1'],html[data-dcs-app-studio='1'] body{background:#0b0d14!important}";
+      (document.head || document.documentElement).appendChild(hideStyle);
+    }
+
+    var gate = document.createElement("div");
+    gate.id = "dcs-pi-auth-gate";
+    gate.setAttribute("data-app-studio", "1");
+    gate.style.cssText =
+      "position:fixed;inset:0;z-index:99999;background:#0b0d14;display:flex;align-items:center;justify-content:center;padding:1.25rem;box-sizing:border-box;";
+    gate.innerHTML =
+      '<div style="max-width:18rem;width:100%;text-align:center;font-family:system-ui,sans-serif">' +
+      '<button type="button" id="dcs-pi-auth-gate-btn" style="width:100%;min-height:3.25rem;font-size:1.1rem;font-weight:700;border:0;border-radius:10px;background:#703dd6;color:#fff;cursor:pointer">Allow / Decline</button>' +
+      '<p id="dcs-pi-auth-gate-status" style="margin:.9rem 0 0;font-size:.85rem;color:#9aa3b5;min-height:1.2em"></p>' +
+      "</div>";
+    document.body.appendChild(gate);
+
+    if (DCS.pi && typeof DCS.pi.init === "function") {
+      DCS.pi.init().catch(function () {});
+    }
+
+    var btn = document.getElementById("dcs-pi-auth-gate-btn");
+    var st = document.getElementById("dcs-pi-auth-gate-status");
+    if (!btn) return;
+
+    btn.addEventListener("click", async function () {
+      btn.disabled = true;
+      btn.textContent = "…";
+      if (st) {
+        st.style.color = "#9aa3b5";
+        st.textContent = "Choisissez Allow ou Decline";
+      }
+      try {
+        var result = await runAppStudioSignIn(errEl);
+        if (result && result.ok) {
+          if (st) {
+            st.style.color = "#3dd68c";
+            st.textContent = "OK — App Studio";
+          }
+          return;
+        }
+        if (st) {
+          st.style.color = "#f0c14b";
+          st.textContent =
+            (result && result.error) || "Touchez à nouveau pour Allow / Decline";
+        }
+        btn.disabled = false;
+        btn.textContent = "Allow / Decline";
+      } catch (e) {
+        if (st) {
+          st.style.color = "#f6465d";
+          st.textContent = (e && e.message) || "Échec";
+        }
+        btn.disabled = false;
+        btn.textContent = "Allow / Decline";
+      }
+    });
   }
 
   function maybeAutoPiLogin(errEl) {
