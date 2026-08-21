@@ -3827,22 +3827,18 @@
         if (gateEl) {
           gateEl.innerHTML =
             '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
-            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Connecté</p>" +
-            "<p style=\"margin:0;opacity:.9;line-height:1.4\">Auth Pi OK. Retour à App Studio pour terminer Verify…</p>" +
+            "<p style=\"font-size:1.1rem;font-weight:700;margin:0 0 .75rem\">Connecté ✓</p>" +
+            "<p style=\"margin:0 0 1rem;opacity:.9;line-height:1.4\">Auth Pi réussie. Revenez à <strong>App Studio</strong> (bouton retour Pi Browser) pour terminer Verify.</p>" +
+            '<button type="button" id="dcs-pi-auth-gate-close" class="btn btn-gold" style="width:100%">OK</button>' +
             "</div>";
-        }
-        /* Recharger la MÊME URL (session active) — sans changer de domaine / quitter le flux */
-        setTimeout(function () {
-          try {
-            var u = new URL(location.href);
-            u.searchParams.delete("force_pi_auth");
-            u.searchParams.delete("logout");
-            u.searchParams.set("pi_ok", "1");
-            location.replace(u.pathname + u.search + u.hash);
-          } catch (eRel) {
-            location.reload();
+          var closeBtn = document.getElementById("dcs-pi-auth-gate-close");
+          if (closeBtn) {
+            closeBtn.addEventListener("click", function () {
+              gateEl.remove();
+            });
           }
-        }, 900);
+        }
+        /* Aucune navigation / reload — rester dans la même WebView */
         return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
