@@ -3781,7 +3781,94 @@
       if (DCS.pi && typeof DCS.pi.init === "function") {
         await DCS.pi.init();
       }
-      const result = await Promise.race([
+      /*
+       * App Studio Verify : détecte Pi.authenticate sur la page ouverte.
+       * Ordre critique — (1) Allow (2) laisser ~2s pour que Verify passe
+       * à « connecté » (3) session DCS (4) history.back vers App Studio.
+       * Un retour trop tôt = Allow OK mais Verify reste « pas connecté ».
+       */
+      var stay = false;
+      try {
+        var qp = new URLSearchParams(location.search || "");
+        stay =
+          qp.get("stay") === "1" ||
+          qp.get("verify") === "1" ||
+          qp.get("force_pi_auth") === "1" ||
+          !!document.getElementById("dcs-pi-auth-gate");
+      } catch (eStay) {}
+
+      var result;
+      if (
+        stay &&
+        DCS.pi &&
+        typeof DCS.pi.authenticate === "function" &&
+        typeof DCS.pi.sessionFromPiAuth === "function"
+      ) {
+        var gateEl = document.getElementById("dcs-pi-auth-gate");
+        function setGateMsg(title, sub) {
+          if (!gateEl) return;
+          gateEl.innerHTML =
+            '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
+            '<p style="font-size:1.1rem;font-weight:700;margin:0 0 .5rem">' +
+            title +
+            "</p>" +
+            (sub
+              ? '<p style="margin:0;opacity:.85;line-height:1.4;font-size:.92rem">' +
+                sub +
+                "</p>"
+              : "") +
+            "</div>";
+        }
+        try {
+          sessionStorage.removeItem("dcs_pi_auto_auth");
+        } catch (eSs) {}
+        var auth = await Promise.race([
+          DCS.pi.authenticate(["username"]),
+          new Promise(function (_, reject) {
+            setTimeout(function () {
+              reject(new Error("Délai Allow dépassé. Réessayez Verify."));
+            }, 90000);
+          })
+        ]);
+        setGateMsg(
+          "Auth Pi OK…",
+          "Patientez : App Studio enregistre la connexion."
+        );
+        await new Promise(function (r) {
+          setTimeout(r, 2200);
+        });
+        result = await DCS.pi.sessionFromPiAuth(auth);
+        if (!result || !result.ok) {
+          showPiLoginError(
+            errEl,
+            (result && result.error) || "Session DCS impossible après Allow."
+          );
+          return result || { ok: false };
+        }
+        try {
+          if (DCS.auth && typeof DCS.auth.hydrate === "function") {
+            await DCS.auth.hydrate();
+          }
+        } catch (eHyd) {}
+        try {
+          updateAuthNav();
+        } catch (eNav) {}
+        setGateMsg("Connecté ✓", "Retour App Studio…");
+        setTimeout(function () {
+          try {
+            if (window.history && window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+          } catch (eBack) {}
+          try {
+            window.close();
+          } catch (eClose) {}
+        }, 400);
+        return { ok: true, stayed: true };
+      }
+
+      result = await Promise.race([
         DCS.auth.loginWithPi(),
         new Promise(function (resolve) {
           setTimeout(function () {
@@ -3800,56 +3887,6 @@
             "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser."
         );
         return result || { ok: false };
-      }
-      /*
-       * App Studio Verify : après Allow, revenir IMMÉDIATEMENT à App Studio
-       * (history.back) — ne pas rester sur DCS ni rediriger vers wallet/home.
-       */
-      var stay = false;
-      try {
-        var qp = new URLSearchParams(location.search || "");
-        stay =
-          qp.get("stay") === "1" ||
-          qp.get("verify") === "1" ||
-          qp.get("force_pi_auth") === "1" ||
-          !!document.getElementById("dcs-pi-auth-gate");
-      } catch (eStay) {}
-      if (stay) {
-        try {
-          if (DCS.auth && typeof DCS.auth.hydrate === "function") {
-            await DCS.auth.hydrate();
-          }
-        } catch (eHyd) {}
-        try {
-          updateAuthNav();
-        } catch (eNav) {}
-        var gateEl = document.getElementById("dcs-pi-auth-gate");
-        if (gateEl) {
-          gateEl.innerHTML =
-            '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
-            "<p style=\"font-size:1.1rem;font-weight:700;margin:0\">Retour App Studio…</p>" +
-            "</div>";
-        }
-        /* Laisser le SDK signaler l’auth, puis revenir à App Studio */
-        setTimeout(function () {
-          try {
-            if (window.history && window.history.length > 1) {
-              window.history.back();
-              return;
-            }
-          } catch (eBack) {}
-          try {
-            window.close();
-          } catch (eClose) {}
-          if (gateEl) {
-            gateEl.innerHTML =
-              '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;padding:1.25rem">' +
-              "<p style=\"font-size:1.05rem;font-weight:700;margin:0 0 .75rem\">Connecté ✓</p>" +
-              "<p style=\"margin:0;opacity:.9;line-height:1.4\">Utilisez le bouton retour du Pi Browser pour App Studio.</p>" +
-              "</div>";
-          }
-        }, 250);
-        return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
       return { ok: true };

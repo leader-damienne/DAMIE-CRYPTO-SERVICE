@@ -149,6 +149,68 @@
   }
 
   /**
+   * Échange accessToken Pi → session Supabase DCS (après Pi.authenticate).
+   */
+  function sessionFromPiAuth(auth) {
+    global.__dcsPiAuthResult = null;
+    global.__dcsPiAuthScopes = null;
+    var accessToken = auth && (auth.accessToken || auth.access_token);
+    if (!accessToken) {
+      return Promise.resolve({
+        ok: false,
+        error: "Jeton Pi manquant après authentification."
+      });
+    }
+    return fetch(functionsUrl("pi-auth"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: cfg().supabaseAnonKey || ""
+      },
+      body: JSON.stringify({
+        accessToken: accessToken,
+        uid: auth.user && auth.user.uid,
+        username: auth.user && auth.user.username,
+        referred_by: (function () {
+          try {
+            var r = localStorage.getItem("dcs_ref") || "";
+            return r && r !== "—" ? r.replace(/^@+/, "") : "";
+          } catch (e) {
+            return "";
+          }
+        })()
+      })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data.ok) {
+          return {
+            ok: false,
+            error: (data && data.error) || "Connexion Pi refusée (" + res.status + ")"
+          };
+        }
+        if (!DCS.backend || !DCS.backend.client) {
+          return { ok: false, error: "Backend DCS non prêt. Rechargez la page." };
+        }
+        return DCS.backend.client.auth
+          .setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token
+          })
+          .then(function (sess) {
+            if (sess.error) {
+              return { ok: false, error: sess.error.message || "Session impossible." };
+            }
+            return DCS.auth.hydrate().then(function (ok) {
+              return ok
+                ? { ok: true, user: data.user }
+                : { ok: false, error: "Profil DCS introuvable après login Pi." };
+            });
+          });
+      });
+    });
+  }
+
+  /**
    * Connexion DCS via Pi Authentication.
    * Le backend (pi-auth) valide le accessToken avec GET /v2/me
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
@@ -161,61 +223,7 @@
     global.__dcsPiAuthResult = null;
     global.__dcsEarlyPiAuthInFlight = null;
     return authenticate(["username"])
-      .then(function (auth) {
-        global.__dcsPiAuthResult = null;
-        global.__dcsPiAuthScopes = null;
-        var accessToken = auth && (auth.accessToken || auth.access_token);
-        if (!accessToken) {
-          return { ok: false, error: "Jeton Pi manquant après authentification." };
-        }
-        return fetch(functionsUrl("pi-auth"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: cfg().supabaseAnonKey || ""
-          },
-          body: JSON.stringify({
-            accessToken: accessToken,
-            uid: auth.user && auth.user.uid,
-            username: auth.user && auth.user.username,
-            referred_by: (function () {
-              try {
-                var r = localStorage.getItem("dcs_ref") || "";
-                return r && r !== "—" ? r.replace(/^@+/, "") : "";
-              } catch (e) {
-                return "";
-              }
-            })()
-          })
-        }).then(function (res) {
-          return res.json().then(function (data) {
-            if (!res.ok || !data.ok) {
-              return {
-                ok: false,
-                error: (data && data.error) || "Connexion Pi refusée (" + res.status + ")"
-              };
-            }
-            if (!DCS.backend || !DCS.backend.client) {
-              return { ok: false, error: "Backend DCS non prêt. Rechargez la page." };
-            }
-            return DCS.backend.client.auth
-              .setSession({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token
-              })
-              .then(function (sess) {
-                if (sess.error) {
-                  return { ok: false, error: sess.error.message || "Session impossible." };
-                }
-                return DCS.auth.hydrate().then(function (ok) {
-                  return ok
-                    ? { ok: true, user: data.user }
-                    : { ok: false, error: "Profil DCS introuvable après login Pi." };
-                });
-              });
-          });
-        });
-      })
+      .then(sessionFromPiAuth)
       .catch(function (err) {
         var msg = (err && err.message) || String(err);
         if (/Pi Browser|indisponible|not available|undefined|sdk\.minepi/i.test(msg) || !global.Pi) {
@@ -335,6 +343,7 @@
   DCS.pi = {
     init: initPi,
     authenticate: authenticate,
+    sessionFromPiAuth: sessionFromPiAuth,
     loginWithPi: loginWithPi,
     depositWithPi: depositWithPi,
     isAvailable: isPiBrowser,
