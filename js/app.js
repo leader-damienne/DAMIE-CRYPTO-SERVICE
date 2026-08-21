@@ -3797,23 +3797,15 @@
     } catch (eClick) {}
   }
 
-  /** Après Allow : quitter la page Verify pour rester dans l’onglet App Studio. */
+  /** Après Allow : NE PAS history.back / close — ça fait recommencer App Studio à zéro. */
   function returnToAppStudioTab() {
-    setTimeout(function () {
-      try {
-        window.close();
-      } catch (e0) {}
-      try {
-        if (window.history && window.history.length > 1) {
-          window.history.back();
-        }
-      } catch (e1) {}
-    }, 400);
+    /* no-op volontaire : App Studio doit détecter l’auth et continuer dans le même flux */
   }
 
   /**
    * Exigence App Studio : au TAP → Pi.authenticate → Allow/Decline natif.
    * Sans TAP, Pi n’affiche souvent pas Allow/Decline.
+   * Après Allow : rester ici (pas de retour navigateur = pas de reset App Studio).
    */
   async function runAppStudioSignIn(errEl) {
     if (!window.DCS || !DCS.pi) {
@@ -3827,10 +3819,6 @@
       if (DCS.pi.sessionFromPiAuth) {
         DCS.pi.sessionFromPiAuth(auth).catch(function () {});
       }
-      /* Après Allow uniquement — laisser App Studio détecter, puis rester dans App Studio */
-      setTimeout(function () {
-        returnToAppStudioTab();
-      }, 1200);
       return { ok: true, stayed: true };
     } catch (e) {
       showPiLoginError(errEl, (e && e.message) || String(e));
@@ -3974,7 +3962,7 @@
         if (result && result.ok) {
           if (st) {
             st.style.color = "#3dd68c";
-            st.textContent = "OK — App Studio";
+            st.textContent = "Connecté — restez ici, App Studio continue";
           }
           return;
         }
