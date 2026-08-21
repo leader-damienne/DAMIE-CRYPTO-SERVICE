@@ -3860,18 +3860,14 @@
         try {
           updateAuthNav();
         } catch (eNav) {}
-        setGateMsg("Connecté", "Retour App Studio…");
-        setTimeout(function () {
-          try {
-            if (window.history && window.history.length > 1) {
-              window.history.back();
-              return;
-            }
-          } catch (eBack) {}
-          try {
-            window.close();
-          } catch (eClose) {}
-        }, 400);
+        /*
+         * Aucun history.back / reload / redirect : l’aller-retour sort d’App Studio.
+         * On reste sur le pont ; App Studio doit marquer « connecté » tout seul.
+         */
+        setGateMsg(
+          "Connecté",
+          "Ne quittez pas. App Studio valide la connexion ici."
+        );
         return { ok: true, stayed: true };
       }
 
@@ -3972,7 +3968,7 @@
     gate.innerHTML =
       '<div style="max-width:20rem;width:100%;text-align:center;color:#fff;font-family:system-ui,sans-serif">' +
       "<p style=\"margin:0 0 .5rem;font-size:1.05rem;font-weight:700\">App Studio</p>" +
-      "<p style=\"margin:0 0 1.25rem;font-size:.9rem;opacity:.8;line-height:1.4\">Touchez Continuer, puis <strong>Allow</strong>.</p>" +
+      "<p style=\"margin:0 0 1.25rem;font-size:.9rem;opacity:.8;line-height:1.4\">Touchez Continuer, puis <strong>Allow</strong>. Restez sur cet écran.</p>" +
       '<button type="button" id="dcs-pi-auth-gate-btn" style="width:100%;min-height:3rem;font-size:1.05rem;font-weight:700;border:0;border-radius:10px;background:#703dd6;color:#fff;cursor:pointer">Continuer</button>' +
       '<p id="dcs-pi-auth-gate-status" style="margin:1rem 0 0;font-size:.85rem;color:#f6465d;min-height:1.2em"></p>' +
       "</div>";
