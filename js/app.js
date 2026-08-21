@@ -3829,34 +3829,39 @@
     });
   }
 
-  /** Auth Pi auto au chargement (App Studio) — une fois / session si Pi Browser. */
+  /** Auth Pi auto au chargement — App Studio Verify doit voir Pi.authenticate. */
   function maybeAutoPiLogin(errEl) {
-    if (!isEcosystemMode() || isLoggedIn()) return;
-    if (
-      !document.getElementById("pi-login-btn") &&
-      !document.getElementById("pi-login-btn-header")
-    ) {
-      return;
-    }
-    try {
-      if (sessionStorage.getItem("dcs_pi_auto_auth") === "1") return;
-    } catch (e) {}
+    if (!isEcosystemMode()) return;
+    if (window.__dcsPiAutoAuthStarted) return;
+    window.__dcsPiAutoAuthStarted = true;
+
     var ua = navigator.userAgent || "";
     var inPi =
       /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
       !!(window.Pi && typeof window.Pi.init === "function");
     if (!inPi) return;
-    try {
-      sessionStorage.setItem("dcs_pi_auto_auth", "1");
-    } catch (e2) {}
-    setTimeout(function () {
-      if (isLoggedIn()) return;
-      runPiLoginFlow(
-        errEl,
-        document.getElementById("pi-login-btn") ||
-          document.getElementById("pi-login-btn-header")
-      );
-    }, 600);
+
+    setTimeout(async function () {
+      try {
+        if (!DCS.pi || typeof DCS.pi.init !== "function") return;
+        await DCS.pi.init();
+        /*
+         * Toujours appeler authenticate (même si déjà connecté DCS).
+         * Sinon App Studio affiche : "We didn't detect a Pi sign-in".
+         */
+        if (isLoggedIn()) {
+          await DCS.pi.authenticate(["username", "payments"]);
+          return;
+        }
+        await runPiLoginFlow(
+          errEl,
+          document.getElementById("pi-login-btn") ||
+            document.getElementById("pi-login-btn-header")
+        );
+      } catch (e) {
+        /* Annulation utilisateur / hors Pi Browser — silencieux */
+      }
+    }, 50);
   }
 
   function setupSignup() {
@@ -4325,13 +4330,13 @@
     if (isSignup) setupSignup();
     if (isSignin || document.getElementById("pi-login-btn")) setupSignin();
 
-    /* Bouton + auto-auth Pi sur toutes les pages (invité / ecosystem) */
-    if (isEcosystemMode() && !isLoggedIn()) {
+    /* Auth Pi au chargement (même si déjà connecté DCS) — requis pour App Studio Verify */
+    if (isEcosystemMode()) {
       const piErr =
         document.getElementById("signin-error") ||
         document.getElementById("signup-error") ||
         null;
-      setupPiLoginButton(piErr);
+      if (!isLoggedIn()) setupPiLoginButton(piErr);
       if (!isSignin && !isSignup) maybeAutoPiLogin(piErr);
     }
 

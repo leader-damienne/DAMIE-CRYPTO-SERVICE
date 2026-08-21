@@ -154,7 +154,7 @@
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
    */
   function loginWithPi() {
-    return authenticate(["username"])
+    return authenticate(["username", "payments"])
       .then(function (auth) {
         var accessToken = auth && (auth.accessToken || auth.access_token);
         if (!accessToken) {
