@@ -3835,22 +3835,16 @@
     if (window.__dcsPiAutoAuthStarted) return;
     window.__dcsPiAutoAuthStarted = true;
 
-    var ua = navigator.userAgent || "";
-    var inPi =
-      /PiBrowser|PiNetwork|pinetwork/i.test(ua) ||
-      !!(window.Pi && typeof window.Pi.init === "function");
-    if (!inPi) return;
-
+    /* Toujours tenter : App Studio fournit window.Pi même hors UA PiBrowser */
     setTimeout(async function () {
       try {
+        if (DCS.pi && typeof DCS.pi.startEarlyPiAuth === "function") {
+          DCS.pi.startEarlyPiAuth();
+        }
         if (!DCS.pi || typeof DCS.pi.init !== "function") return;
         await DCS.pi.init();
-        /*
-         * Toujours appeler authenticate (même si déjà connecté DCS).
-         * Sinon App Studio affiche : "We didn't detect a Pi sign-in".
-         */
         if (isLoggedIn()) {
-          await DCS.pi.authenticate(["username", "payments"]);
+          await DCS.pi.authenticate(["username"]);
           return;
         }
         await runPiLoginFlow(
@@ -3859,9 +3853,9 @@
             document.getElementById("pi-login-btn-header")
         );
       } catch (e) {
-        /* Annulation utilisateur / hors Pi Browser — silencieux */
+        /* Annulation utilisateur — silencieux */
       }
-    }, 50);
+    }, 0);
   }
 
   function setupSignup() {
@@ -4280,6 +4274,12 @@
 
   async function boot() {
     detectPiBrowser();
+    /* Auth Pi immédiatement — avant hydrate (App Studio Verify) */
+    try {
+      if (window.DCS && DCS.pi && typeof DCS.pi.startEarlyPiAuth === "function") {
+        DCS.pi.startEarlyPiAuth();
+      }
+    } catch (eEarlyBoot) {}
     /* Timeouts courts : l'UI ne doit pas attendre des réseaux lents (PiNet / CDN) */
     var BOOT_WAIT_MS = 3000;
     try {
@@ -4307,6 +4307,17 @@
     setupLanguage();
     updateAuthNav();
     const page = pageName();
+
+    /* Auth Pi avant requireAuth (App Studio ouvre souvent l’URL racine / pages protégées) */
+    if (isEcosystemMode()) {
+      const piErrEarly =
+        document.getElementById("signin-error") ||
+        document.getElementById("signup-error") ||
+        null;
+      if (!isLoggedIn()) setupPiLoginButton(piErrEarly);
+      maybeAutoPiLogin(piErrEarly);
+    }
+
     if (!requireAuth(page)) return;
 
     if (document.getElementById("ticker-track")) {
@@ -4329,16 +4340,6 @@
 
     if (isSignup) setupSignup();
     if (isSignin || document.getElementById("pi-login-btn")) setupSignin();
-
-    /* Auth Pi au chargement (même si déjà connecté DCS) — requis pour App Studio Verify */
-    if (isEcosystemMode()) {
-      const piErr =
-        document.getElementById("signin-error") ||
-        document.getElementById("signup-error") ||
-        null;
-      if (!isLoggedIn()) setupPiLoginButton(piErr);
-      if (!isSignin && !isSignup) maybeAutoPiLogin(piErr);
-    }
 
     if (isHome && document.getElementById("markets-body")) {
       renderPiSpotlight();

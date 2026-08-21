@@ -154,7 +154,11 @@
    * Authorization: Bearer <accessToken> — pas de PI_API_KEY pour ce flux.
    */
   function loginWithPi() {
-    return authenticate(["username", "payments"])
+    var authPromise = global.__dcsPiAuthResult
+      ? Promise.resolve(global.__dcsPiAuthResult)
+      : authenticate(["username"]);
+    global.__dcsPiAuthResult = null;
+    return authPromise
       .then(function (auth) {
         var accessToken = auth && (auth.accessToken || auth.access_token);
         if (!accessToken) {
@@ -218,6 +222,25 @@
         }
         return { ok: false, error: msg };
       });
+  }
+
+  /**
+   * App Studio Verify : appeler Pi.authenticate dès que possible (avant le boot UI).
+   * await Pi.init puis authenticate(["username"]).
+   */
+  function startEarlyPiAuth() {
+    if (!ecosystemMode()) return;
+    if (global.__dcsEarlyPiAuthStarted) return;
+    global.__dcsEarlyPiAuthStarted = true;
+    initPi()
+      .then(function (Pi) {
+        if (!Pi || typeof Pi.authenticate !== "function") return null;
+        return Pi.authenticate(["username"], onIncompletePaymentFound);
+      })
+      .then(function (auth) {
+        if (auth) global.__dcsPiAuthResult = auth;
+      })
+      .catch(function () {});
   }
 
   function depositWithPi(amount) {
@@ -320,6 +343,12 @@
     depositWithPi: depositWithPi,
     isAvailable: isPiBrowser,
     ecosystemMode: ecosystemMode,
-    callBackend: callPiBackend
+    callBackend: callPiBackend,
+    startEarlyPiAuth: startEarlyPiAuth
   };
+
+  /* Déclencher immédiatement (App Studio "Waiting for sign-in…") */
+  try {
+    startEarlyPiAuth();
+  } catch (eEarly) {}
 })(typeof window !== "undefined" ? window : this);
