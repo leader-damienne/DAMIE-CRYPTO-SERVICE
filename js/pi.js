@@ -136,10 +136,10 @@
     });
   }
 
-  /** Auth Pi — scopes défaut: username (App Studio). Paiements: passer ["username","payments"]. */
+  /** Auth Pi — doc Pi : scopes au minimum ["username","payments"]. */
   function authenticate(scopes) {
     var sc =
-      scopes && scopes.length ? scopes : ["username"];
+      scopes && scopes.length ? scopes : ["username", "payments"];
     return initPi().then(function (Pi) {
       if (!Pi || typeof Pi.authenticate !== "function") {
         throw new Error("Ouvrez DCS dans le Pi Browser pour vous connecter avec Pi.");
