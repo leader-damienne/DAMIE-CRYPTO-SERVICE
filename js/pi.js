@@ -229,42 +229,14 @@
   }
 
   /**
-   * App Studio Verify : forcer Pi.authenticate (consentement utilisateur).
-   * Retries si le SDK n’est pas prêt tout de suite.
+   * Ne pas auto-appeler authenticate sans TAP (sinon pas de fenêtre Allow).
+   * L’overlay « Autoriser avec Pi » dans app.js déclenche authenticate.
    */
   function startEarlyPiAuth() {
     if (!ecosystemMode()) return Promise.resolve(null);
-    if (global.__dcsEarlyPiAuthInFlight) return global.__dcsEarlyPiAuthInFlight;
-
-    function attempt(n) {
-      return initPi()
-        .then(function (Pi) {
-          if (!Pi || typeof Pi.authenticate !== "function") {
-            throw new Error("SDK Pi indisponible");
-          }
-          global.__dcsPiAuthScopes = "username";
-          return Pi.authenticate(["username"], onIncompletePaymentFound);
-        })
-        .then(function (auth) {
-          if (auth) global.__dcsPiAuthResult = auth;
-          return auth;
-        })
-        .catch(function (err) {
-          if (n < 4) {
-            return new Promise(function (resolve) {
-              setTimeout(function () {
-                resolve(attempt(n + 1));
-              }, 700 * n);
-            });
-          }
-          global.__dcsPiAuthLastError = (err && err.message) || String(err);
-          return null;
-        });
-    }
-
-    global.__dcsEarlyPiAuthStarted = true;
-    global.__dcsEarlyPiAuthInFlight = attempt(1);
-    return global.__dcsEarlyPiAuthInFlight;
+    return initPi().catch(function () {
+      return null;
+    });
   }
 
   function depositWithPi(amount) {

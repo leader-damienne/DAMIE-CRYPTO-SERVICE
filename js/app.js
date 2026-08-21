@@ -3829,34 +3829,75 @@
     });
   }
 
-  /** Auth Pi auto au chargement — App Studio Verify doit voir Pi.authenticate. */
+  /** Overlay obligatoire : un TAP lance Pi.authenticate (sinon pas de fenêtre Allow). */
+  function showPiAuthGate(errEl) {
+    if (!isEcosystemMode()) return;
+    if (document.getElementById("dcs-pi-auth-gate")) return;
+    if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
+      /* hors Pi Browser : pas d’overlay */
+      return;
+    }
+
+    const gate = document.createElement("div");
+    gate.id = "dcs-pi-auth-gate";
+    gate.setAttribute("role", "dialog");
+    gate.style.cssText =
+      "position:fixed;inset:0;z-index:99999;background:rgba(8,10,18,.92);display:flex;align-items:center;justify-content:center;padding:1.25rem;box-sizing:border-box;";
+    gate.innerHTML =
+      '<div style="max-width:22rem;width:100%;text-align:center;color:#fff;font-family:inherit">' +
+      "<p style=\"margin:0 0 .75rem;font-size:1.15rem;font-weight:700\">Autorisation Pi requise</p>" +
+      "<p style=\"margin:0 0 1.25rem;font-size:.92rem;opacity:.85;line-height:1.4\">Touchez le bouton pour ouvrir la demande d’autorisation Pi (Allow). Nécessaire pour App Studio Verify.</p>" +
+      '<button type="button" id="dcs-pi-auth-gate-btn" class="btn btn-gold" style="width:100%;min-height:3rem;font-size:1.05rem">Autoriser avec Pi</button>' +
+      '<p id="dcs-pi-auth-gate-status" style="margin:1rem 0 0;font-size:.85rem;color:#f6465d;min-height:1.2em"></p>' +
+      "</div>";
+    document.body.appendChild(gate);
+
+    const btn = document.getElementById("dcs-pi-auth-gate-btn");
+    const st = document.getElementById("dcs-pi-auth-gate-status");
+    if (!btn) return;
+
+    btn.addEventListener("click", async function () {
+      btn.disabled = true;
+      btn.textContent = "Ouverture Pi…";
+      if (st) st.textContent = "";
+      try {
+        /* Un seul flux : authenticate au TAP (consentement Allow) */
+        const result = await runPiLoginFlow(errEl, btn);
+        if (result && result.ok) {
+          gate.remove();
+          return;
+        }
+        if (st) {
+          st.style.color = "#f0c14b";
+          st.textContent =
+            "Si la fenêtre Pi s’est ouverte, acceptez Allow puis Verify dans App Studio. " +
+            ((result && result.error) || "");
+        }
+        btn.disabled = false;
+        btn.textContent = "Autoriser avec Pi";
+      } catch (e) {
+        if (st) {
+          st.style.color = "#f6465d";
+          st.textContent =
+            (e && e.message) || "Échec. Touchez à nouveau pour autoriser.";
+        }
+        btn.disabled = false;
+        btn.textContent = "Autoriser avec Pi";
+        showPiLoginError(errEl, (e && e.message) || String(e));
+      }
+    });
+  }
+
+  /** Auth Pi auto : overlay + TAP (App Studio a besoin du consentement). */
   function maybeAutoPiLogin(errEl) {
     if (!isEcosystemMode()) return;
     if (window.__dcsPiAutoAuthStarted) return;
     window.__dcsPiAutoAuthStarted = true;
-
-    setTimeout(async function () {
-      try {
-        if (!DCS.pi || typeof DCS.pi.init !== "function") return;
-        await DCS.pi.init();
-        if (isLoggedIn()) {
-          await DCS.pi.authenticate(["username"]);
-          return;
-        }
-        /* runPiLoginFlow appelle toujours Pi.authenticate → fenêtre Allow */
-        await runPiLoginFlow(
-          errEl,
-          document.getElementById("pi-login-btn") ||
-            document.getElementById("pi-login-btn-header")
-        );
-      } catch (e) {
-        showPiLoginError(
-          errEl,
-          (e && e.message) ||
-            "Autorisation Pi non affichée. Touchez « Connexion Pi » puis Allow."
-        );
-      }
-    }, 400);
+    /* Préparer le SDK, mais l’auth se fait au TAP sur l’overlay */
+    if (DCS.pi && typeof DCS.pi.init === "function") {
+      DCS.pi.init().catch(function () {});
+    }
+    showPiAuthGate(errEl);
   }
 
   function setupSignup() {
