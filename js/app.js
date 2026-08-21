@@ -3729,7 +3729,7 @@
     if (isPublicPage(p)) return true;
     if (isLoggedIn()) return true;
     /* Pi / App Studio : rester sur l’URL ouverte — pas de redirect vers signin */
-    if (isEcosystemMode()) return false;
+    if (isEcosystemMode() || isAppStudioLock()) return false;
     const next = encodeURIComponent(p);
     window.location.replace("signin.html?next=" + next);
     return false;
@@ -3768,11 +3768,54 @@
     } catch (e) {}
   }
 
+  function isAppStudioLock() {
+    return (
+      window.__dcsAppStudioLock === true ||
+      document.documentElement.getAttribute("data-dcs-app-studio") === "1"
+    );
+  }
+
+  /** Interdit toute navigation DCS — rester dans App Studio uniquement. */
+  function lockToAppStudio() {
+    window.__dcsAppStudioLock = true;
+    document.documentElement.setAttribute("data-dcs-app-studio", "1");
+    try {
+      if (window.__dcsAppStudioNavBlock) return;
+      window.__dcsAppStudioNavBlock = true;
+      document.addEventListener(
+        "click",
+        function (e) {
+          if (!isAppStudioLock()) return;
+          var a = e.target && e.target.closest && e.target.closest("a[href]");
+          if (a) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        },
+        true
+      );
+    } catch (eClick) {}
+  }
+
+  /** Après Allow : quitter la page Verify pour rester dans l’onglet App Studio. */
+  function returnToAppStudioTab() {
+    setTimeout(function () {
+      try {
+        window.close();
+      } catch (e0) {}
+      try {
+        if (window.history && window.history.length > 1) {
+          window.history.back();
+        }
+      } catch (e1) {}
+    }, 400);
+  }
+
   /**
    * Exigence App Studio Verify uniquement :
    * Pi.init → Pi.authenticate → Allow/Decline natif.
-   * Rien d’autre (pas de redirect, pas d’autre onglet, pas d’UI DCS).
-   * Doc Pi : scopes au minimum ["username","payments"] hors pi-sdk-react.
+   * Puis obligatoirement rester dans App Studio (fermer la page Verify).
+   * Doc Pi : scopes ["username","payments"].
    */
   async function runAppStudioSignIn(errEl) {
     if (!window.DCS || !DCS.pi) {
@@ -3780,7 +3823,7 @@
       return { ok: false };
     }
     try {
-      document.documentElement.setAttribute("data-dcs-app-studio", "1");
+      lockToAppStudio();
       if (!document.getElementById("dcs-app-studio-hide")) {
         var hideStyle = document.createElement("style");
         hideStyle.id = "dcs-app-studio-hide";
@@ -3800,10 +3843,11 @@
       }
       await DCS.pi.init();
       var auth = await DCS.pi.authenticate(["username", "payments"]);
-      /* Session DCS en fond — App Studio n’exige que authenticate */
       if (DCS.pi.sessionFromPiAuth) {
         DCS.pi.sessionFromPiAuth(auth).catch(function () {});
       }
+      /* Obligatoire : ne pas rester sur DCS / autre onglet — revenir à App Studio */
+      returnToAppStudioTab();
       return { ok: true, stayed: true };
     } catch (e) {
       showPiLoginError(errEl, (e && e.message) || String(e));
@@ -3822,10 +3866,7 @@
       return { ok: false };
     }
     /* App Studio / Verify : uniquement l’exigence Pi (Allow/Decline) */
-    if (
-      document.documentElement.getAttribute("data-dcs-app-studio") === "1" ||
-      document.getElementById("dcs-pi-auth-gate")
-    ) {
+    if (isAppStudioLock() || document.getElementById("dcs-pi-auth-gate")) {
       return runAppStudioSignIn(errEl);
     }
     const target =
@@ -3860,6 +3901,10 @@
             "Connexion Pi impossible. Ouvrez cette page dans le Pi Browser."
         );
         return result || { ok: false };
+      }
+      if (isAppStudioLock()) {
+        returnToAppStudioTab();
+        return { ok: true, stayed: true };
       }
       window.location.href = authNextUrl();
       return { ok: true };
@@ -3901,7 +3946,7 @@
       return;
     }
     window.__dcsAppStudioSignInStarted = true;
-    document.documentElement.setAttribute("data-dcs-app-studio", "1");
+    lockToAppStudio();
     runAppStudioSignIn(errEl);
   }
 
@@ -3920,7 +3965,7 @@
       if (otpForm) otpForm.hidden = true;
       if (isLoggedIn()) {
         /* App Studio Verify : ne pas ouvrir un autre écran / onglet */
-        if (document.documentElement.getAttribute("data-dcs-app-studio") === "1") {
+        if (isAppStudioLock()) {
           return;
         }
         window.location.replace(authNextUrl());
@@ -4091,10 +4136,7 @@
     const form = document.getElementById("signin-form");
     const err = document.getElementById("signin-error");
     if (isLoggedIn()) {
-      if (
-        isEcosystemMode() ||
-        document.documentElement.getAttribute("data-dcs-app-studio") === "1"
-      ) {
+      if (isEcosystemMode() || isAppStudioLock()) {
         return;
       }
       window.location.replace(authNextUrl());
