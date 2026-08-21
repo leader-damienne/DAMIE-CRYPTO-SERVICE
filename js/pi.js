@@ -222,7 +222,7 @@
     } catch (e0) {}
     global.__dcsPiAuthResult = null;
     global.__dcsEarlyPiAuthInFlight = null;
-    return authenticate(["username"])
+    return authenticate(["username", "payments"])
       .then(sessionFromPiAuth)
       .catch(function (err) {
         var msg = (err && err.message) || String(err);
