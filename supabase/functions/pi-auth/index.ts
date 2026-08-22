@@ -118,27 +118,115 @@ Deno.serve(async (req) => {
     /* 1) Compte déjà lié à ce Pi uid */
     let existing = await db
       .from("profiles")
-      .select("id, email, username, pi_uid")
+      .select("id, email, username, pi_uid, pi_username, created_at")
       .eq("pi_uid", piUser.uid)
       .maybeSingle();
 
-    /* 2) Sinon : réutiliser un profil existant (même username Pi) pour ne PAS perdre les soldes */
-    if (!existing.data?.id && piUser.username) {
-      const byName = await db
+    /*
+     * 2) Nouvelle app Pi = nouveau uid, même username → récupérer le compte
+     *    qui a les soldes (évite wallet à 0 sur un profil tout neuf).
+     */
+    if (piUser.username) {
+      const name = piUser.username;
+      const seen: Record<string, true> = {};
+      const candidates: Array<{
+        id: string;
+        email: string | null;
+        username: string | null;
+        pi_uid: string | null;
+        pi_username: string | null;
+        created_at: string | null;
+      }> = [];
+
+      const pushRows = (
+        rows: Array<{
+          id: string;
+          email: string | null;
+          username: string | null;
+          pi_uid: string | null;
+          pi_username: string | null;
+          created_at: string | null;
+        }> | null
+      ) => {
+        (rows || []).forEach((row) => {
+          if (!row?.id || seen[row.id]) return;
+          seen[row.id] = true;
+          candidates.push(row);
+        });
+      };
+
+      const byUser = await db
         .from("profiles")
-        .select("id, email, username, pi_uid")
-        .ilike("username", piUser.username)
-        .maybeSingle();
-      if (byName.data?.id && !byName.data.pi_uid) {
-        existing = byName;
-      } else if (!byName.data?.id) {
-        const byDisplay = await db
-          .from("profiles")
-          .select("id, email, username, pi_uid")
-          .ilike("display_name", piUser.username)
+        .select("id, email, username, pi_uid, pi_username, created_at")
+        .ilike("username", name)
+        .limit(20);
+      pushRows(byUser.data);
+
+      const byPiUser = await db
+        .from("profiles")
+        .select("id, email, username, pi_uid, pi_username, created_at")
+        .ilike("pi_username", name)
+        .limit(20);
+      pushRows(byPiUser.data);
+
+      const byDisplay = await db
+        .from("profiles")
+        .select("id, email, username, pi_uid, pi_username, created_at")
+        .ilike("display_name", name)
+        .limit(20);
+      pushRows(byDisplay.data);
+
+      let bestId = "";
+      let bestEmail: string | null = null;
+      let bestUsername: string | null = null;
+      let bestPiAmt = -1;
+      let bestCreated = "";
+
+      for (let i = 0; i < candidates.length; i++) {
+        const row = candidates[i];
+        const { data: w } = await db
+          .from("wallets")
+          .select("amount")
+          .eq("user_id", row.id)
+          .eq("symbol", "PI")
           .maybeSingle();
-        if (byDisplay.data?.id && !byDisplay.data.pi_uid) {
-          existing = byDisplay;
+        const piAmt = Number(w && w.amount != null ? w.amount : 0);
+        const created = String(row.created_at || "");
+        if (
+          piAmt > bestPiAmt ||
+          (piAmt === bestPiAmt && (!bestCreated || created < bestCreated))
+        ) {
+          bestId = row.id;
+          bestEmail = row.email;
+          bestUsername = row.username;
+          bestPiAmt = piAmt;
+          bestCreated = created;
+        }
+      }
+
+      if (bestId) {
+        let currentPi = 0;
+        if (existing.data?.id) {
+          const { data: w0 } = await db
+            .from("wallets")
+            .select("amount")
+            .eq("user_id", existing.data.id)
+            .eq("symbol", "PI")
+            .maybeSingle();
+          currentPi = Number(w0 && w0.amount != null ? w0.amount : 0);
+        }
+        if (!existing.data?.id || (currentPi <= 0 && bestPiAmt > 0)) {
+          existing = {
+            data: {
+              id: bestId,
+              email: bestEmail,
+              username: bestUsername,
+              pi_uid: piUser.uid,
+              pi_username: name,
+              created_at: bestCreated,
+            },
+            error: null,
+          } as typeof existing;
         }
       }
     }
@@ -209,6 +297,13 @@ Deno.serve(async (req) => {
       if (prof?.id) break;
       await new Promise((r) => setTimeout(r, 250));
     }
+
+    /* Libérer pi_uid sur les autres profils (index unique) avant rattachement */
+    await db
+      .from("profiles")
+      .update({ pi_uid: null })
+      .eq("pi_uid", piUser.uid)
+      .neq("id", authUserId);
 
     await db
       .from("profiles")
