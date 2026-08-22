@@ -226,6 +226,13 @@
       .then(sessionFromPiAuth)
       .catch(function (err) {
         var msg = (err && err.message) || String(err);
+        if (/status code 404|404/i.test(msg)) {
+          return {
+            ok: false,
+            error:
+              "Auth Pi 404 : URL ou mode sandbox incorrect. Dans App Studio utilisez l’URL Netlify avec piSandbox=false."
+          };
+        }
         if (/Pi Browser|indisponible|not available|undefined|sdk\.minepi/i.test(msg) || !global.Pi) {
           return {
             ok: false,
