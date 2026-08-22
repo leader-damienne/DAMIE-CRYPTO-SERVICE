@@ -116,24 +116,69 @@
     return initPromise;
   }
 
+  /**
+   * Produit U2A : dépôt wallet DCS (User → App).
+   * Memo / metadata alignés front + backend.
+   */
+  var DEPOSIT_PRODUCT = {
+    kind: "deposit",
+    memoPrefix: "DCS wallet deposit",
+    app: "DAMIE_CRYPTO_SERVICE"
+  };
+
   function onIncompletePaymentFound(payment) {
-    if (!payment || !payment.identifier) return;
+    if (!payment || !payment.identifier) {
+      return Promise.resolve();
+    }
     var paymentId = payment.identifier;
     var amount = Number(payment.amount) || 0;
+    var memo = payment.memo || DEPOSIT_PRODUCT.memoPrefix;
+    var txid =
+      payment.transaction && payment.transaction.txid
+        ? payment.transaction.txid
+        : "";
+
+    /* Toujours traiter via le backend — ne jamais ignorer */
     return callPiBackend("approve", {
       paymentId: paymentId,
       amount: amount,
-      memo: payment.memo || "DCS incomplete"
-    }).then(function (apr) {
-      if (!apr.ok) return;
-      if (payment.transaction && payment.transaction.txid) {
+      memo: memo,
+      kind: DEPOSIT_PRODUCT.kind
+    })
+      .then(function (apr) {
+        if (!apr || !apr.ok) {
+          return callPiBackend("incomplete", {
+            paymentId: paymentId,
+            amount: amount,
+            memo: memo,
+            kind: DEPOSIT_PRODUCT.kind,
+            error: (apr && apr.error) || "approve incomplete failed"
+          });
+        }
+        if (!txid) {
+          return callPiBackend("incomplete", {
+            paymentId: paymentId,
+            amount: amount,
+            memo: memo,
+            kind: DEPOSIT_PRODUCT.kind
+          });
+        }
         return callPiBackend("complete", {
           paymentId: paymentId,
-          txid: payment.transaction.txid,
-          amount: amount
+          txid: txid,
+          amount: amount,
+          kind: DEPOSIT_PRODUCT.kind
         });
-      }
-    });
+      })
+      .catch(function (err) {
+        return callPiBackend("incomplete", {
+          paymentId: paymentId,
+          amount: amount,
+          memo: memo,
+          kind: DEPOSIT_PRODUCT.kind,
+          error: (err && err.message) || String(err)
+        });
+      });
   }
 
   /** Auth Pi — doc Pi : scopes au minimum ["username","payments"]. */
@@ -254,6 +299,11 @@
     });
   }
 
+  /**
+   * U2A — Dépôt Pi vers wallet DCS.
+   * Exige await Pi.init via authenticate/initPi avant createPayment.
+   * Scopes: username + payments.
+   */
   function depositWithPi(amount) {
     var MIN_DEPOSIT_PI = 0.0000001;
     var amt = Number(amount);
@@ -267,68 +317,116 @@
       return Promise.resolve({ ok: false, error: "Connectez-vous à DCS." });
     }
 
-    return authenticate(["username", "payments"])
+    var memo =
+      DEPOSIT_PRODUCT.memoPrefix + " " + String(DCS.user.id).slice(0, 8);
+    var metadata = {
+      app: DEPOSIT_PRODUCT.app,
+      product: DEPOSIT_PRODUCT.kind,
+      kind: DEPOSIT_PRODUCT.kind,
+      userId: DCS.user.id,
+      amount: amt
+    };
+
+    return initPi()
+      .then(function () {
+        return authenticate(["username", "payments"]);
+      })
       .then(function (auth) {
         var Pi = global.Pi;
-        var memo = "DCS deposit " + String(DCS.user.id).slice(0, 8);
+        if (!Pi || typeof Pi.createPayment !== "function") {
+          return {
+            ok: false,
+            error: "Pi.createPayment indisponible. Ouvrez DCS dans le Pi Browser."
+          };
+        }
         return new Promise(function (resolve) {
+          var settled = false;
+          function finish(result) {
+            if (settled) return;
+            settled = true;
+            resolve(result);
+          }
           Pi.createPayment(
             {
               amount: amt,
               memo: memo,
-              metadata: {
-                app: "DAMIE_CRYPTO_SERVICE",
-                userId: DCS.user.id,
-                kind: "deposit"
-              }
+              metadata: metadata
             },
             {
               onReadyForServerApproval: function (paymentId) {
                 callPiBackend("approve", {
                   paymentId: paymentId,
                   amount: amt,
-                  memo: memo
-                }).then(function (res) {
-                  if (!res.ok) {
-                    resolve({
+                  memo: memo,
+                  kind: DEPOSIT_PRODUCT.kind,
+                  metadata: metadata
+                })
+                  .then(function (res) {
+                    if (!res || !res.ok) {
+                      finish({
+                        ok: false,
+                        error:
+                          (res && res.error) ||
+                          "Paiement refusé (approve). Vérifiez PI_NETWORK_API_KEY."
+                      });
+                    }
+                  })
+                  .catch(function (err) {
+                    finish({
                       ok: false,
-                      error: res.error || "Paiement refusé. Réessayez dans le Pi Browser."
+                      error: (err && err.message) || "Erreur réseau approve Pi."
                     });
-                  }
-                }).catch(function (err) {
-                  resolve({
-                    ok: false,
-                    error: (err && err.message) || "Erreur réseau approve Pi."
                   });
-                });
               },
               onReadyForServerCompletion: function (paymentId, txid) {
                 callPiBackend("complete", {
                   paymentId: paymentId,
                   txid: txid,
-                  amount: amt
-                }).then(function (res) {
-                  if (!res.ok) {
-                    resolve({ ok: false, error: res.error || "Complete échoué." });
-                    return;
-                  }
-                  resolve({
-                    ok: true,
-                    amount: (res.amount != null ? res.amount : amt),
-                    piUser: auth && auth.user ? auth.user.username : "",
-                    paymentId: paymentId,
-                    txid: txid
+                  amount: amt,
+                  kind: DEPOSIT_PRODUCT.kind,
+                  metadata: metadata
+                })
+                  .then(function (res) {
+                    if (!res || !res.ok) {
+                      finish({
+                        ok: false,
+                        error: (res && res.error) || "Complete échoué."
+                      });
+                      return;
+                    }
+                    finish({
+                      ok: true,
+                      amount: res.amount != null ? res.amount : amt,
+                      piUser: auth && auth.user ? auth.user.username : "",
+                      paymentId: paymentId,
+                      txid: txid,
+                      product: DEPOSIT_PRODUCT.kind
+                    });
+                  })
+                  .catch(function (err) {
+                    finish({
+                      ok: false,
+                      error: (err && err.message) || "Erreur réseau complete Pi."
+                    });
                   });
-                });
               },
               onCancel: function (paymentId) {
-                callPiBackend("cancel", { paymentId: paymentId });
-                resolve({ ok: false, error: "Paiement annulé.", cancelled: true });
+                callPiBackend("cancel", {
+                  paymentId: paymentId,
+                  kind: DEPOSIT_PRODUCT.kind
+                });
+                finish({
+                  ok: false,
+                  error: "Paiement annulé.",
+                  cancelled: true
+                });
               },
               onError: function (error) {
-                resolve({
+                finish({
                   ok: false,
-                  error: (error && (error.message || String(error))) || "Erreur Pi SDK."
+                  error:
+                    (error && (error.message || String(error))) ||
+                    "Erreur Pi SDK."
                 });
               }
             }
@@ -356,7 +454,8 @@
     isAvailable: isPiBrowser,
     ecosystemMode: ecosystemMode,
     callBackend: callPiBackend,
-    startEarlyPiAuth: startEarlyPiAuth
+    startEarlyPiAuth: startEarlyPiAuth,
+    DEPOSIT_PRODUCT: DEPOSIT_PRODUCT
   };
 
   /* Déclencher immédiatement (App Studio "Waiting for sign-in…") */

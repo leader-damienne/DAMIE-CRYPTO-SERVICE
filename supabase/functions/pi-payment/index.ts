@@ -97,6 +97,13 @@ Deno.serve(async (req) => {
     const paymentId = String(payload.paymentId || "");
     const txid = String(payload.txid || "");
     const amountHint = Number(payload.amount || 0);
+    const kind = String(payload.kind || (payload.metadata && payload.metadata.kind) || "deposit");
+    const memo = String(payload.memo || "DCS wallet deposit");
+
+    /* Produit U2A actuel : dépôt wallet uniquement */
+    if (kind && kind !== "deposit") {
+      return json({ ok: false, error: "Produit Pi non supporté: " + kind }, 400);
+    }
 
     if (!paymentId) return json({ ok: false, error: "paymentId requis." }, 400);
 
@@ -110,14 +117,14 @@ Deno.serve(async (req) => {
           payment_id: paymentId,
           user_id: user.id,
           amount: amountHint > 0 ? amountHint : 0.00000001,
-          memo: String(payload.memo || "DCS deposit"),
+          memo: memo,
           status: "approved",
-          meta: { stage: "approved" },
+          meta: { stage: "approved", kind: "deposit", product: "deposit" },
         },
         { onConflict: "payment_id" }
       );
 
-      return json({ ok: true, action: "approve", paymentId });
+      return json({ ok: true, action: "approve", paymentId, kind: "deposit" });
     }
 
     if (action === "complete") {
