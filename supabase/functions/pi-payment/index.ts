@@ -5,7 +5,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const PI_API_BASE = Deno.env.get("PI_API_BASE") || "https://api.minepi.com";
-const PI_API_KEY = Deno.env.get("PI_API_KEY") || "";
+const PI_API_KEY =
+  Deno.env.get("PI_API_KEY") ||
+  Deno.env.get("PI_NETWORK_API_KEY") ||
+  "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -26,7 +29,7 @@ function json(body: Record<string, unknown>, status = 200) {
 async function piFetch(path: string, method = "GET", body?: Record<string, unknown>) {
   if (!PI_API_KEY) {
     throw new Error(
-      "PI_API_KEY manquant. Dans Supabase → Edge Functions → Secrets, ajoutez la Server API Key de l’app App Studio."
+      "PI_API_KEY manquant. Dans Supabase → Edge Functions → Secrets, ajoutez la Server API Key (App Studio / Develop) sous PI_API_KEY ou PI_NETWORK_API_KEY."
     );
   }
   const res = await fetch(`${PI_API_BASE}/v2${path}`, {
@@ -53,12 +56,12 @@ async function piFetch(path: string, method = "GET", body?: Record<string, unkno
       throw new Error(
         "Clé Pi refusée (" +
           apiMsg +
-          "). Mettez à jour PI_API_KEY avec la Server API Key de l’app App Studio (appdcs.com), puis redéployez pi-payment."
+          "). Mettez à jour PI_API_KEY avec la Server API Key de l’app publiée (damiecryptoservi2345.pinet.com), puis redéployez pi-payment."
       );
     }
     if (/payment_not_found/i.test(String(apiMsg))) {
       throw new Error(
-        "payment_not_found : la PI_API_KEY Supabase n’est pas celle de l’app App Studio (appdcs.com). Remplacez le secret PI_API_KEY puis redéployez pi-payment."
+        "payment_not_found : la PI_API_KEY Supabase n’est pas celle de l’app publiée (damiecryptoservi2345.pinet.com). Remplacez le secret puis redéployez pi-payment."
       );
     }
     throw new Error(apiMsg);
