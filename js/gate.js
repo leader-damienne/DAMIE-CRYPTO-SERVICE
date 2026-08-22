@@ -28,6 +28,15 @@
     }
   } catch (e) {}
 
+  /* Pi Browser / App Studio : jamais ouvrir un autre onglet depuis cette page */
+  try {
+    if (/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
+      window.open = function () {
+        return null;
+      };
+    }
+  } catch (eOpen) {}
+
   /* Capturer parrainage : /=pseudo · ?ref= · ?=pseudo · host=pseudo */
   try {
     var ref = "";

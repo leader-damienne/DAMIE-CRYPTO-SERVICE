@@ -3764,7 +3764,7 @@
    * 1) await Pi.init({ version:"2.0", sandbox })
    * 2) Pi.authenticate(["username","payments"], onIncompletePaymentFound)
    * 3) envoyer accessToken au backend → GET /v2/me
-   * Aucune navigation inventée (pas de history.back, pas d’autre onglet).
+   * En ecosystem / App Studio : AUCUNE navigation (pas d’autre onglet, pas de redirect).
    */
   async function runPiLoginFlow(errEl, btn) {
     if (errEl) {
@@ -3801,11 +3801,11 @@
       try {
         updateAuthNav();
       } catch (eNav) {}
-      /* Bouton manuel hors Verify : aller à la page demandée */
-      if (btn && !isEcosystemMode()) {
-        window.location.href = authNextUrl();
-      } else if (btn && target && target.id && target.id.indexOf("pi-login") === 0) {
-        /* Login volontaire depuis l’UI DCS */
+      /*
+       * Mode Pi / App Studio : rester sur la même URL (Verify continue).
+       * Hors ecosystem seulement : aller à la page demandée.
+       */
+      if (!isEcosystemMode() && btn) {
         window.location.href = authNextUrl();
       }
       return { ok: true };
@@ -3836,8 +3836,8 @@
   }
 
   /**
-   * Au chargement dans Pi Browser : exactement le flux SDK (init + authenticate).
-   * App Studio Verify détecte cet appel — on ne force aucune navigation.
+   * Au chargement dans Pi Browser : flux SDK officiel uniquement.
+   * Pas de navigation — App Studio doit pouvoir détecter authenticate ici.
    */
   function maybeAutoPiLogin(errEl) {
     if (!isEcosystemMode()) return;
@@ -3848,6 +3848,35 @@
     }
     window.__dcsPiAutoAuthStarted = true;
     runPiLoginFlow(errEl, null);
+  }
+
+  /** Empêche notre page d’ouvrir un autre onglet (window.open / target=_blank). */
+  function blockNewTabsInPi() {
+    if (!isEcosystemMode()) return;
+    if (window.__dcsBlockNewTabs) return;
+    window.__dcsBlockNewTabs = true;
+    try {
+      window.open = function () {
+        return null;
+      };
+    } catch (eOpen) {}
+    try {
+      document.addEventListener(
+        "click",
+        function (e) {
+          var a = e.target && e.target.closest && e.target.closest("a[href]");
+          if (!a) return;
+          if (a.getAttribute("target") === "_blank") {
+            a.removeAttribute("target");
+          }
+          var rel = a.getAttribute("rel") || "";
+          if (/noopener|noreferrer/i.test(rel) && a.getAttribute("target") === "_blank") {
+            e.preventDefault();
+          }
+        },
+        true
+      );
+    } catch (eClick) {}
   }
 
   function setupSignup() {
@@ -4267,6 +4296,7 @@
 
   async function boot() {
     detectPiBrowser();
+    blockNewTabsInPi();
     /* ?force_pi_auth=1 ou ?logout=1 : forcer nouvelle autorisation Pi (App Studio) */
     try {
       var qp = new URLSearchParams(location.search || "");
