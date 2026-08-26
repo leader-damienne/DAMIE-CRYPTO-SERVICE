@@ -1079,7 +1079,23 @@
             DCS.marketplace = [];
             return [];
           }
-          DCS.marketplace = (res.data || []).map(function (row) {
+          DCS.marketplace = (res.data || [])
+            .filter(function (row) {
+              /* Masquer les annonces seed / fictives (sans vrai compte vendeur) */
+              if (!row || !row.seller_id) return false;
+              var demoNames = {
+                "amina k.": 1,
+                "jean-marc d.": 1,
+                "fatou s.": 1,
+                "omar b.": 1
+              };
+              var name = String(row.seller_name || "")
+                .trim()
+                .toLowerCase();
+              if (demoNames[name]) return false;
+              return true;
+            })
+            .map(function (row) {
             return {
               id: row.id,
               title: row.title,
@@ -1113,6 +1129,7 @@
                   articleId: row.listing_id,
                   title: art ? art.title : "Article",
                   author: art ? art.author : "",
+                  sellerId: art ? art.sellerId : null,
                   pricePi: Number(row.price_pi),
                   date: row.created_at
                     ? new Date(row.created_at).toLocaleDateString("fr-FR")
@@ -1199,6 +1216,145 @@
           if (res.error) return { ok: false, error: res.error.message };
           return { ok: true };
         });
+    },
+
+    loadSellerPublicProfiles: function (sellerIds) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve({});
+      var ids = (sellerIds || []).filter(Boolean);
+      if (!ids.length) {
+        DCS.sellerProfiles = DCS.sellerProfiles || {};
+        return Promise.resolve(DCS.sellerProfiles);
+      }
+      var unique = [];
+      var seen = {};
+      ids.forEach(function (id) {
+        if (!seen[id]) {
+          seen[id] = true;
+          unique.push(id);
+        }
+      });
+      return gate.client
+        .from("profiles")
+        .select(
+          "id, username, display_name, pi_username, bio, city, country, avatar, kyc, created_at, phone_linked, gmail_linked"
+        )
+        .in("id", unique)
+        .then(function (res) {
+          if (!DCS.sellerProfiles) DCS.sellerProfiles = {};
+          if (res.error) {
+            console.warn(res.error);
+            return DCS.sellerProfiles;
+          }
+          (res.data || []).forEach(function (row) {
+            DCS.sellerProfiles[row.id] = {
+              id: row.id,
+              username: row.username || "",
+              displayName: row.display_name || row.pi_username || row.username || "",
+              piUsername: row.pi_username || "",
+              bio: row.bio || "",
+              city: row.city || "",
+              country: row.country || "",
+              avatar: row.avatar || "",
+              kyc: row.kyc || "none",
+              phoneLinked: !!row.phone_linked,
+              gmailLinked: !!row.gmail_linked,
+              joined: row.created_at
+                ? new Date(row.created_at).toLocaleDateString("fr-FR")
+                : "",
+              joinedRaw: row.created_at || null
+            };
+          });
+          return DCS.sellerProfiles;
+        });
+    },
+
+    loadSellerStats: function () {
+      var gate = this.requireClient();
+      if (!gate.ok) {
+        DCS.sellerStats = {};
+        return Promise.resolve({});
+      }
+      return gate.client.rpc("dcs_marketplace_seller_stats").then(function (res) {
+        DCS.sellerStats = {};
+        if (res.error) {
+          console.warn(res.error);
+          return DCS.sellerStats;
+        }
+        (res.data || []).forEach(function (row) {
+          if (!row || !row.seller_id) return;
+          DCS.sellerStats[row.seller_id] = {
+            listings: Number(row.listings_count) || 0,
+            sales: Number(row.sales_count) || 0,
+            minPrice: row.min_price != null ? Number(row.min_price) : null,
+            maxPrice: row.max_price != null ? Number(row.max_price) : null
+          };
+        });
+        return DCS.sellerStats;
+      });
+    },
+
+    sendMarketplaceMessage: function (listingId, recipientId, body, senderLabel) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      return gate.client
+        .rpc("dcs_send_marketplace_message", {
+          p_listing_id: listingId || null,
+          p_recipient_id: recipientId,
+          p_body: body,
+          p_sender_label: senderLabel || null
+        })
+        .then(function (res) {
+          if (res.error) return { ok: false, error: res.error.message };
+          var data = res.data || {};
+          if (data && data.ok === false) {
+            return { ok: false, error: data.error || "Envoi impossible." };
+          }
+          return { ok: true, id: data && data.id ? data.id : null };
+        });
+    },
+
+    loadMarketplaceMessages: function () {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve([]);
+      if (!DCS.user.id) {
+        DCS.marketplaceMessages = [];
+        return Promise.resolve([]);
+      }
+      var uid = DCS.user.id;
+      return gate.client
+        .from("marketplace_messages")
+        .select("id, listing_id, sender_id, recipient_id, sender_label, body, read_at, created_at")
+        .or("sender_id.eq." + uid + ",recipient_id.eq." + uid)
+        .order("created_at", { ascending: true })
+        .limit(300)
+        .then(function (res) {
+          if (res.error) {
+            console.warn(res.error);
+            DCS.marketplaceMessages = [];
+            return [];
+          }
+          DCS.marketplaceMessages = res.data || [];
+          return DCS.marketplaceMessages;
+        });
+    },
+
+    markMarketplaceMessagesRead: function (peerId, listingId) {
+      var gate = this.requireClient();
+      if (!gate.ok) return Promise.resolve(gate);
+      if (!DCS.user.id || !peerId) return Promise.resolve({ ok: false, error: "Paramètres manquants." });
+      var q = gate.client
+        .from("marketplace_messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("recipient_id", DCS.user.id)
+        .eq("sender_id", peerId)
+        .is("read_at", null);
+      if (listingId) q = q.eq("listing_id", listingId);
+      return q.then(function (res) {
+        if (res.error) return { ok: false, error: res.error.message };
+        return { ok: true };
+      });
     },
 
     loadCommunity: function () {

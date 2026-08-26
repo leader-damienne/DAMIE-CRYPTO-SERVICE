@@ -1008,8 +1008,348 @@
     });
   }
 
-  let marketFilter = { seller: "all", query: "" };
+  let marketFilter = { seller: "all", query: "", catalogMode: "merchants" };
   let activeArticleId = null;
+  let activeSellerId = null;
+  let activeChat = { peerId: null, listingId: null, peerLabel: "", listingTitle: "" };
+
+  function conversationKey(peerId, listingId) {
+    return String(peerId || "") + "::" + String(listingId || "");
+  }
+
+  function requireMarketLogin() {
+    if (DCS.user && DCS.user.id) return true;
+    alert("Connectez-vous avec Pi pour utiliser la messagerie Marketplace.");
+    return false;
+  }
+
+  function peerLabelFromMessage(m, uid) {
+    if (!m) return "Utilisateur";
+    if (m.sender_id === uid) {
+      const art = findArticle(m.listing_id);
+      if (art && art.sellerId && art.sellerId !== uid) return art.author || "Vendeur";
+      return "Contact";
+    }
+    return m.sender_label || "Utilisateur";
+  }
+
+  function buildConversations() {
+    const uid = DCS.user && DCS.user.id;
+    const msgs = DCS.marketplaceMessages || [];
+    if (!uid) return [];
+    const map = {};
+    msgs.forEach(function (m) {
+      const peerId = m.sender_id === uid ? m.recipient_id : m.sender_id;
+      if (!peerId) return;
+      const key = conversationKey(peerId, m.listing_id);
+      const art = findArticle(m.listing_id);
+      if (!map[key]) {
+        map[key] = {
+          key: key,
+          peerId: peerId,
+          listingId: m.listing_id || null,
+          peerLabel: peerLabelFromMessage(m, uid),
+          listingTitle: art ? art.title : "Article Marketplace",
+          lastBody: m.body || "",
+          lastAt: m.created_at,
+          unread: 0
+        };
+      }
+      map[key].lastBody = m.body || "";
+      map[key].lastAt = m.created_at;
+      if (m.sender_id !== uid && m.sender_label) map[key].peerLabel = m.sender_label;
+      if (art && art.author && peerId === art.sellerId) map[key].peerLabel = art.author;
+      if (m.recipient_id === uid && !m.read_at) map[key].unread += 1;
+    });
+    return Object.keys(map)
+      .map(function (k) {
+        return map[k];
+      })
+      .sort(function (a, b) {
+        return new Date(b.lastAt || 0) - new Date(a.lastAt || 0);
+      });
+  }
+
+  function threadMessages(peerId, listingId) {
+    const uid = DCS.user && DCS.user.id;
+    return (DCS.marketplaceMessages || []).filter(function (m) {
+      if (!uid || !peerId) return false;
+      const involves =
+        (m.sender_id === uid && m.recipient_id === peerId) ||
+        (m.sender_id === peerId && m.recipient_id === uid);
+      if (!involves) return false;
+      if (listingId) return m.listing_id === listingId;
+      return !m.listing_id;
+    });
+  }
+
+  async function refreshMarketplaceMessages() {
+    if (!DCS.backend || !DCS.backend.loadMarketplaceMessages) return;
+    if (!(DCS.user && DCS.user.id)) {
+      DCS.marketplaceMessages = [];
+      return;
+    }
+    try {
+      await DCS.backend.loadMarketplaceMessages();
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  function renderMarketConversations() {
+    const list = document.getElementById("market-conv-list");
+    if (!list) return;
+    if (!(DCS.user && DCS.user.id)) {
+      list.innerHTML =
+        '<p class="panel-note">Connectez-vous pour voir vos conversations.</p>';
+      return;
+    }
+    const convs = buildConversations();
+    if (!convs.length) {
+      list.innerHTML =
+        '<p class="panel-note">Aucune conversation. Ouvrez un article et cliquez sur « Message / RDV ».</p>';
+      return;
+    }
+    list.innerHTML = convs
+      .map(function (c) {
+        const active =
+          activeChat.peerId === c.peerId &&
+          String(activeChat.listingId || "") === String(c.listingId || "");
+        return (
+          '<button type="button" class="market-conv-item' +
+          (active ? " active" : "") +
+          '" data-peer="' +
+          escapeHtml(c.peerId) +
+          '" data-listing="' +
+          escapeHtml(c.listingId || "") +
+          '" data-peer-label="' +
+          escapeHtml(c.peerLabel || "") +
+          '" data-listing-title="' +
+          escapeHtml(c.listingTitle || "") +
+          '">' +
+          "<strong>" +
+          escapeHtml(c.peerLabel || "Contact") +
+          "</strong>" +
+          "<small>" +
+          escapeHtml(c.listingTitle || "") +
+          "</small>" +
+          '<span class="market-conv-preview">' +
+          escapeHtml((c.lastBody || "").slice(0, 80)) +
+          "</span>" +
+          (c.unread
+            ? '<span class="market-conv-unread">' + c.unread + "</span>"
+            : "") +
+          "</button>"
+        );
+      })
+      .join("");
+    list.querySelectorAll(".market-conv-item").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openMarketThread(
+          btn.getAttribute("data-peer"),
+          btn.getAttribute("data-listing") || null,
+          btn.getAttribute("data-peer-label") || "",
+          btn.getAttribute("data-listing-title") || ""
+        );
+      });
+    });
+  }
+
+  function renderMarketThread() {
+    const box = document.getElementById("market-chat-msgs");
+    const peerEl = document.getElementById("market-chat-peer");
+    const listingEl = document.getElementById("market-chat-listing");
+    const form = document.getElementById("market-chat-form");
+    if (!box) return;
+    if (!activeChat.peerId) {
+      if (peerEl) peerEl.textContent = "Sélectionnez une conversation";
+      if (listingEl) listingEl.textContent = "";
+      box.innerHTML = '<p class="panel-note">Choisissez une conversation à gauche.</p>';
+      if (form) form.hidden = true;
+      return;
+    }
+    if (peerEl) peerEl.textContent = activeChat.peerLabel || "Contact";
+    if (listingEl) {
+      listingEl.textContent = activeChat.listingTitle
+        ? "Article : " + activeChat.listingTitle
+        : "";
+    }
+    if (form) form.hidden = false;
+    const uid = DCS.user && DCS.user.id;
+    const msgs = threadMessages(activeChat.peerId, activeChat.listingId);
+    if (!msgs.length) {
+      box.innerHTML =
+        '<p class="panel-note">Aucun message pour l’instant. Proposez un créneau de livraison.</p>';
+      return;
+    }
+    box.innerHTML = msgs
+      .map(function (m) {
+        const mine = m.sender_id === uid;
+        const when = m.created_at
+          ? new Date(m.created_at).toLocaleString("fr-FR")
+          : "";
+        return (
+          '<div class="market-chat-bubble' +
+          (mine ? " mine" : "") +
+          '">' +
+          "<p>" +
+          escapeHtml(m.body || "") +
+          "</p>" +
+          "<time>" +
+          escapeHtml(when) +
+          "</time>" +
+          "</div>"
+        );
+      })
+      .join("");
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function openMarketThread(peerId, listingId, peerLabel, listingTitle) {
+    if (!peerId || !requireMarketLogin()) return;
+    const art = listingId ? findArticle(listingId) : null;
+    activeChat = {
+      peerId: peerId,
+      listingId: listingId || null,
+      peerLabel: peerLabel || (art && art.author) || "Contact",
+      listingTitle: listingTitle || (art && art.title) || ""
+    };
+    renderMarketConversations();
+    renderMarketThread();
+    try {
+      await DCS.backend.markMarketplaceMessagesRead(peerId, listingId || null);
+      await refreshMarketplaceMessages();
+      renderMarketConversations();
+      renderMarketThread();
+    } catch (e) {}
+  }
+
+  function openComposeMessage(article) {
+    if (!article || !requireMarketLogin()) return;
+    if (!article.sellerId) {
+      alert("Ce vendeur n’est pas joignable pour le moment.");
+      return;
+    }
+    if (DCS.user.id === article.sellerId) {
+      alert("C’est votre propre article. Les messages arrivent dans l’onglet Messages.");
+      openMarketView("messages");
+      return;
+    }
+    const modal = document.getElementById("compose-message-modal");
+    if (!modal) return;
+    document.getElementById("compose-msg-peer").textContent = article.author || "Vendeur";
+    document.getElementById("compose-msg-article").textContent = article.title || "—";
+    document.getElementById("compose-msg-listing-id").value = article.id || "";
+    document.getElementById("compose-msg-recipient-id").value = article.sellerId;
+    const body = document.getElementById("compose-msg-body");
+    if (body) body.value = "";
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeComposeMessage() {
+    const modal = document.getElementById("compose-message-modal");
+    if (modal) modal.hidden = true;
+    const articleModal = document.getElementById("article-modal");
+    if (!articleModal || articleModal.hidden) {
+      document.body.style.overflow = "";
+    }
+  }
+
+  async function sendComposeMessage(e) {
+    if (e) e.preventDefault();
+    if (!requireMarketLogin()) return;
+    const recipientId = (document.getElementById("compose-msg-recipient-id") || {}).value;
+    const listingId = (document.getElementById("compose-msg-listing-id") || {}).value || null;
+    const body = ((document.getElementById("compose-msg-body") || {}).value || "").trim();
+    if (!recipientId || !body) {
+      alert("Écrivez un message.");
+      return;
+    }
+    const label =
+      (DCS.user && (DCS.user.displayName || DCS.user.piUsername || DCS.user.username)) || null;
+    const res = await DCS.backend.sendMarketplaceMessage(listingId, recipientId, body, label);
+    if (!res.ok) {
+      alert(
+        res.error || "Envoi impossible. Vérifiez que la messagerie est activée côté serveur."
+      );
+      return;
+    }
+    closeComposeMessage();
+    closeArticleModal();
+    await refreshMarketplaceMessages();
+    openMarketView("messages");
+    const art = listingId ? findArticle(listingId) : null;
+    await openMarketThread(
+      recipientId,
+      listingId,
+      art ? art.author : "Vendeur",
+      art ? art.title : ""
+    );
+    alert("Message envoyé. Suivez la conversation dans Messages.");
+  }
+
+  async function sendThreadReply(e) {
+    if (e) e.preventDefault();
+    if (!requireMarketLogin() || !activeChat.peerId) return;
+    const input = document.getElementById("market-chat-input");
+    const body = ((input && input.value) || "").trim();
+    if (!body) {
+      alert("Écrivez un message.");
+      return;
+    }
+    const label =
+      (DCS.user && (DCS.user.displayName || DCS.user.piUsername || DCS.user.username)) || null;
+    const res = await DCS.backend.sendMarketplaceMessage(
+      activeChat.listingId,
+      activeChat.peerId,
+      body,
+      label
+    );
+    if (!res.ok) {
+      alert(res.error || "Envoi impossible.");
+      return;
+    }
+    if (input) input.value = "";
+    await refreshMarketplaceMessages();
+    renderMarketConversations();
+    renderMarketThread();
+  }
+
+  function setupMarketplaceMessaging() {
+    const form = document.getElementById("market-chat-form");
+    if (form) form.addEventListener("submit", sendThreadReply);
+    document.querySelectorAll("[data-quick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const input = document.getElementById("market-chat-input");
+        if (input) {
+          input.value = btn.getAttribute("data-quick") || "";
+          input.focus();
+        }
+      });
+    });
+    const composeForm = document.getElementById("compose-message-form");
+    if (composeForm) composeForm.addEventListener("submit", sendComposeMessage);
+    const closeBtn = document.getElementById("compose-msg-close");
+    const cancelBtn = document.getElementById("compose-msg-cancel");
+    if (closeBtn) closeBtn.addEventListener("click", closeComposeMessage);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeComposeMessage);
+    const composeModal = document.getElementById("compose-message-modal");
+    if (composeModal) {
+      composeModal.addEventListener("click", function (e) {
+        if (e.target === composeModal) closeComposeMessage();
+      });
+    }
+    document.querySelectorAll("[data-compose-quick]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const body = document.getElementById("compose-msg-body");
+        if (body) {
+          body.value = btn.getAttribute("data-compose-quick") || "";
+          body.focus();
+        }
+      });
+    });
+  }
 
   function getSellers() {
     const map = {};
@@ -1020,6 +1360,473 @@
     return Object.keys(map)
       .sort((a, b) => a.localeCompare(b, "fr"))
       .map((name) => ({ name, count: map[name] }));
+  }
+
+  function getMerchants() {
+    const map = {};
+    (DCS.marketplace || []).forEach(function (a) {
+      const key = a.sellerId || "name:" + (a.author || "inconnu");
+      if (!map[key]) {
+        map[key] = {
+          key: key,
+          sellerId: a.sellerId || null,
+          shopName: a.author || "Boutique",
+          count: 0,
+          minPrice: Infinity,
+          maxPrice: 0,
+          categories: {},
+          cover: "",
+          sampleTitle: a.title || ""
+        };
+      }
+      const m = map[key];
+      m.count += 1;
+      const price = Number(a.pricePi) || 0;
+      if (price > 0 && price < m.minPrice) m.minPrice = price;
+      if (price > m.maxPrice) m.maxPrice = price;
+      if (a.category) m.categories[a.category] = true;
+      if (!m.cover && a.photos && a.photos[0]) m.cover = a.photos[0];
+      if (!m.sampleTitle && a.title) m.sampleTitle = a.title;
+    });
+    return Object.keys(map)
+      .map(function (k) {
+        const m = map[k];
+        if (m.minPrice === Infinity) m.minPrice = 0;
+        m.categoryList = Object.keys(m.categories);
+        const st = (DCS.sellerStats && m.sellerId && DCS.sellerStats[m.sellerId]) || null;
+        m.sales = st ? st.sales : 0;
+        if (st && st.minPrice != null) m.minPrice = st.minPrice;
+        if (st && st.maxPrice != null) m.maxPrice = st.maxPrice;
+        return m;
+      })
+      .sort(function (a, b) {
+        if (b.sales !== a.sales) return b.sales - a.sales;
+        return (a.shopName || "").localeCompare(b.shopName || "", "fr");
+      });
+  }
+
+  function sellerInitials(name) {
+    const s = String(name || "?").trim();
+    if (!s) return "?";
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return s.slice(0, 2).toUpperCase();
+  }
+
+  function kycLabel(kyc) {
+    const k = String(kyc || "none").toLowerCase();
+    if (k === "verified" || k === "approved" || k === "ok") return "Vérifié";
+    if (k === "pending") return "KYC en cours";
+    return "";
+  }
+
+  function setCatalogMode(mode) {
+    marketFilter.catalogMode = mode === "articles" ? "articles" : "merchants";
+    document.querySelectorAll("[data-catalog-mode]").forEach(function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-catalog-mode") === marketFilter.catalogMode);
+    });
+    const merchantsView = document.getElementById("merchants-p2p-view");
+    const articlesView = document.getElementById("articles-catalog-view");
+    if (merchantsView) merchantsView.hidden = marketFilter.catalogMode !== "merchants";
+    if (articlesView) articlesView.hidden = marketFilter.catalogMode !== "articles";
+    if (marketFilter.catalogMode === "merchants") renderMerchantsP2P();
+    else {
+      renderSellers();
+      renderMarketplace();
+    }
+  }
+
+  async function refreshSellerDirectory() {
+    const ids = (DCS.marketplace || [])
+      .map(function (a) {
+        return a.sellerId;
+      })
+      .filter(Boolean);
+    try {
+      if (DCS.backend.loadSellerStats) await DCS.backend.loadSellerStats();
+    } catch (e) {}
+    try {
+      if (DCS.backend.loadSellerPublicProfiles) await DCS.backend.loadSellerPublicProfiles(ids);
+    } catch (e) {}
+  }
+
+  function renderMerchantsP2P() {
+    const list = document.getElementById("merchants-p2p-list");
+    const hint = document.getElementById("merchants-hint");
+    if (!list) return;
+    const q = (marketFilter.query || "").trim().toLowerCase();
+    let merchants = getMerchants();
+    if (q) {
+      merchants = merchants.filter(function (m) {
+        const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
+        const hay = [
+          m.shopName,
+          m.sampleTitle,
+          (m.categoryList || []).join(" "),
+          profile && profile.city,
+          profile && profile.country,
+          profile && profile.username,
+          profile && profile.piUsername,
+          profile && profile.bio
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.indexOf(q) !== -1;
+      });
+    }
+    if (hint) {
+      hint.textContent =
+        merchants.length +
+        " marchand(s) · style P2P · paiement exclusif en PI COIN";
+    }
+    if (!merchants.length) {
+      list.innerHTML =
+        '<p class="panel-note" style="padding:1rem 0">Aucun marchand pour le moment. Publiez depuis l’espace vendeur.</p>';
+      return;
+    }
+    list.innerHTML = merchants
+      .map(function (m) {
+        const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
+        const display =
+          (profile && (profile.displayName || profile.piUsername)) || m.shopName;
+        const avatarUrl = profile && profile.avatar ? safeUrl(profile.avatar) : "";
+        const verified = profile ? kycLabel(profile.kyc) : "";
+        const cityLine = [profile && profile.city, profile && profile.country]
+          .filter(Boolean)
+          .join(", ");
+        const priceLabel =
+          m.minPrice === m.maxPrice
+            ? String(m.minPrice) + " π"
+            : m.minPrice + " – " + m.maxPrice + " π";
+        const completion =
+          m.sales > 0 ? Math.min(99, 85 + Math.min(14, m.sales)) + "%" : "—";
+        const cats = (m.categoryList || []).slice(0, 3);
+        const avatarHtml = avatarUrl
+          ? '<img src="' + escapeHtml(avatarUrl) + '" alt="" />'
+          : escapeHtml(sellerInitials(display));
+        return (
+          '<article class="p2p-merchant-row" data-merchant-id="' +
+          escapeHtml(m.sellerId || "") +
+          '" data-merchant-shop="' +
+          escapeHtml(m.shopName) +
+          '">' +
+          '<div class="p2p-col p2p-col-merchant">' +
+          '<div class="p2p-avatar">' +
+          avatarHtml +
+          "</div>" +
+          '<div class="p2p-merchant-meta">' +
+          '<div class="p2p-merchant-name">' +
+          "<strong>" +
+          escapeHtml(display) +
+          "</strong>" +
+          (verified
+            ? '<span class="p2p-badge verified">' + escapeHtml(verified) + "</span>"
+            : '<span class="p2p-badge">Marchand DCS</span>') +
+          "</div>" +
+          '<div class="p2p-merchant-sub">' +
+          escapeHtml(m.shopName) +
+          (cityLine ? " · " + escapeHtml(cityLine) : "") +
+          "</div>" +
+          '<div class="p2p-merchant-stats">' +
+          "<span>" +
+          m.sales +
+          " vente(s)</span>" +
+          "<span>Taux " +
+          completion +
+          "</span>" +
+          "<span>" +
+          m.count +
+          " annonce(s)</span>" +
+          "</div>" +
+          (cats.length
+            ? '<div class="p2p-tags">' +
+              cats
+                .map(function (c) {
+                  return '<span class="p2p-tag">' + escapeHtml(c) + "</span>";
+                })
+                .join("") +
+              "</div>"
+            : "") +
+          "</div></div>" +
+          '<div class="p2p-col p2p-col-price">' +
+          '<div class="p2p-price">' +
+          escapeHtml(priceLabel) +
+          "</div>" +
+          '<div class="p2p-price-note">' +
+          escapeHtml(m.sampleTitle || "Catalogue boutique") +
+          "</div>" +
+          "</div>" +
+          '<div class="p2p-col p2p-col-limit">' +
+          "<strong>" +
+          m.count +
+          "</strong> article(s)<br />" +
+          "<span class=\"panel-note\">" +
+          m.sales +
+          " commande(s)</span>" +
+          "</div>" +
+          '<div class="p2p-col p2p-col-pay">' +
+          '<span class="p2p-pay-pill">PI COIN</span>' +
+          '<span class="p2p-pay-pill soft">RDV livraison</span>' +
+          "</div>" +
+          '<div class="p2p-col p2p-col-actions">' +
+          '<button type="button" class="btn btn-gold" data-p2p-trade="' +
+          escapeHtml(m.sellerId || m.shopName) +
+          '" data-p2p-shop="' +
+          escapeHtml(m.shopName) +
+          '">Acheter</button>' +
+          '<button type="button" class="btn btn-outline" data-p2p-profile="' +
+          escapeHtml(m.sellerId || "") +
+          '" data-p2p-shop="' +
+          escapeHtml(m.shopName) +
+          '">Profil</button>' +
+          '<button type="button" class="btn btn-outline" data-p2p-message="' +
+          escapeHtml(m.sellerId || "") +
+          '" data-p2p-shop="' +
+          escapeHtml(m.shopName) +
+          '">Message</button>' +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+
+    list.querySelectorAll("[data-p2p-profile]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openSellerProfile(btn.getAttribute("data-p2p-profile"), btn.getAttribute("data-p2p-shop"));
+      });
+    });
+    list.querySelectorAll("[data-p2p-trade]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const sid = btn.getAttribute("data-p2p-trade");
+        const shop = btn.getAttribute("data-p2p-shop");
+        const merchant = getMerchants().find(function (m) {
+          return (m.sellerId && m.sellerId === sid) || m.shopName === shop || m.shopName === sid;
+        });
+        if (merchant && merchant.sellerId) {
+          marketFilter.seller = merchant.shopName;
+          setCatalogMode("articles");
+        } else if (shop) {
+          marketFilter.seller = shop;
+          setCatalogMode("articles");
+        }
+      });
+    });
+    list.querySelectorAll("[data-p2p-message]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const sid = btn.getAttribute("data-p2p-message");
+        const shop = btn.getAttribute("data-p2p-shop");
+        const article =
+          (DCS.marketplace || []).find(function (a) {
+            return a.sellerId && a.sellerId === sid;
+          }) ||
+          (DCS.marketplace || []).find(function (a) {
+            return a.author === shop;
+          });
+        if (article) openComposeMessage(article);
+        else alert("Aucun article de ce marchand pour démarrer la conversation.");
+      });
+    });
+  }
+
+  function closeSellerProfile() {
+    const modal = document.getElementById("seller-profile-modal");
+    if (modal) modal.hidden = true;
+    activeSellerId = null;
+    const articleModal = document.getElementById("article-modal");
+    if (!articleModal || articleModal.hidden) document.body.style.overflow = "";
+  }
+
+  function openSellerProfile(sellerId, shopName) {
+    const modal = document.getElementById("seller-profile-modal");
+    if (!modal) return;
+    const merchant =
+      getMerchants().find(function (m) {
+        return (sellerId && m.sellerId === sellerId) || (shopName && m.shopName === shopName);
+      }) || null;
+    if (!merchant) {
+      alert("Profil marchand introuvable.");
+      return;
+    }
+    activeSellerId = merchant.sellerId || null;
+    const profile =
+      (merchant.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[merchant.sellerId]) || null;
+    const display =
+      (profile && (profile.displayName || profile.piUsername || profile.username)) ||
+      merchant.shopName;
+    const avatarEl = document.getElementById("sp-avatar");
+    const avatarUrl = profile && profile.avatar ? safeUrl(profile.avatar) : "";
+    if (avatarEl) {
+      avatarEl.innerHTML = avatarUrl
+        ? '<img src="' + escapeHtml(avatarUrl) + '" alt="" />'
+        : escapeHtml(sellerInitials(display));
+    }
+    const badges = document.getElementById("sp-badges");
+    if (badges) {
+      const verified = profile ? kycLabel(profile.kyc) : "";
+      badges.innerHTML =
+        '<span class="p2p-badge">Marchand DCS</span>' +
+        (verified ? '<span class="p2p-badge verified">' + escapeHtml(verified) + "</span>" : "") +
+        (profile && profile.phoneLinked
+          ? '<span class="p2p-badge">Tél. lié</span>'
+          : "") +
+        (profile && profile.gmailLinked
+          ? '<span class="p2p-badge">Gmail lié</span>'
+          : "");
+    }
+    document.getElementById("sp-shop-name").textContent = display;
+    document.getElementById("sp-handle").textContent =
+      "@" +
+      ((profile && (profile.piUsername || profile.username)) || merchant.shopName) +
+      " · Boutique « " +
+      merchant.shopName +
+      " »";
+    const loc = [profile && profile.city, profile && profile.country].filter(Boolean).join(", ");
+    document.getElementById("sp-location").textContent = loc
+      ? "📍 " + loc
+      : "Lieu non renseigné — convenez d’un RDV via Messages";
+    const sales = merchant.sales || 0;
+    const completion = sales > 0 ? Math.min(99, 85 + Math.min(14, sales)) + "%" : "Nouveau";
+    const stats = document.getElementById("sp-stats");
+    if (stats) {
+      stats.innerHTML =
+        '<div class="seller-profile-stat"><span>Annonces</span><strong>' +
+        merchant.count +
+        "</strong></div>" +
+        '<div class="seller-profile-stat"><span>Ventes</span><strong>' +
+        sales +
+        "</strong></div>" +
+        '<div class="seller-profile-stat"><span>Taux</span><strong>' +
+        completion +
+        "</strong></div>" +
+        '<div class="seller-profile-stat"><span>Prix</span><strong>' +
+        (merchant.minPrice === merchant.maxPrice
+          ? merchant.minPrice + " π"
+          : merchant.minPrice + "–" + merchant.maxPrice + " π") +
+        "</strong></div>";
+    }
+    document.getElementById("sp-bio").textContent =
+      (profile && profile.bio && profile.bio.trim()) ||
+      "Ce marchand n’a pas encore renseigné sa bio. Contactez-le pour la livraison.";
+    const info = document.getElementById("sp-info");
+    if (info) {
+      const rows = [
+        ["Boutique", merchant.shopName],
+        ["Identifiant", (profile && (profile.piUsername || profile.username)) || "—"],
+        ["Membre depuis", (profile && profile.joined) || "—"],
+        ["Ville", (profile && profile.city) || "—"],
+        ["Pays", (profile && profile.country) || "—"],
+        ["Catégories", (merchant.categoryList || []).join(", ") || "—"],
+        ["Paiement accepté", "PI COIN uniquement"],
+        ["Livraison", "Rendez-vous via Messages Marketplace"]
+      ];
+      info.innerHTML = rows
+        .map(function (r) {
+          return (
+            '<div class="seller-profile-info-row"><span>' +
+            escapeHtml(r[0]) +
+            "</span><strong>" +
+            escapeHtml(r[1]) +
+            "</strong></div>"
+          );
+        })
+        .join("");
+    }
+    const listingsEl = document.getElementById("sp-listings");
+    const mine = (DCS.marketplace || []).filter(function (a) {
+      if (merchant.sellerId) return a.sellerId === merchant.sellerId;
+      return a.author === merchant.shopName;
+    });
+    if (listingsEl) {
+      listingsEl.innerHTML = mine.length
+        ? mine
+            .map(function (a) {
+              const thumb = a.photos && a.photos[0] ? safeUrl(a.photos[0]) : "";
+              return (
+                '<button type="button" class="seller-profile-listing" data-sp-open="' +
+                escapeHtml(a.id) +
+                '">' +
+                (thumb
+                  ? '<img src="' + escapeHtml(thumb) + '" alt="" />'
+                  : '<span class="market-cover placeholder">PI</span>') +
+                "<div><strong>" +
+                escapeHtml(a.title) +
+                "</strong><span>" +
+                escapeHtml(a.category || "") +
+                " · " +
+                escapeHtml(String(a.pricePi)) +
+                " π</span></div></button>"
+              );
+            })
+            .join("")
+        : '<p class="panel-note">Aucun article actif.</p>';
+      listingsEl.querySelectorAll("[data-sp-open]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          closeSellerProfile();
+          openArticle(btn.getAttribute("data-sp-open"));
+        });
+      });
+    }
+    const msgBtn = document.getElementById("sp-message");
+    if (msgBtn) {
+      msgBtn.disabled = !merchant.sellerId || (DCS.user && DCS.user.id === merchant.sellerId);
+    }
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function setupSellerProfileModal() {
+    const modal = document.getElementById("seller-profile-modal");
+    const closeBtn = document.getElementById("seller-profile-close");
+    const closeBtn2 = document.getElementById("sp-close-btn");
+    if (closeBtn) closeBtn.addEventListener("click", closeSellerProfile);
+    if (closeBtn2) closeBtn2.addEventListener("click", closeSellerProfile);
+    if (modal) {
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal) closeSellerProfile();
+      });
+    }
+    const viewBtn = document.getElementById("sp-view-articles");
+    if (viewBtn) {
+      viewBtn.addEventListener("click", function () {
+        const merchant = getMerchants().find(function (m) {
+          return m.sellerId && m.sellerId === activeSellerId;
+        });
+        if (merchant) marketFilter.seller = merchant.shopName;
+        closeSellerProfile();
+        setCatalogMode("articles");
+        openMarketView("buy");
+      });
+    }
+    const msgBtn = document.getElementById("sp-message");
+    if (msgBtn) {
+      msgBtn.addEventListener("click", function () {
+        const article = (DCS.marketplace || []).find(function (a) {
+          return a.sellerId && a.sellerId === activeSellerId;
+        });
+        if (article) {
+          closeSellerProfile();
+          openComposeMessage(article);
+        }
+      });
+    }
+    const reportBtn = document.getElementById("sp-report");
+    if (reportBtn) {
+      reportBtn.addEventListener("click", function () {
+        const merchant = getMerchants().find(function (m) {
+          return m.sellerId && m.sellerId === activeSellerId;
+        });
+        if (merchant) {
+          closeSellerProfile();
+          openReportSeller(merchant.shopName, null);
+        }
+      });
+    }
+    document.querySelectorAll("[data-catalog-mode]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        setCatalogMode(btn.getAttribute("data-catalog-mode"));
+      });
+    });
   }
 
   function findArticle(id) {
@@ -1186,6 +1993,9 @@
             : '<button class="btn btn-gold" type="button" data-buy="' +
               escapeHtml(a.id) +
               '" style="margin-top:0.4rem;width:100%">Acheter</button>') +
+          '<button class="btn btn-outline" type="button" data-message="' +
+          escapeHtml(a.id) +
+          '" style="margin-top:0.4rem;width:100%">Message / RDV</button>' +
           '<button class="btn btn-outline btn-report" type="button" data-report="' +
           escapeHtml(a.id) +
           '" style="margin-top:0.4rem;width:100%">Signaler</button>' +
@@ -1207,6 +2017,12 @@
     });
     el.querySelectorAll("[data-buy]").forEach((btn) => {
       btn.addEventListener("click", () => buyArticle(btn.getAttribute("data-buy")));
+    });
+    el.querySelectorAll("[data-message]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const article = findArticle(btn.getAttribute("data-message"));
+        if (article) openComposeMessage(article);
+      });
     });
     el.querySelectorAll("[data-report]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1251,7 +2067,12 @@
           (p.articleId
             ? '<button type="button" class="btn btn-outline" data-visit-order="' +
               p.articleId +
-              '" style="padding:0.35rem 0.65rem;font-size:0.75rem">Ouvrir</button>'
+              '" style="padding:0.35rem 0.65rem;font-size:0.75rem">Ouvrir</button>' +
+              (p.sellerId
+                ? ' <button type="button" class="btn btn-outline" data-message-order="' +
+                  p.articleId +
+                  '" style="padding:0.35rem 0.65rem;font-size:0.75rem">RDV</button>'
+                : "")
             : "—") +
           "</td>" +
           "</tr>"
@@ -1259,6 +2080,12 @@
       .join("");
     body.querySelectorAll("[data-visit-order]").forEach((btn) => {
       btn.addEventListener("click", () => openArticle(btn.getAttribute("data-visit-order")));
+    });
+    body.querySelectorAll("[data-message-order]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const article = findArticle(btn.getAttribute("data-message-order"));
+        if (article) openComposeMessage(article);
+      });
     });
   }
 
@@ -1322,6 +2149,12 @@
     if (buyBtn) {
       buyBtn.disabled = owned;
       buyBtn.textContent = owned ? "Déjà acheté" : "Acheter en PI COIN";
+    }
+    const msgBtn = document.getElementById("modal-message");
+    if (msgBtn) {
+      const isOwn = DCS.user && DCS.user.id && article.sellerId === DCS.user.id;
+      msgBtn.disabled = !article.sellerId || !!isOwn;
+      msgBtn.textContent = isOwn ? "Vos messages" : "Message / RDV";
     }
     const gallery = document.getElementById("modal-gallery");
     const photos = article.photos || [];
@@ -1522,6 +2355,7 @@
     let target = "buy";
     if (view === "sell" || view === "vendeur") target = "sell";
     else if (view === "orders" || view === "achats") target = "orders";
+    else if (view === "messages" || view === "message" || view === "msg") target = "messages";
     tabs.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-view") === target);
     });
@@ -1536,9 +2370,21 @@
     if (searchWrap) searchWrap.style.display = target === "buy" ? "" : "none";
     if (target === "orders") renderBuyerOrders();
     if (target === "sell") renderSellerDashboard();
+    if (target === "messages") {
+      refreshMarketplaceMessages().then(function () {
+        renderMarketConversations();
+        renderMarketThread();
+      });
+    }
     try {
       const hash =
-        target === "sell" ? "#espace-vendeur" : target === "orders" ? "#mes-achats" : "#catalogue";
+        target === "sell"
+          ? "#espace-vendeur"
+          : target === "orders"
+            ? "#mes-achats"
+            : target === "messages"
+              ? "#messages"
+              : "#catalogue";
       history.replaceState(null, "", hash);
     } catch (e) {}
   }
@@ -1560,6 +2406,8 @@
       openMarketView("sell");
     } else if (hash.includes("achat") || hash.includes("order")) {
       openMarketView("orders");
+    } else if (hash.includes("message")) {
+      openMarketView("messages");
     } else {
       openMarketView("buy");
     }
@@ -1568,7 +2416,8 @@
     if (search) {
       search.addEventListener("input", () => {
         marketFilter.query = search.value;
-        renderMarketplace();
+        if (marketFilter.catalogMode === "merchants") renderMerchantsP2P();
+        else renderMarketplace();
       });
     }
 
@@ -1577,11 +2426,25 @@
     const backBtn = document.getElementById("modal-back");
     const buyBtn = document.getElementById("modal-buy");
     const reportBtn = document.getElementById("modal-report");
+    const messageBtn = document.getElementById("modal-message");
     if (closeBtn) closeBtn.addEventListener("click", closeArticleModal);
     if (backBtn) backBtn.addEventListener("click", closeArticleModal);
     if (buyBtn) {
       buyBtn.addEventListener("click", () => {
         if (activeArticleId != null) buyArticle(activeArticleId);
+      });
+    }
+    if (messageBtn) {
+      messageBtn.addEventListener("click", () => {
+        if (activeArticleId == null) return;
+        const article = findArticle(activeArticleId);
+        if (!article) return;
+        if (DCS.user && DCS.user.id && article.sellerId === DCS.user.id) {
+          openMarketView("messages");
+          closeArticleModal();
+          return;
+        }
+        openComposeMessage(article);
       });
     }
     if (reportBtn) {
@@ -1597,6 +2460,7 @@
       });
     }
     setupReportSeller();
+    setupMarketplaceMessaging();
     renderBuyerOrders();
     renderSellerDashboard();
   }
@@ -4428,10 +5292,18 @@
     }
     if (isMarket) {
       await DCS.backend.loadListings();
-      renderMarketplace();
-      renderSellers();
+      try {
+        await DCS.backend.loadMarketplaceMessages();
+      } catch (e) {}
+      try {
+        await refreshSellerDirectory();
+      } catch (e) {}
       setupMarketplaceForm();
       setupMarketplaceViews();
+      setupSellerProfileModal();
+      setCatalogMode(marketFilter.catalogMode || "merchants");
+      renderSellers();
+      renderMarketplace();
     }
     if (isRef) {
       await DCS.backend.loadReferrals();

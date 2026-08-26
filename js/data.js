@@ -236,6 +236,9 @@ DCS.articles = [
 ];
 
 DCS.marketplace = [];
+DCS.marketplaceMessages = [];
+DCS.sellerProfiles = {};
+DCS.sellerStats = {};
 
 DCS.purchases = [];
 
