@@ -4685,6 +4685,36 @@
    * 3) envoyer accessToken au backend → GET /v2/me
    * En ecosystem / App Studio : AUCUNE navigation (pas d’autre onglet, pas de redirect).
    */
+  /**
+   * Après Allow Pi : ouvrir l’app (même URL ou accueil).
+   * Recharge pour terminer le boot avec session active.
+   */
+  function enterAppAfterPiAuth() {
+    try {
+      updateAuthNav();
+    } catch (eNav) {}
+    /* Anti-boucle : un seul reload après Allow */
+    try {
+      if (sessionStorage.getItem("dcs_pi_just_entered") === "1") {
+        sessionStorage.removeItem("dcs_pi_just_entered");
+        return;
+      }
+      sessionStorage.setItem("dcs_pi_just_entered", "1");
+      sessionStorage.setItem("dcs_pi_auth_ok", "1");
+    } catch (eSs) {}
+    var next = authNextUrl();
+    var here = normalizePage(pageName());
+    if (here === "signin.html" || here === "signup.html" || here === "join.html") {
+      window.location.replace(next);
+      return;
+    }
+    if (normalizePage(next) !== here) {
+      window.location.replace(next);
+      return;
+    }
+    window.location.reload();
+  }
+
   async function runPiLoginFlow(errEl, btn) {
     if (errEl) {
       errEl.hidden = true;
@@ -4721,10 +4751,14 @@
         updateAuthNav();
       } catch (eNav) {}
       /*
-       * Mode Pi / App Studio : rester sur la même URL (Verify continue).
-       * Hors ecosystem seulement : aller à la page demandée.
+       * Ecosystem / Pi Browser : après Allow, ouvrir l’app automatiquement.
+       * Hors ecosystem + clic bouton : navigation classique.
        */
-      if (!isEcosystemMode() && btn) {
+      if (isEcosystemMode()) {
+        enterAppAfterPiAuth();
+        return { ok: true, entered: true };
+      }
+      if (btn) {
         window.location.href = authNextUrl();
       }
       return { ok: true };
@@ -4755,18 +4789,18 @@
   }
 
   /**
-   * Au chargement dans Pi Browser : flux SDK officiel uniquement.
-   * Pas de navigation — App Studio doit pouvoir détecter authenticate ici.
+   * Au chargement dans Pi Browser : flux SDK officiel, attendu avant le boot UI.
+   * Après Allow, enterAppAfterPiAuth ouvre l’app.
    */
-  function maybeAutoPiLogin(errEl) {
-    if (!isEcosystemMode()) return;
-    if (window.__dcsPiAutoAuthStarted) return;
-    if (isLoggedIn()) return;
+  async function maybeAutoPiLogin(errEl) {
+    if (!isEcosystemMode()) return { ok: false, skipped: true };
+    if (window.__dcsPiAutoAuthStarted) return { ok: false, skipped: true };
+    if (isLoggedIn()) return { ok: true, already: true };
     if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
-      return;
+      return { ok: false, skipped: true };
     }
     window.__dcsPiAutoAuthStarted = true;
-    runPiLoginFlow(errEl, null);
+    return runPiLoginFlow(errEl, null);
   }
 
   /** Empêche notre page d’ouvrir un autre onglet (window.open / target=_blank). */
@@ -5269,17 +5303,31 @@
     updateAuthNav();
     const page = pageName();
 
-    /* Auth Pi avant requireAuth (App Studio ouvre souvent l’URL racine / pages protégées) */
+    /* Auth Pi avant requireAuth — attendre Allow puis ouvrir l’app */
     if (isEcosystemMode()) {
       const piErrEarly =
         document.getElementById("signin-error") ||
         document.getElementById("signup-error") ||
         null;
       if (!isLoggedIn()) setupPiLoginButton(piErrEarly);
-      maybeAutoPiLogin(piErrEarly);
+      try {
+        var authRes = await maybeAutoPiLogin(piErrEarly);
+        /* Si enterAppAfterPiAuth a lancé un reload/replace, stoppe ce boot */
+        if (authRes && authRes.entered) return;
+      } catch (eAuto) {}
     }
 
-    if (!requireAuth(page)) return;
+    if (!requireAuth(page)) {
+      /* Ecosystem : ne pas couper tout le boot si auth encore en cours —
+         mais si vraiment non connecté, laisser la page + bouton Pi. */
+      if (!isEcosystemMode()) return;
+      updateAuthNav();
+      if (!isPublicPage(page) && !isLoggedIn()) {
+        /* Continuer le boot minimal (nav) ; les modules protégés s’activeront après Allow */
+      } else if (!isLoggedIn()) {
+        return;
+      }
+    }
 
     if (document.getElementById("ticker-track")) {
       renderTicker();

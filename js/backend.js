@@ -115,6 +115,17 @@
     }
     DCS.user.loggedIn = true;
     setLocalSession(profile.id, profile.username);
+    /* Restaurer avatar depuis cache local si la base est vide (évite disparition) */
+    try {
+      if (!DCS.user.avatar && profile.id) {
+        var cached = localStorage.getItem("dcs_avatar_" + profile.id) || "";
+        if (cached && /^(https?:|data:image\/)/i.test(cached)) {
+          DCS.user.avatar = cached.split("?")[0];
+        }
+      } else if (DCS.user.avatar && profile.id) {
+        localStorage.setItem("dcs_avatar_" + profile.id, String(DCS.user.avatar).split("?")[0]);
+      }
+    } catch (eCache) {}
     if (typeof DCS.buildShareLinks === "function") DCS.buildShareLinks();
     return true;
   }
@@ -311,6 +322,17 @@
               });
             }
             applyProfile(profile);
+            /* Si avatar restauré depuis cache local mais absent en base → réécrire */
+            try {
+              if (
+                profile &&
+                DCS.user.avatar &&
+                !profile.avatar &&
+                self.persistProfile
+              ) {
+                self.persistProfile().catch(function () {});
+              }
+            } catch (eAvRest) {}
             /* Ne pas bloquer l'ouverture : soldes / MFA en arrière-plan */
             self
               .syncSecurityFlags(session.user)
@@ -346,7 +368,22 @@
         } else {
           DCS.user.phoneLinked = false;
         }
-        return self.persistProfile().catch(function () {});
+        /* Ne PAS appeler persistProfile ici : un patch partiel / race
+           pouvait écraser avatar et d’autres champs avec des valeurs vides. */
+        return gate.client
+          .from("profiles")
+          .update({
+            gmail_linked: !!DCS.user.gmailLinked,
+            phone_linked: !!DCS.user.phoneLinked,
+            google_auth: !!DCS.user.googleAuth
+          })
+          .eq("id", DCS.user.id)
+          .then(function () {
+            return true;
+          })
+          .catch(function () {
+            return false;
+          });
       });
     },
 
@@ -912,9 +949,15 @@
         address: u.address || "",
         bio: u.bio || "",
         phone: u.phone || "",
-        avatar: avatarVal,
         language: u.language || "fr"
       };
+      /* Ne jamais écraser une photo existante avec une chaîne vide */
+      if (avatarVal && !/^blob:/i.test(avatarVal)) {
+        patch.avatar = avatarVal;
+        try {
+          localStorage.setItem("dcs_avatar_" + u.id, avatarVal);
+        } catch (eAv) {}
+      }
       /* KYC verified uniquement côté ops ; le client peut seulement demander pending */
       if (u.kyc === "pending") patch.kyc = "pending";
       return gate.client
