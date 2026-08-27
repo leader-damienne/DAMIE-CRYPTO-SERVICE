@@ -837,6 +837,48 @@ ul {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+.seller-flag {
+  display: inline-block;
+  width: 22px;
+  height: 16px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.seller-flag-unknown {
+  width: auto;
+  height: auto;
+  border: 0;
+  box-shadow: none;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.p2p-merchant-name .seller-flag {
+  margin-right: 0.2rem;
+}
+
+.seller-profile-location {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.seller-profile-info-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: right;
+}
+
+.sp-country-name {
+  font-weight: 700;
+}
+
 .founder-footer {
   margin-top: 0.85rem;
   font-size: 0.8rem;
@@ -2875,6 +2917,10 @@ body.is-pi-browser .form-row-2 {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  justify-content: flex-end;
 }
 
 .mkt-card-shop:hover {

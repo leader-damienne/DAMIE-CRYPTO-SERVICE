@@ -1413,6 +1413,74 @@
     return s.slice(0, 2).toUpperCase();
   }
 
+  function countryToIso(country) {
+    const n = String(country || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const map = {
+      benin: "bj",
+      senegal: "sn",
+      "cote d'ivoire": "ci",
+      "cote divoire": "ci",
+      "ivory coast": "ci",
+      cameroun: "cm",
+      cameroon: "cm",
+      gabon: "ga",
+      togo: "tg",
+      mali: "ml",
+      "burkina faso": "bf",
+      niger: "ne",
+      tchad: "td",
+      chad: "td",
+      congo: "cg",
+      "congo-brazzaville": "cg",
+      "rd congo": "cd",
+      "rdc": "cd",
+      "republique democratique du congo": "cd",
+      "democratic republic of the congo": "cd",
+      guinee: "gn",
+      guinea: "gn",
+      france: "fr",
+      nigeria: "ng",
+      ghana: "gh",
+      maroc: "ma",
+      morocco: "ma"
+    };
+    return map[n] || "";
+  }
+
+  function countryFlagHtml(country) {
+    const label = String(country || "").trim();
+    if (!label || /^autre$/i.test(label)) {
+      return (
+        '<span class="seller-flag seller-flag-unknown" title="International" aria-label="International">🌐</span>'
+      );
+    }
+    const iso = countryToIso(label);
+    if (!iso) {
+      return (
+        '<span class="seller-flag seller-flag-unknown" title="' +
+        escapeHtml(label) +
+        '" aria-label="' +
+        escapeHtml(label) +
+        '">🏳️</span>'
+      );
+    }
+    return (
+      '<img class="seller-flag" src="https://flagcdn.com/w40/' +
+      iso +
+      '.png" srcset="https://flagcdn.com/w80/' +
+      iso +
+      '.png 2x" width="22" height="16" alt="' +
+      escapeHtml(label) +
+      '" title="' +
+      escapeHtml(label) +
+      '" loading="lazy" decoding="async" />'
+    );
+  }
+
   function kycLabel(kyc) {
     const k = String(kyc || "none").toLowerCase();
     if (k === "verified" || k === "approved" || k === "ok") return "Vérifié";
@@ -1495,6 +1563,7 @@
         const cityLine = [profile && profile.city, profile && profile.country]
           .filter(Boolean)
           .join(", ");
+        const flagHtml = countryFlagHtml(profile && profile.country);
         const priceLabel =
           m.minPrice === m.maxPrice
             ? String(m.minPrice) + " π"
@@ -1517,6 +1586,7 @@
           "</div>" +
           '<div class="p2p-merchant-meta">' +
           '<div class="p2p-merchant-name">' +
+          flagHtml +
           "<strong>" +
           escapeHtml(display) +
           "</strong>" +
@@ -1721,9 +1791,15 @@
       merchant.shopName +
       " »";
     const loc = [profile && profile.city, profile && profile.country].filter(Boolean).join(", ");
-    document.getElementById("sp-location").textContent = loc
-      ? loc
-      : "Lieu non renseigné — convenez d’un RDV via Messages";
+    const locEl = document.getElementById("sp-location");
+    if (locEl) {
+      locEl.innerHTML = loc
+        ? countryFlagHtml(profile && profile.country) +
+          ' <span class="sp-loc-text">' +
+          escapeHtml(loc) +
+          "</span>"
+        : '<span class="sp-loc-text">Lieu non renseigné — convenez d’un RDV via Messages</span>';
+    }
     const sales = merchant.sales || 0;
     const completion = sales > 0 ? Math.min(99, 85 + Math.min(14, sales)) + "%" : "Nouveau";
     const stats = document.getElementById("sp-stats");
@@ -1756,7 +1832,7 @@
         ["Nom", (profile && profile.lastName) || "—"],
         ["Identifiant Pi", (profile && (profile.piUsername || profile.username)) || "—"],
         ["Membre depuis", (profile && profile.joined) || "—"],
-        ["Pays", (profile && profile.country) || "—"],
+        ["Pays", (profile && profile.country) || "—", "country"],
         ["Ville / lieu", (profile && profile.city) || "—"],
         ["Adresse / remise", (profile && profile.address) || "—"],
         ["Téléphone", (profile && profile.phone) || "—"],
@@ -1772,11 +1848,18 @@
       ];
       info.innerHTML = rows
         .map(function (r) {
+          var valueHtml =
+            r[2] === "country" && r[1] && r[1] !== "—"
+              ? countryFlagHtml(r[1]) +
+                ' <span class="sp-country-name">' +
+                escapeHtml(String(r[1])) +
+                "</span>"
+              : escapeHtml(String(r[1]));
           return (
             '<div class="seller-profile-info-row"><span>' +
             escapeHtml(r[0]) +
-            "</span><strong>" +
-            escapeHtml(String(r[1])) +
+            "</span><strong class=\"seller-profile-info-val\">" +
+            valueHtml +
             "</strong></div>"
           );
         })
@@ -1991,6 +2074,9 @@
         const excerpt = String(a.excerpt || "").trim();
         const short =
           excerpt.length > 110 ? excerpt.slice(0, 107).trim() + "…" : excerpt;
+        const sellerProf =
+          (a.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[a.sellerId]) || null;
+        const shopFlag = countryFlagHtml(sellerProf && sellerProf.country);
         return (
           '<article class="mkt-card' +
           (owned ? " is-owned" : "") +
@@ -2018,6 +2104,8 @@
           '" data-open-shop="' +
           escapeHtml(a.author || "") +
           '">' +
+          shopFlag +
+          " " +
           escapeHtml(a.author || "Vendeur") +
           "</button>" +
           "</div>" +
