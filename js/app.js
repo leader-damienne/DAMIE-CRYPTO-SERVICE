@@ -1278,6 +1278,11 @@
     closeComposeMessage();
     closeArticleModal();
     await refreshMarketplaceMessages();
+    updateMessagesTabBadge();
+    try {
+      if (DCS.backend.loadNotifications) await DCS.backend.loadNotifications();
+      if (typeof renderNotifications === "function") renderNotifications();
+    } catch (eN) {}
     openMarketView("messages");
     const art = listingId ? findArticle(listingId) : null;
     await openMarketThread(
@@ -1286,7 +1291,9 @@
       art ? art.author : "Vendeur",
       art ? art.title : ""
     );
-    alert("Message envoyé. Suivez la conversation dans Messages.");
+    updateMarketMsgAlert();
+    updateMessagesTabBadge();
+    alert("Message envoyé. Le destinataire le verra dans Messages (notification).");
   }
 
   async function sendThreadReply(e) {
@@ -1314,6 +1321,12 @@
     await refreshMarketplaceMessages();
     renderMarketConversations();
     renderMarketThread();
+    updateMessagesTabBadge();
+    updateMarketMsgAlert();
+    try {
+      if (DCS.backend.loadNotifications) await DCS.backend.loadNotifications();
+      if (typeof renderNotifications === "function") renderNotifications();
+    } catch (eN2) {}
   }
 
   function setupMarketplaceMessaging() {
@@ -1450,39 +1463,102 @@
     } catch (e) {}
   }
 
+  function merchantSearchHaystack(m) {
+    const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
+    return [
+      m.shopName,
+      m.sampleTitle,
+      (m.categoryList || []).join(" "),
+      profile && profile.displayName,
+      profile && profile.username,
+      profile && profile.piUsername,
+      profile && profile.piUsername ? "@" + profile.piUsername : "",
+      profile && profile.city,
+      profile && profile.country,
+      profile && profile.address,
+      profile && profile.phone,
+      profile && profile.bio,
+      profile && profile.firstName,
+      profile && profile.lastName
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+  }
+
+  function filterMerchantsByQuery(merchants, query) {
+    const q = String(query || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^@+/, "");
+    if (!q) return merchants || [];
+    return (merchants || []).filter(function (m) {
+      const hay = merchantSearchHaystack(m);
+      if (hay.indexOf(q) !== -1) return true;
+      if (hay.indexOf("@" + q) !== -1) return true;
+      return false;
+    });
+  }
+
+  function unreadMarketplaceCount() {
+    const uid = DCS.user && DCS.user.id;
+    if (!uid) return 0;
+    return (DCS.marketplaceMessages || []).filter(function (m) {
+      return m.recipient_id === uid && !m.read_at;
+    }).length;
+  }
+
+  function updateMessagesTabBadge() {
+    const tabs = document.getElementById("market-tabs");
+    if (!tabs) return;
+    const btn = tabs.querySelector('[data-view="messages"]');
+    if (!btn) return;
+    const n = unreadMarketplaceCount();
+    const base = "Messages";
+    btn.innerHTML =
+      n > 0
+        ? base + ' <span class="market-tab-badge">' + n + "</span>"
+        : base;
+  }
+
+  function updateMarketMsgAlert() {
+    const el = document.getElementById("market-msg-alert");
+    if (!el) return;
+    const n = unreadMarketplaceCount();
+    if (n <= 0) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML =
+      "<strong>" +
+      n +
+      " nouveau(x) message(s)</strong> — ouvrez une conversation à gauche pour lire et répondre.";
+  }
+
   function renderMerchantsP2P() {
     const list = document.getElementById("merchants-p2p-list");
     const hint = document.getElementById("merchants-hint");
     if (!list) return;
-    const q = (marketFilter.query || "").trim().toLowerCase();
-    let merchants = getMerchants();
-    if (q) {
-      merchants = merchants.filter(function (m) {
-        const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
-        const hay = [
-          m.shopName,
-          m.sampleTitle,
-          (m.categoryList || []).join(" "),
-          profile && profile.city,
-          profile && profile.country,
-          profile && profile.username,
-          profile && profile.piUsername,
-          profile && profile.bio
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.indexOf(q) !== -1;
-      });
-    }
+    let merchants = filterMerchantsByQuery(getMerchants(), marketFilter.query);
     if (hint) {
-      hint.textContent =
-        merchants.length +
-        " vendeur(s) · paiement exclusif en PI COIN";
+      const q = (marketFilter.query || "").trim();
+      hint.textContent = q
+        ? merchants.length +
+          " vendeur(s) pour « " +
+          q +
+          " » · cliquez un vendeur pour voir toutes ses infos"
+        : merchants.length +
+          " vendeur(s) · cliquez un vendeur pour ouvrir son profil complet";
     }
     if (!merchants.length) {
       list.innerHTML =
-        '<p class="panel-note" style="padding:1rem 0">Aucun marchand pour le moment. Publiez depuis l’espace vendeur.</p>';
+        '<p class="panel-note" style="padding:1rem 0">' +
+        ((marketFilter.query || "").trim()
+          ? "Aucun vendeur trouvé pour cette recherche. Essayez le @pseudo Pi ou le nom de boutique."
+          : "Aucun marchand pour le moment. Publiez depuis l’espace vendeur.") +
+        "</p>";
       return;
     }
     list.innerHTML = merchants
@@ -1490,6 +1566,8 @@
         const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
         const display =
           (profile && (profile.displayName || profile.piUsername)) || m.shopName;
+        const piHandle =
+          (profile && (profile.piUsername || profile.username)) || "";
         const avatarUrl = profile && profile.avatar ? safeUrl(profile.avatar) : "";
         const verified = profile ? kycLabel(profile.kyc) : "";
         const cityLine = [profile && profile.city, profile && profile.country]
@@ -1506,11 +1584,11 @@
           ? '<img src="' + escapeHtml(avatarUrl) + '" alt="" />'
           : escapeHtml(sellerInitials(display));
         return (
-          '<article class="p2p-merchant-row" data-merchant-id="' +
+          '<article class="p2p-merchant-row is-clickable" data-merchant-id="' +
           escapeHtml(m.sellerId || "") +
           '" data-merchant-shop="' +
           escapeHtml(m.shopName) +
-          '">' +
+          '" title="Voir le profil vendeur">' +
           '<div class="p2p-col p2p-col-merchant">' +
           '<div class="p2p-avatar">' +
           avatarHtml +
@@ -1526,6 +1604,7 @@
           "</div>" +
           '<div class="p2p-merchant-sub">' +
           escapeHtml(m.shopName) +
+          (piHandle ? " · <span class=\"p2p-pi-user\">@" + escapeHtml(piHandle) + "</span>" : "") +
           (cityLine ? " · " + escapeHtml(cityLine) : "") +
           "</div>" +
           '<div class="p2p-merchant-stats">' +
@@ -1591,13 +1670,24 @@
       })
       .join("");
 
+    list.querySelectorAll(".p2p-merchant-row").forEach(function (row) {
+      row.addEventListener("click", function (e) {
+        if (e.target && e.target.closest && e.target.closest("button")) return;
+        openSellerProfile(
+          row.getAttribute("data-merchant-id") || "",
+          row.getAttribute("data-merchant-shop") || ""
+        );
+      });
+    });
     list.querySelectorAll("[data-p2p-profile]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
         openSellerProfile(btn.getAttribute("data-p2p-profile"), btn.getAttribute("data-p2p-shop"));
       });
     });
     list.querySelectorAll("[data-p2p-trade]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
         const sid = btn.getAttribute("data-p2p-trade");
         const shop = btn.getAttribute("data-p2p-shop");
         const merchant = getMerchants().find(function (m) {
@@ -1613,7 +1703,8 @@
       });
     });
     list.querySelectorAll("[data-p2p-message]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
         const sid = btn.getAttribute("data-p2p-message");
         const shop = btn.getAttribute("data-p2p-shop");
         const article =
@@ -1676,8 +1767,9 @@
     }
     document.getElementById("sp-shop-name").textContent = display;
     document.getElementById("sp-handle").textContent =
-      "@" +
-      ((profile && (profile.piUsername || profile.username)) || merchant.shopName) +
+      (profile && (profile.piUsername || profile.username)
+        ? "@" + (profile.piUsername || profile.username)
+        : "—") +
       " · Boutique « " +
       merchant.shopName +
       " »";
@@ -1712,7 +1804,8 @@
     if (info) {
       const rows = [
         ["Boutique", merchant.shopName],
-        ["Identifiant", (profile && (profile.piUsername || profile.username)) || "—"],
+        ["Identifiant Pi", (profile && (profile.piUsername || profile.username)) ? "@" + (profile.piUsername || profile.username) : "—"],
+        ["Nom", [profile && profile.firstName, profile && profile.lastName].filter(Boolean).join(" ") || "—"],
         ["Membre depuis", (profile && profile.joined) || "—"],
         ["Ville / lieu", (profile && profile.city) || "—"],
         ["Pays", (profile && profile.country) || "—"],
@@ -1851,16 +1944,26 @@
   }
 
   function filteredArticles() {
-    const q = (marketFilter.query || "").trim().toLowerCase();
+    const q = (marketFilter.query || "").trim().toLowerCase().replace(/^@+/, "");
     return (DCS.marketplace || []).filter((a) => {
       if (marketFilter.seller !== "all" && a.author !== marketFilter.seller) return false;
       if (!q) return true;
-      return (
-        (a.title || "").toLowerCase().includes(q) ||
-        (a.author || "").toLowerCase().includes(q) ||
-        (a.category || "").toLowerCase().includes(q) ||
-        (a.excerpt || "").toLowerCase().includes(q)
-      );
+      const profile =
+        (a.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[a.sellerId]) || null;
+      const hay = [
+        a.title,
+        a.author,
+        a.category,
+        a.excerpt,
+        profile && profile.piUsername,
+        profile && profile.username,
+        profile && profile.displayName,
+        profile && profile.city
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.indexOf(q) !== -1;
     });
   }
 
@@ -2570,8 +2673,11 @@
       refreshMarketplaceMessages().then(function () {
         renderMarketConversations();
         renderMarketThread();
+        updateMessagesTabBadge();
+        updateMarketMsgAlert();
       });
     }
+    updateMessagesTabBadge();
     try {
       const hash =
         target === "sell"
@@ -2612,6 +2718,16 @@
     if (search) {
       search.addEventListener("input", () => {
         marketFilter.query = search.value;
+        const q = (marketFilter.query || "").trim();
+        /* Recherche vendeur (@pseudo Pi / boutique) → vue Vendeurs */
+        if (q) {
+          const hits = filterMerchantsByQuery(getMerchants(), q);
+          if (hits.length) {
+            if (marketFilter.catalogMode !== "merchants") setCatalogMode("merchants");
+            else renderMerchantsP2P();
+            return;
+          }
+        }
         if (marketFilter.catalogMode === "merchants") renderMerchantsP2P();
         else renderMarketplace();
       });

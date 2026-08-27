@@ -1343,7 +1343,7 @@
       return gate.client
         .from("profiles")
         .select(
-          "id, username, display_name, pi_username, bio, city, country, address, phone, avatar, kyc, created_at, phone_linked, gmail_linked"
+          "id, username, display_name, first_name, last_name, pi_username, bio, city, country, address, phone, avatar, kyc, created_at, phone_linked, gmail_linked"
         )
         .in("id", unique)
         .then(function (res) {
@@ -1357,6 +1357,8 @@
               id: row.id,
               username: row.username || "",
               displayName: row.display_name || row.pi_username || row.username || "",
+              firstName: row.first_name || "",
+              lastName: row.last_name || "",
               piUsername: row.pi_username || "",
               bio: row.bio || "",
               city: row.city || "",
@@ -1404,17 +1406,90 @@
 
     sendMarketplaceMessage: function (listingId, recipientId, body, senderLabel) {
       var gate = this.requireClient();
+      var self = this;
       if (!gate.ok) return Promise.resolve(gate);
       if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
+      var text = String(body || "").trim();
+      if (!text) return Promise.resolve({ ok: false, error: "Message vide." });
+      if (text.length > 2000) {
+        return Promise.resolve({ ok: false, error: "Message trop long (max. 2000)." });
+      }
+      var lid = listingId;
+      if (!lid || lid === "null" || lid === "undefined" || String(lid).trim() === "") {
+        lid = null;
+      }
+      var label =
+        senderLabel ||
+        DCS.user.displayName ||
+        DCS.user.piUsername ||
+        DCS.user.username ||
+        "Utilisateur DCS";
+
+      function notifyRecipient(preview) {
+        return gate.client
+          .from("notifications")
+          .insert({
+            user_id: recipientId,
+            title: "Message Marketplace",
+            body: String(label) + " : " + String(preview || text).slice(0, 120),
+            kind: "market"
+          })
+          .then(function () {
+            return true;
+          })
+          .catch(function () {
+            return false;
+          });
+      }
+
+      function insertDirect() {
+        return gate.client
+          .from("marketplace_messages")
+          .insert({
+            listing_id: lid,
+            sender_id: DCS.user.id,
+            recipient_id: recipientId,
+            sender_label: label,
+            body: text
+          })
+          .select("id")
+          .single()
+          .then(function (ins) {
+            if (ins.error) {
+              var msg = ins.error.message || "Envoi impossible.";
+              if (/relation.*marketplace_messages|does not exist|schema cache/i.test(msg)) {
+                return {
+                  ok: false,
+                  error:
+                    "Messagerie non activée. Exécutez supabase/marketplace-messages.sql dans Supabase."
+                };
+              }
+              return { ok: false, error: msg };
+            }
+            return notifyRecipient(text).then(function () {
+              return { ok: true, id: ins.data && ins.data.id ? ins.data.id : null };
+            });
+          });
+      }
+
       return gate.client
         .rpc("dcs_send_marketplace_message", {
-          p_listing_id: listingId || null,
+          p_listing_id: lid,
           p_recipient_id: recipientId,
-          p_body: body,
-          p_sender_label: senderLabel || null
+          p_body: text,
+          p_sender_label: label
         })
         .then(function (res) {
-          if (res.error) return { ok: false, error: res.error.message };
+          if (res.error) {
+            var em = res.error.message || "";
+            /* RPC absente / schéma → fallback insert direct */
+            if (
+              /Could not find the function|schema cache|does not exist|42883/i.test(em)
+            ) {
+              return insertDirect();
+            }
+            return { ok: false, error: em };
+          }
           var data = res.data || {};
           if (data && data.ok === false) {
             return { ok: false, error: data.error || "Envoi impossible." };

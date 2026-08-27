@@ -2965,6 +2965,40 @@ body.is-pi-browser .form-row-2 {
   font-size: 0.88rem;
 }
 
+.p2p-merchant-row.is-clickable {
+  cursor: pointer;
+}
+
+.p2p-pi-user {
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+
+.market-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.35rem;
+  margin-left: 0.25rem;
+  border-radius: 999px;
+  background: var(--gold, #d4af37);
+  color: #111;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.market-msg-alert {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--white);
+  font-size: 0.88rem;
+}
+
 .seller-step-badge {
   display: inline-block;
   margin-bottom: 0.65rem;
