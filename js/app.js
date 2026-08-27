@@ -1738,24 +1738,35 @@
       return a.author === merchant.shopName;
     });
     if (listingsEl) {
+      listingsEl.className = "mkt-product-grid mkt-product-grid-compact";
       listingsEl.innerHTML = mine.length
         ? mine
             .map(function (a) {
               const thumb = a.photos && a.photos[0] ? safeUrl(a.photos[0]) : "";
               return (
-                '<button type="button" class="seller-profile-listing" data-sp-open="' +
+                '<article class="mkt-card mkt-card-mini">' +
+                '<button type="button" class="mkt-card-media" data-sp-open="' +
                 escapeHtml(a.id) +
                 '">' +
                 (thumb
-                  ? '<img src="' + escapeHtml(thumb) + '" alt="" />'
-                  : '<span class="market-cover placeholder">PI</span>') +
-                "<div><strong>" +
+                  ? '<img src="' + escapeHtml(thumb) + '" alt="" loading="lazy" />'
+                  : '<div class="mkt-card-placeholder">π</div>') +
+                "</button>" +
+                '<div class="mkt-card-body">' +
+                '<span class="ref-badge">' +
+                escapeHtml(a.category || "Divers") +
+                "</span>" +
+                "<h4>" +
                 escapeHtml(a.title) +
-                "</strong><span>" +
-                escapeHtml(a.category || "") +
-                " · " +
+                "</h4>" +
+                '<div class="mkt-card-footer">' +
+                '<span class="price-pi">' +
                 escapeHtml(String(a.pricePi)) +
-                " π</span></div></button>"
+                " π</span>" +
+                '<button type="button" class="btn btn-outline" data-sp-open="' +
+                escapeHtml(a.id) +
+                '">Voir</button>' +
+                "</div></div></article>"
               );
             })
             .join("")
@@ -1872,46 +1883,33 @@
     if (!list || !window.DCS) return;
     const sellers = getSellers();
     if (allCount) allCount.textContent = String((DCS.marketplace || []).length);
+    const allChip = document.querySelector('.mkt-filter-chip[data-seller="all"]');
+    if (allChip) allChip.classList.toggle("active", marketFilter.seller === "all");
     list.innerHTML =
       sellers
-        .map(
-          (s) =>
-            '<div class="seller-chip-wrap">' +
-            '<button type="button" class="seller-chip" data-seller="' +
-            s.name.replace(/"/g, "&quot;") +
+        .map(function (s) {
+          const active = s.name === marketFilter.seller;
+          return (
+            '<button type="button" class="mkt-filter-chip' +
+            (active ? " active" : "") +
+            '" data-seller="' +
+            escapeHtml(s.name) +
             '">' +
-            '<span class="seller-avatar">' +
-            s.name.slice(0, 1).toUpperCase() +
-            "</span>" +
-            '<span class="seller-meta"><strong>' +
-            s.name +
-            "</strong><small>" +
+            escapeHtml(s.name) +
+            " <span>" +
             s.count +
-            " article" +
-            (s.count > 1 ? "s" : "") +
-            "</small></span>" +
-            "</button>" +
-            '<button type="button" class="seller-report-btn" data-report-seller="' +
-            s.name.replace(/"/g, "&quot;") +
-            '" title="Signaler">Signaler</button>' +
-            "</div>"
-        )
-        .join("") ||
-      '<p class="panel-note" style="margin:0.5rem 0 0">Aucun vendeur pour le moment. Publiez depuis l’espace vendeur.</p>';
+            "</span></button>"
+          );
+        })
+        .join("") || "";
 
-    document.querySelectorAll(".seller-chip").forEach((btn) => {
+    document.querySelectorAll(".mkt-filter-chip[data-seller]").forEach(function (btn) {
       const name = btn.getAttribute("data-seller") || "all";
       btn.classList.toggle("active", name === marketFilter.seller);
-      btn.onclick = () => {
+      btn.onclick = function () {
         marketFilter.seller = name;
         renderSellers();
         renderMarketplace();
-      };
-    });
-    document.querySelectorAll("[data-report-seller]").forEach((btn) => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        openReportSeller(btn.getAttribute("data-report-seller"), null);
       };
     });
   }
@@ -1924,11 +1922,12 @@
     if (hint) {
       hint.textContent =
         marketFilter.seller === "all"
-          ? items.length + " article(s) disponibles · paiement en PI COIN"
+          ? items.length + " article(s) · paiement en PI COIN"
           : "Boutique « " + marketFilter.seller + " » · " + items.length + " article(s)";
     }
     if (!items.length) {
-      el.innerHTML = '<p class="panel-note" style="padding:1rem 0">Aucun article trouvé.</p>';
+      el.innerHTML =
+        '<div class="mkt-empty"><p class="panel-note">Aucun article trouvé pour ce filtre.</p></div>';
       return;
     }
     el.innerHTML = items
@@ -1936,98 +1935,101 @@
         const photos = a.photos || [];
         const owned = isPurchased(a.id);
         const coverSrc = safeUrl(photos[0]);
-        const cover = coverSrc
-          ? '<img class="market-cover" src="' + escapeHtml(coverSrc) + '" alt="" />'
-          : '<div class="market-cover placeholder">PI</div>';
-        const thumbs =
-          photos.length > 1
-            ? '<div class="article-photos compact">' +
-              photos
-                .slice(0, 4)
-                .map(function (src, i) {
-                  var u = safeUrl(src);
-                  if (!u) return "";
-                  return (
-                    '<button type="button" class="article-photo" data-full="' +
-                    escapeHtml(u) +
-                    '" title="Photo ' +
-                    (i + 1) +
-                    '"><img src="' +
-                    escapeHtml(u) +
-                    '" alt="" loading="lazy" /></button>'
-                  );
-                })
-                .join("") +
-              "</div>"
-            : "";
+        const photoCount = photos.filter(function (p) {
+          return !!safeUrl(p);
+        }).length;
+        const excerpt = String(a.excerpt || "").trim();
+        const short =
+          excerpt.length > 110 ? excerpt.slice(0, 107).trim() + "…" : excerpt;
         return (
-          '<article class="market-article">' +
-          '<div class="market-article-top">' +
-          cover +
-          '<div class="market-article-body">' +
-          "<div>" +
-          '<div class="ref-badge">' +
+          '<article class="mkt-card' +
+          (owned ? " is-owned" : "") +
+          '">' +
+          '<button type="button" class="mkt-card-media" data-visit="' +
+          escapeHtml(a.id) +
+          '" aria-label="Voir ' +
+          escapeHtml(a.title) +
+          '">' +
+          (coverSrc
+            ? '<img src="' + escapeHtml(coverSrc) + '" alt="" loading="lazy" />'
+            : '<div class="mkt-card-placeholder">π</div>') +
+          (photoCount > 1
+            ? '<span class="mkt-card-photos">' + photoCount + " photos</span>"
+            : "") +
+          (owned ? '<span class="mkt-card-owned">Acheté</span>' : "") +
+          "</button>" +
+          '<div class="mkt-card-body">' +
+          '<div class="mkt-card-top">' +
+          '<span class="ref-badge">' +
           escapeHtml(a.category || "Divers") +
+          "</span>" +
+          '<button type="button" class="mkt-card-shop" data-open-seller="' +
+          escapeHtml(a.sellerId || "") +
+          '" data-open-shop="' +
+          escapeHtml(a.author || "") +
+          '">' +
+          escapeHtml(a.author || "Vendeur") +
+          "</button>" +
           "</div>" +
           "<h4>" +
           escapeHtml(a.title) +
           "</h4>" +
-          "<p>par <strong>" +
-          escapeHtml(a.author) +
-          "</strong> — " +
-          escapeHtml(a.excerpt || "") +
-          "</p>" +
-          (owned
-            ? '<p class="tx-status is-confirmed" style="margin-top:0.45rem"><span class="status-dot on"></span>Déjà acheté</p>'
-            : "") +
-          "</div>" +
-          '<div class="market-article-buy">' +
-          '<div class="price-pi">' +
-          escapeHtml(a.pricePi) +
-          " π</div>" +
-          '<button class="btn btn-outline" type="button" data-visit="' +
+          (short ? '<p class="mkt-card-excerpt">' + escapeHtml(short) + "</p>" : "") +
+          '<div class="mkt-card-footer">' +
+          '<div class="mkt-card-price"><span class="price-pi">' +
+          escapeHtml(String(a.pricePi)) +
+          " π</span><small>PI COIN</small></div>" +
+          '<div class="mkt-card-actions">' +
+          '<button type="button" class="btn btn-outline" data-visit="' +
           escapeHtml(a.id) +
-          '" style="margin-top:0.4rem;width:100%">Consulter</button>' +
+          '">Détails</button>' +
           (owned
-            ? '<button class="btn btn-outline" type="button" disabled style="margin-top:0.4rem;width:100%">Acheté</button>'
-            : '<button class="btn btn-gold" type="button" data-buy="' +
+            ? '<button type="button" class="btn btn-outline" disabled>Acheté</button>'
+            : '<button type="button" class="btn btn-gold" data-buy="' +
               escapeHtml(a.id) +
-              '" style="margin-top:0.4rem;width:100%">Acheter</button>') +
-          '<button class="btn btn-outline" type="button" data-message="' +
+              '">Acheter</button>') +
+          "</div></div>" +
+          '<div class="mkt-card-links">' +
+          '<button type="button" data-message="' +
           escapeHtml(a.id) +
-          '" style="margin-top:0.4rem;width:100%">Message / RDV</button>' +
-          '<button class="btn btn-outline btn-report" type="button" data-report="' +
+          '">Message / RDV</button>' +
+          '<button type="button" class="is-muted" data-report="' +
           escapeHtml(a.id) +
-          '" style="margin-top:0.4rem;width:100%">Signaler</button>' +
-          "</div></div></div>" +
-          thumbs +
-          "</article>"
+          '">Signaler</button>' +
+          "</div></div></article>"
         );
       })
       .join("");
 
-    el.querySelectorAll(".article-photo").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openLightbox(btn.getAttribute("data-full"));
+    el.querySelectorAll("[data-visit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openArticle(btn.getAttribute("data-visit"));
       });
     });
-    el.querySelectorAll("[data-visit]").forEach((btn) => {
-      btn.addEventListener("click", () => openArticle(btn.getAttribute("data-visit")));
+    el.querySelectorAll("[data-buy]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        buyArticle(btn.getAttribute("data-buy"));
+      });
     });
-    el.querySelectorAll("[data-buy]").forEach((btn) => {
-      btn.addEventListener("click", () => buyArticle(btn.getAttribute("data-buy")));
-    });
-    el.querySelectorAll("[data-message]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+    el.querySelectorAll("[data-message]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
         const article = findArticle(btn.getAttribute("data-message"));
         if (article) openComposeMessage(article);
       });
     });
-    el.querySelectorAll("[data-report]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+    el.querySelectorAll("[data-report]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
         const article = findArticle(btn.getAttribute("data-report"));
         if (article) openReportSeller(article.author, article.id);
+      });
+    });
+    el.querySelectorAll("[data-open-seller]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openSellerProfile(
+          btn.getAttribute("data-open-seller") || "",
+          btn.getAttribute("data-open-shop") || ""
+        );
       });
     });
   }
@@ -2115,21 +2117,41 @@
         '<p class="panel-note">Aucun article publié. Utilisez le formulaire pour mettre en vente.</p>';
       return;
     }
+    box.className = "mkt-product-grid mkt-product-grid-compact";
     box.innerHTML = mine
-      .map(
-        (a) =>
-          '<div class="asset-row seller-listing-row">' +
-          "<div><strong>" +
-          a.title +
-          '</strong><div class="panel-note">' +
-          (a.category || "Divers") +
-          " · " +
-          a.pricePi +
-          " π</div></div>" +
-          '<span class="tx-status is-confirmed"><span class="status-dot on"></span>Actif</span>' +
-          "</div>"
-      )
+      .map(function (a) {
+        const thumb = a.photos && a.photos[0] ? safeUrl(a.photos[0]) : "";
+        return (
+          '<article class="mkt-card mkt-card-mini">' +
+          '<div class="mkt-card-media" style="pointer-events:none">' +
+          (thumb
+            ? '<img src="' + escapeHtml(thumb) + '" alt="" loading="lazy" />'
+            : '<div class="mkt-card-placeholder">π</div>') +
+          '<span class="mkt-card-owned soft">Actif</span>' +
+          "</div>" +
+          '<div class="mkt-card-body">' +
+          '<span class="ref-badge">' +
+          escapeHtml(a.category || "Divers") +
+          "</span>" +
+          "<h4>" +
+          escapeHtml(a.title) +
+          "</h4>" +
+          '<div class="mkt-card-footer">' +
+          '<span class="price-pi">' +
+          escapeHtml(String(a.pricePi)) +
+          " π</span>" +
+          '<button type="button" class="btn btn-outline" data-visit-mine="' +
+          escapeHtml(a.id) +
+          '">Voir</button>' +
+          "</div></div></article>"
+        );
+      })
       .join("");
+    box.querySelectorAll("[data-visit-mine]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openArticle(btn.getAttribute("data-visit-mine"));
+      });
+    });
   }
 
   function openArticle(id) {

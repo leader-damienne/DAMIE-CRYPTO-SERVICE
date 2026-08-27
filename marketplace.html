@@ -78,20 +78,20 @@
     <!-- CATALOGUE -->
     <section id="buyers-catalog" class="market-view" data-view-panel="buy">
       <div class="market-catalog-switch" role="tablist" aria-label="Vue catalogue">
-        <button type="button" class="market-switch-btn active" data-catalog-mode="merchants">Marchands P2P</button>
+        <button type="button" class="market-switch-btn active" data-catalog-mode="merchants">Vendeurs</button>
         <button type="button" class="market-switch-btn" data-catalog-mode="articles">Articles</button>
       </div>
 
-      <!-- Vue marchands style P2P (OKX-like) -->
+      <!-- Vue vendeurs (présentation type liste marchands) -->
       <div id="merchants-p2p-view" class="panel" style="margin-bottom:3rem">
         <div class="section-head" style="margin-bottom:0.85rem">
           <div>
-            <h2 class="market-section-title">Marchands Marketplace</h2>
+            <h2 class="market-section-title">Vendeurs Marketplace</h2>
             <p id="merchants-hint" class="panel-note">Annonces vendeurs · paiement en PI COIN · profils et rendez-vous livraison</p>
           </div>
         </div>
         <div class="p2p-table-head" aria-hidden="true">
-          <span>Marchand</span>
+          <span>Vendeur</span>
           <span>Prix (π)</span>
           <span>Stock / ventes</span>
           <span>Paiement</span>
@@ -101,27 +101,21 @@
       </div>
 
       <!-- Vue articles -->
-      <div id="articles-catalog-view" class="buyers-layout" hidden>
-        <aside class="panel sellers-panel">
-          <h3>Filtres boutique</h3>
-          <p class="panel-note">Filtrez le catalogue par vendeur</p>
-          <button type="button" class="seller-chip active" data-seller="all">
-            <span class="seller-avatar">★</span>
-            <span class="seller-meta"><strong>Tous</strong><small><span id="seller-count-all">0</span> article(s)</small></span>
-          </button>
-          <div id="sellers-list" class="sellers-list"></div>
-        </aside>
-
-        <div>
-          <div class="panel">
-            <div class="section-head" style="margin-bottom:0.85rem">
-              <div>
-                <h2 class="market-section-title">Articles en vente</h2>
-                <p id="catalog-hint" class="panel-note">Sélectionnez un article pour le consulter ou l’acheter en PI COIN</p>
-              </div>
+      <div id="articles-catalog-view" hidden>
+        <div class="panel mkt-catalog-panel" style="margin-bottom:3rem">
+          <div class="section-head mkt-catalog-head">
+            <div>
+              <h2 class="market-section-title">Articles en vente</h2>
+              <p id="catalog-hint" class="panel-note">Catalogue structuré · paiement exclusif en PI COIN</p>
             </div>
-            <div id="marketplace-list" class="course-list"></div>
           </div>
+          <div class="mkt-filter-bar" aria-label="Filtres vendeurs">
+            <button type="button" class="mkt-filter-chip active" data-seller="all">
+              Tous <span id="seller-count-all">0</span>
+            </button>
+            <div id="sellers-list" class="mkt-filter-chips"></div>
+          </div>
+          <div id="marketplace-list" class="mkt-product-grid"></div>
         </div>
       </div>
     </section>
@@ -199,7 +193,7 @@
       <div class="grid-2" style="padding-bottom:3rem">
         <div class="panel" id="seller-panel">
           <h3>Publier un article</h3>
-          <p class="panel-note" style="margin-bottom:1rem">Les acheteurs paient uniquement en PI COIN (314 159 $). Remplissez les champs puis publiez. Complétez aussi votre <a href="profil.html">Profil</a> (photo, bio, ville) — visible sur votre fiche marchand P2P.</p>
+          <p class="panel-note" style="margin-bottom:1rem">Les acheteurs paient uniquement en PI COIN (314 159 $). Remplissez les champs puis publiez. Complétez aussi votre <a href="profil.html">Profil</a> (photo, bio, ville) — visible sur votre fiche vendeur.</p>
           <form id="seller-form">
             <div class="form-group">
               <label for="seller-name">Nom de boutique</label>
