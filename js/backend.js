@@ -749,7 +749,7 @@
         return Promise.resolve({ ok: false, error: "Aucun fichier." });
       }
 
-      function resizeToDataUrl(blobFile) {
+      function resizeToJpegBlob(blobFile) {
         return new Promise(function (resolve, reject) {
           var reader = new FileReader();
           reader.onerror = function () {
@@ -758,23 +758,39 @@
           reader.onload = function () {
             var img = new Image();
             img.onerror = function () {
-              reject(new Error("Image invalide."));
+              reject(
+                new Error(
+                  "Image invalide. Utilisez JPG ou PNG (pas HEIC / formats iPhone non convertis)."
+                )
+              );
             };
             img.onload = function () {
-              var max = 400;
-              var w = img.width;
-              var h = img.height;
+              var max = 512;
+              var w = img.width || 1;
+              var h = img.height || 1;
               if (w > max || h > max) {
                 var r = Math.min(max / w, max / h);
-                w = Math.round(w * r);
-                h = Math.round(h * r);
+                w = Math.max(1, Math.round(w * r));
+                h = Math.max(1, Math.round(h * r));
               }
               var canvas = document.createElement("canvas");
               canvas.width = w;
               canvas.height = h;
               var ctx = canvas.getContext("2d");
+              ctx.fillStyle = "#111";
+              ctx.fillRect(0, 0, w, h);
               ctx.drawImage(img, 0, 0, w, h);
-              resolve(canvas.toDataURL("image/jpeg", 0.82));
+              canvas.toBlob(
+                function (blob) {
+                  if (!blob) {
+                    reject(new Error("Compression impossible."));
+                    return;
+                  }
+                  resolve(blob);
+                },
+                "image/jpeg",
+                0.85
+              );
             };
             img.src = reader.result;
           };
@@ -782,52 +798,94 @@
         });
       }
 
-      var ext = (file.name && file.name.split(".").pop()) || "jpg";
-      ext = String(ext).toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      if (ext === "jpeg") ext = "jpg";
-      var path = DCS.user.id + "/avatar." + (ext === "png" ? "png" : "jpg");
+      /* Toujours avatar.jpg : on convertit en JPEG (évite PNG path + contenu JPEG) */
+      var path = DCS.user.id + "/avatar.jpg";
+      var storage = gate.client.storage.from("avatars");
 
-      return resizeToDataUrl(file)
-        .then(function (dataUrl) {
-          /* Convertir dataURL → Blob pour Storage */
-          var parts = dataUrl.split(",");
-          var mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/jpeg";
-          var bin = atob(parts[1]);
-          var arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          var blob = new Blob([arr], { type: mime });
+      function publicAvatarUrl() {
+        var pub = storage.getPublicUrl(path);
+        var base = pub.data && pub.data.publicUrl ? pub.data.publicUrl : "";
+        return base ? base.split("?")[0] : "";
+      }
 
-          return gate.client.storage
-            .from("avatars")
-            .upload(path, blob, { upsert: true, contentType: mime })
-            .then(function (up) {
-              if (!up.error) {
-                var pub = gate.client.storage.from("avatars").getPublicUrl(path);
-                var url =
-                  (pub.data && pub.data.publicUrl ? pub.data.publicUrl : "") +
-                  "?t=" +
-                  Date.now();
-                DCS.user.avatar = url;
-                return self.persistProfile().then(function (p) {
-                  if (!p.ok) return { ok: false, error: p.error || "Profil non enregistré." };
-                  return { ok: true, url: url };
+      function uploadBlob(blob) {
+        return storage
+          .upload(path, blob, {
+            upsert: true,
+            contentType: "image/jpeg",
+            cacheControl: "3600"
+          })
+          .then(function (up) {
+            if (!up.error) return { ok: true };
+            /* Retry : supprimer puis renvoyer (upsert parfois bloqué par RLS) */
+            return storage.remove([path]).then(function () {
+              return storage
+                .upload(path, blob, {
+                  upsert: true,
+                  contentType: "image/jpeg",
+                  cacheControl: "3600"
+                })
+                .then(function (up2) {
+                  if (up2.error) {
+                    return {
+                      ok: false,
+                      error: up2.error.message || up.error.message || "Upload Storage refusé."
+                    };
+                  }
+                  return { ok: true };
                 });
+            });
+          });
+      }
+
+      return resizeToJpegBlob(file)
+        .then(function (blob) {
+          return uploadBlob(blob).then(function (upRes) {
+            if (upRes.ok) {
+              var clean = publicAvatarUrl();
+              if (!clean) {
+                return { ok: false, error: "URL publique avatar introuvable." };
               }
-              /* Fallback : enregistrer l'image compressée dans le profil (sans Storage) */
-              DCS.user.avatar = dataUrl;
+              DCS.user.avatar = clean;
               return self.persistProfile().then(function (p) {
                 if (!p.ok) {
-                  return {
+                  return { ok: false, error: p.error || "Profil non enregistré." };
+                }
+                return { ok: true, url: clean + "?t=" + Date.now() };
+              });
+            }
+            /* Fallback local compressé seulement si Storage indisponible */
+            return new Promise(function (resolve) {
+              var fr = new FileReader();
+              fr.onload = function () {
+                var dataUrl = String(fr.result || "");
+                if (!dataUrl || dataUrl.length > 180000) {
+                  resolve({
                     ok: false,
                     error:
-                      (up.error && up.error.message) ||
-                      p.error ||
-                      "Impossible d'enregistrer la photo."
-                  };
+                      (upRes.error || "Bucket avatars indisponible.") +
+                      " Exécutez supabase/storage-avatars.sql puis réessayez."
+                  });
+                  return;
                 }
-                return { ok: true, url: dataUrl, fallback: true };
-              });
+                DCS.user.avatar = dataUrl;
+                self.persistProfile().then(function (p) {
+                  if (!p.ok) {
+                    resolve({
+                      ok: false,
+                      error: p.error || upRes.error || "Impossible d'enregistrer la photo."
+                    });
+                    return;
+                  }
+                  resolve({ ok: true, url: dataUrl, fallback: true });
+                });
+              };
+              fr.onerror = function () {
+                resolve({ ok: false, error: upRes.error || "Upload impossible." });
+              };
+              fr.readAsDataURL(blob);
             });
+          });
         })
         .catch(function (err) {
           return { ok: false, error: (err && err.message) || "Upload impossible." };
@@ -838,6 +896,11 @@
       var gate = this.requireClient();
       if (!gate.ok || !DCS.user.id) return Promise.resolve({ ok: false });
       var u = DCS.user;
+      var avatarVal = String(u.avatar || "");
+      /* Ne pas stocker le cache-buster ?t=… */
+      if (/^https?:\/\//i.test(avatarVal)) {
+        avatarVal = avatarVal.split("?")[0];
+      }
       var patch = {
         display_name: u.displayName || "",
         first_name: u.firstName || "",
@@ -849,7 +912,7 @@
         address: u.address || "",
         bio: u.bio || "",
         phone: u.phone || "",
-        avatar: u.avatar || "",
+        avatar: avatarVal,
         language: u.language || "fr"
       };
       /* KYC verified uniquement côté ops ; le client peut seulement demander pending */

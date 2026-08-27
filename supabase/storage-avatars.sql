@@ -1,5 +1,5 @@
 -- Bucket photos de profil DCS
--- Exécuter dans Supabase → SQL Editor (une fois)
+-- Exécuter dans Supabase → SQL Editor (une fois, ou rejouer pour réparer les policies)
 
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
@@ -22,6 +22,10 @@ drop policy if exists "avatars_owner_update" on storage.objects;
 create policy "avatars_owner_update"
   on storage.objects for update
   using (
+    bucket_id = 'avatars'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  )
+  with check (
     bucket_id = 'avatars'
     and auth.uid()::text = (storage.foldername(name))[1]
   );

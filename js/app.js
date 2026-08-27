@@ -1478,7 +1478,7 @@
     if (hint) {
       hint.textContent =
         merchants.length +
-        " marchand(s) · style P2P · paiement exclusif en PI COIN";
+        " vendeur(s) · paiement exclusif en PI COIN";
     }
     if (!merchants.length) {
       list.innerHTML =
@@ -1522,7 +1522,7 @@
           "</strong>" +
           (verified
             ? '<span class="p2p-badge verified">' + escapeHtml(verified) + "</span>"
-            : '<span class="p2p-badge">Marchand DCS</span>') +
+            : '<span class="p2p-badge">Vendeur DCS</span>') +
           "</div>" +
           '<div class="p2p-merchant-sub">' +
           escapeHtml(m.shopName) +
@@ -1624,7 +1624,7 @@
             return a.author === shop;
           });
         if (article) openComposeMessage(article);
-        else alert("Aucun article de ce marchand pour démarrer la conversation.");
+        else alert("Aucun article de ce vendeur pour démarrer la conversation.");
       });
     });
   }
@@ -1645,7 +1645,7 @@
         return (sellerId && m.sellerId === sellerId) || (shopName && m.shopName === shopName);
       }) || null;
     if (!merchant) {
-      alert("Profil marchand introuvable.");
+      alert("Profil vendeur introuvable.");
       return;
     }
     activeSellerId = merchant.sellerId || null;
@@ -1665,7 +1665,7 @@
     if (badges) {
       const verified = profile ? kycLabel(profile.kyc) : "";
       badges.innerHTML =
-        '<span class="p2p-badge">Marchand DCS</span>' +
+        '<span class="p2p-badge">Vendeur DCS</span>' +
         (verified ? '<span class="p2p-badge verified">' + escapeHtml(verified) + "</span>" : "") +
         (profile && profile.phoneLinked
           ? '<span class="p2p-badge">Tél. lié</span>'
@@ -1707,7 +1707,7 @@
     }
     document.getElementById("sp-bio").textContent =
       (profile && profile.bio && profile.bio.trim()) ||
-      "Ce marchand n’a pas encore renseigné sa bio. Contactez-le pour la livraison.";
+      "Ce vendeur n’a pas encore renseigné sa bio. Contactez-le pour la livraison.";
     const info = document.getElementById("sp-info");
     if (info) {
       const rows = [
@@ -3800,13 +3800,19 @@
           .slice(0, 2)
           .toUpperCase();
       };
+      const showPhoto = () => {
+        avatarImg.hidden = false;
+        avatarFb.hidden = true;
+      };
       if (u.avatar && !String(u.avatar).startsWith("blob:")) {
-        avatarImg.onload = function () {
-          avatarImg.hidden = false;
-          avatarFb.hidden = true;
-        };
+        const raw = String(u.avatar);
+        const displaySrc = /^https?:\/\//i.test(raw)
+          ? raw.split("?")[0] + "?t=" + Date.now()
+          : raw;
+        avatarImg.onload = showPhoto;
         avatarImg.onerror = showFallback;
-        avatarImg.src = u.avatar;
+        avatarImg.src = displaySrc;
+        if (avatarImg.complete && avatarImg.naturalWidth > 0) showPhoto();
       } else {
         showFallback();
       }
@@ -3871,35 +3877,62 @@
   function setupProfileForms() {
     initBirthdateSelects();
     const photoInput = document.getElementById("avatar-input");
+    const changeBtn = document.getElementById("avatar-change-btn");
+    if (changeBtn && photoInput) {
+      changeBtn.addEventListener("click", function () {
+        photoInput.click();
+      });
+    }
     if (photoInput) {
       photoInput.addEventListener("change", async () => {
         const file = photoInput.files && photoInput.files[0];
         if (!file) return;
-        if (!file.type || file.type.indexOf("image/") !== 0) {
-          alert("Choisissez une image (JPG, PNG…).");
+        const typeOk =
+          !file.type ||
+          file.type.indexOf("image/") === 0 ||
+          /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name || "");
+        if (!typeOk) {
+          alert("Choisissez une image (JPG, PNG, WEBP…).");
           photoInput.value = "";
           return;
         }
-        if (file.size > 8 * 1024 * 1024) {
-          alert("Image trop lourde (max. 8 Mo).");
+        if (file.size > 12 * 1024 * 1024) {
+          alert("Image trop lourde (max. 12 Mo).");
           photoInput.value = "";
           return;
         }
-        const wrap = photoInput.closest(".avatar-wrap") || document.querySelector(".avatar-wrap");
+        if (!(DCS.user && DCS.user.id)) {
+          alert("Connectez-vous avec Pi pour changer la photo de profil.");
+          photoInput.value = "";
+          return;
+        }
+        const wrap = document.getElementById("avatar-wrap") || document.querySelector(".avatar-wrap");
         const hint = document.getElementById("avatar-hint");
         const prevHint = hint ? hint.textContent : "";
         if (wrap) wrap.classList.add("is-uploading");
+        if (changeBtn) changeBtn.disabled = true;
         if (hint) hint.textContent = "Envoi de la photo…";
-        const res = await DCS.backend.uploadAvatar(file);
+        let res;
+        try {
+          res = await DCS.backend.uploadAvatar(file);
+        } catch (err) {
+          res = { ok: false, error: (err && err.message) || "Upload impossible." };
+        }
         if (wrap) wrap.classList.remove("is-uploading");
+        if (changeBtn) changeBtn.disabled = false;
         if (hint) hint.textContent = prevHint || "Touchez la photo pour la changer";
         photoInput.value = "";
         if (!res.ok) {
           alert(res.error || "Impossible d'enregistrer la photo.");
           return;
         }
+        if (res.url) DCS.user.avatar = String(res.url).split("?")[0];
         renderProfile();
-        if (hint) hint.textContent = "Photo mise à jour";
+        if (hint) {
+          hint.textContent = res.fallback
+            ? "Photo enregistrée (mode secours)"
+            : "Photo mise à jour";
+        }
         setTimeout(function () {
           if (hint) hint.textContent = "Touchez la photo pour la changer";
         }, 2200);

@@ -2248,6 +2248,21 @@ body.is-pi-browser .form-row-2 {
   border-radius: 50%;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+
+.avatar-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 3;
+  font-size: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .avatar-wrap:focus-within {
