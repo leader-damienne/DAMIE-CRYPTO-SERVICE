@@ -1278,11 +1278,6 @@
     closeComposeMessage();
     closeArticleModal();
     await refreshMarketplaceMessages();
-    updateMessagesTabBadge();
-    try {
-      if (DCS.backend.loadNotifications) await DCS.backend.loadNotifications();
-      if (typeof renderNotifications === "function") renderNotifications();
-    } catch (eN) {}
     openMarketView("messages");
     const art = listingId ? findArticle(listingId) : null;
     await openMarketThread(
@@ -1291,9 +1286,7 @@
       art ? art.author : "Vendeur",
       art ? art.title : ""
     );
-    updateMarketMsgAlert();
-    updateMessagesTabBadge();
-    alert("Message envoyé. Le destinataire le verra dans Messages (notification).");
+    alert("Message envoyé. Suivez la conversation dans Messages.");
   }
 
   async function sendThreadReply(e) {
@@ -1321,12 +1314,6 @@
     await refreshMarketplaceMessages();
     renderMarketConversations();
     renderMarketThread();
-    updateMessagesTabBadge();
-    updateMarketMsgAlert();
-    try {
-      if (DCS.backend.loadNotifications) await DCS.backend.loadNotifications();
-      if (typeof renderNotifications === "function") renderNotifications();
-    } catch (eN2) {}
   }
 
   function setupMarketplaceMessaging() {
@@ -1463,102 +1450,39 @@
     } catch (e) {}
   }
 
-  function merchantSearchHaystack(m) {
-    const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
-    return [
-      m.shopName,
-      m.sampleTitle,
-      (m.categoryList || []).join(" "),
-      profile && profile.displayName,
-      profile && profile.username,
-      profile && profile.piUsername,
-      profile && profile.piUsername ? "@" + profile.piUsername : "",
-      profile && profile.city,
-      profile && profile.country,
-      profile && profile.address,
-      profile && profile.phone,
-      profile && profile.bio,
-      profile && profile.firstName,
-      profile && profile.lastName
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-  }
-
-  function filterMerchantsByQuery(merchants, query) {
-    const q = String(query || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@+/, "");
-    if (!q) return merchants || [];
-    return (merchants || []).filter(function (m) {
-      const hay = merchantSearchHaystack(m);
-      if (hay.indexOf(q) !== -1) return true;
-      if (hay.indexOf("@" + q) !== -1) return true;
-      return false;
-    });
-  }
-
-  function unreadMarketplaceCount() {
-    const uid = DCS.user && DCS.user.id;
-    if (!uid) return 0;
-    return (DCS.marketplaceMessages || []).filter(function (m) {
-      return m.recipient_id === uid && !m.read_at;
-    }).length;
-  }
-
-  function updateMessagesTabBadge() {
-    const tabs = document.getElementById("market-tabs");
-    if (!tabs) return;
-    const btn = tabs.querySelector('[data-view="messages"]');
-    if (!btn) return;
-    const n = unreadMarketplaceCount();
-    const base = "Messages";
-    btn.innerHTML =
-      n > 0
-        ? base + ' <span class="market-tab-badge">' + n + "</span>"
-        : base;
-  }
-
-  function updateMarketMsgAlert() {
-    const el = document.getElementById("market-msg-alert");
-    if (!el) return;
-    const n = unreadMarketplaceCount();
-    if (n <= 0) {
-      el.hidden = true;
-      el.innerHTML = "";
-      return;
-    }
-    el.hidden = false;
-    el.innerHTML =
-      "<strong>" +
-      n +
-      " nouveau(x) message(s)</strong> — ouvrez une conversation à gauche pour lire et répondre.";
-  }
-
   function renderMerchantsP2P() {
     const list = document.getElementById("merchants-p2p-list");
     const hint = document.getElementById("merchants-hint");
     if (!list) return;
-    let merchants = filterMerchantsByQuery(getMerchants(), marketFilter.query);
+    const q = (marketFilter.query || "").trim().toLowerCase();
+    let merchants = getMerchants();
+    if (q) {
+      merchants = merchants.filter(function (m) {
+        const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
+        const hay = [
+          m.shopName,
+          m.sampleTitle,
+          (m.categoryList || []).join(" "),
+          profile && profile.city,
+          profile && profile.country,
+          profile && profile.username,
+          profile && profile.piUsername,
+          profile && profile.bio
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.indexOf(q) !== -1;
+      });
+    }
     if (hint) {
-      const q = (marketFilter.query || "").trim();
-      hint.textContent = q
-        ? merchants.length +
-          " vendeur(s) pour « " +
-          q +
-          " » · cliquez un vendeur pour voir toutes ses infos"
-        : merchants.length +
-          " vendeur(s) · cliquez un vendeur pour ouvrir son profil complet";
+      hint.textContent =
+        merchants.length +
+        " vendeur(s) · paiement exclusif en PI COIN";
     }
     if (!merchants.length) {
       list.innerHTML =
-        '<p class="panel-note" style="padding:1rem 0">' +
-        ((marketFilter.query || "").trim()
-          ? "Aucun vendeur trouvé pour cette recherche. Essayez le @pseudo Pi ou le nom de boutique."
-          : "Aucun marchand pour le moment. Publiez depuis l’espace vendeur.") +
-        "</p>";
+        '<p class="panel-note" style="padding:1rem 0">Aucun marchand pour le moment. Publiez depuis l’espace vendeur.</p>';
       return;
     }
     list.innerHTML = merchants
@@ -1566,8 +1490,6 @@
         const profile = (m.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[m.sellerId]) || null;
         const display =
           (profile && (profile.displayName || profile.piUsername)) || m.shopName;
-        const piHandle =
-          (profile && (profile.piUsername || profile.username)) || "";
         const avatarUrl = profile && profile.avatar ? safeUrl(profile.avatar) : "";
         const verified = profile ? kycLabel(profile.kyc) : "";
         const cityLine = [profile && profile.city, profile && profile.country]
@@ -1584,11 +1506,11 @@
           ? '<img src="' + escapeHtml(avatarUrl) + '" alt="" />'
           : escapeHtml(sellerInitials(display));
         return (
-          '<article class="p2p-merchant-row is-clickable" data-merchant-id="' +
+          '<article class="p2p-merchant-row is-clickable" role="button" tabindex="0" data-open-merchant="' +
           escapeHtml(m.sellerId || "") +
-          '" data-merchant-shop="' +
+          '" data-open-shop="' +
           escapeHtml(m.shopName) +
-          '" title="Voir le profil vendeur">' +
+          '" title="Voir toutes les infos du vendeur">' +
           '<div class="p2p-col p2p-col-merchant">' +
           '<div class="p2p-avatar">' +
           avatarHtml +
@@ -1604,7 +1526,6 @@
           "</div>" +
           '<div class="p2p-merchant-sub">' +
           escapeHtml(m.shopName) +
-          (piHandle ? " · <span class=\"p2p-pi-user\">@" + escapeHtml(piHandle) + "</span>" : "") +
           (cityLine ? " · " + escapeHtml(cityLine) : "") +
           "</div>" +
           '<div class="p2p-merchant-stats">' +
@@ -1627,6 +1548,7 @@
                 .join("") +
               "</div>"
             : "") +
+          '<p class="p2p-tap-hint">Touchez pour voir le profil complet</p>' +
           "</div></div>" +
           '<div class="p2p-col p2p-col-price">' +
           '<div class="p2p-price">' +
@@ -1648,17 +1570,17 @@
           '<span class="p2p-pay-pill">PI COIN</span>' +
           '<span class="p2p-pay-pill soft">RDV livraison</span>' +
           "</div>" +
-          '<div class="p2p-col p2p-col-actions">' +
+          '<div class="p2p-col p2p-col-actions" data-stop-row="1">' +
           '<button type="button" class="btn btn-gold" data-p2p-trade="' +
           escapeHtml(m.sellerId || m.shopName) +
           '" data-p2p-shop="' +
           escapeHtml(m.shopName) +
-          '">Acheter</button>' +
+          '">Articles</button>' +
           '<button type="button" class="btn btn-outline" data-p2p-profile="' +
           escapeHtml(m.sellerId || "") +
           '" data-p2p-shop="' +
           escapeHtml(m.shopName) +
-          '">Profil</button>' +
+          '">Fiche complète</button>' +
           '<button type="button" class="btn btn-outline" data-p2p-message="' +
           escapeHtml(m.sellerId || "") +
           '" data-p2p-shop="' +
@@ -1670,13 +1592,21 @@
       })
       .join("");
 
-    list.querySelectorAll(".p2p-merchant-row").forEach(function (row) {
+    function bindOpenMerchant(el) {
+      const sid = el.getAttribute("data-open-merchant") || "";
+      const shop = el.getAttribute("data-open-shop") || "";
+      openSellerProfile(sid, shop);
+    }
+    list.querySelectorAll("[data-open-merchant]").forEach(function (row) {
       row.addEventListener("click", function (e) {
-        if (e.target && e.target.closest && e.target.closest("button")) return;
-        openSellerProfile(
-          row.getAttribute("data-merchant-id") || "",
-          row.getAttribute("data-merchant-shop") || ""
-        );
+        if (e.target && e.target.closest && e.target.closest("[data-stop-row]")) return;
+        bindOpenMerchant(row);
+      });
+      row.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          bindOpenMerchant(row);
+        }
       });
     });
     list.querySelectorAll("[data-p2p-profile]").forEach(function (btn) {
@@ -1728,10 +1658,10 @@
     if (!articleModal || articleModal.hidden) document.body.style.overflow = "";
   }
 
-  function openSellerProfile(sellerId, shopName) {
+  async function openSellerProfile(sellerId, shopName) {
     const modal = document.getElementById("seller-profile-modal");
     if (!modal) return;
-    const merchant =
+    let merchant =
       getMerchants().find(function (m) {
         return (sellerId && m.sellerId === sellerId) || (shopName && m.shopName === shopName);
       }) || null;
@@ -1740,9 +1670,27 @@
       return;
     }
     activeSellerId = merchant.sellerId || null;
+    /* Recharger le profil public pour afficher toutes les infos à jour */
+    if (merchant.sellerId && DCS.backend && DCS.backend.loadSellerPublicProfiles) {
+      try {
+        await DCS.backend.loadSellerPublicProfiles([merchant.sellerId]);
+      } catch (eLoad) {}
+    }
+    merchant =
+      getMerchants().find(function (m) {
+        return (
+          (merchant.sellerId && m.sellerId === merchant.sellerId) ||
+          m.shopName === merchant.shopName
+        );
+      }) || merchant;
     const profile =
       (merchant.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[merchant.sellerId]) || null;
+    const fullName = [profile && profile.firstName, profile && profile.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
     const display =
+      fullName ||
       (profile && (profile.displayName || profile.piUsername || profile.username)) ||
       merchant.shopName;
     const avatarEl = document.getElementById("sp-avatar");
@@ -1758,24 +1706,23 @@
       badges.innerHTML =
         '<span class="p2p-badge">Vendeur DCS</span>' +
         (verified ? '<span class="p2p-badge verified">' + escapeHtml(verified) + "</span>" : "") +
-        (profile && profile.phoneLinked
-          ? '<span class="p2p-badge">Tél. lié</span>'
+        (profile && profile.phone
+          ? '<span class="p2p-badge">Tél. renseigné</span>'
           : "") +
-        (profile && profile.gmailLinked
-          ? '<span class="p2p-badge">Gmail lié</span>'
+        (profile && profile.city
+          ? '<span class="p2p-badge">Lieu OK</span>'
           : "");
     }
     document.getElementById("sp-shop-name").textContent = display;
     document.getElementById("sp-handle").textContent =
-      (profile && (profile.piUsername || profile.username)
-        ? "@" + (profile.piUsername || profile.username)
-        : "—") +
+      "@" +
+      ((profile && (profile.piUsername || profile.username)) || merchant.shopName) +
       " · Boutique « " +
       merchant.shopName +
       " »";
     const loc = [profile && profile.city, profile && profile.country].filter(Boolean).join(", ");
     document.getElementById("sp-location").textContent = loc
-      ? "📍 " + loc
+      ? loc
       : "Lieu non renseigné — convenez d’un RDV via Messages";
     const sales = merchant.sales || 0;
     const completion = sales > 0 ? Math.min(99, 85 + Math.min(14, sales)) + "%" : "Nouveau";
@@ -1799,19 +1746,27 @@
     }
     document.getElementById("sp-bio").textContent =
       (profile && profile.bio && profile.bio.trim()) ||
-      "Ce vendeur n’a pas encore renseigné sa bio. Contactez-le pour la livraison.";
+      "Ce vendeur n’a pas encore renseigné sa présentation.";
     const info = document.getElementById("sp-info");
     if (info) {
       const rows = [
         ["Boutique", merchant.shopName],
-        ["Identifiant Pi", (profile && (profile.piUsername || profile.username)) ? "@" + (profile.piUsername || profile.username) : "—"],
-        ["Nom", [profile && profile.firstName, profile && profile.lastName].filter(Boolean).join(" ") || "—"],
+        ["Nom complet", fullName || "—"],
+        ["Prénom", (profile && profile.firstName) || "—"],
+        ["Nom", (profile && profile.lastName) || "—"],
+        ["Identifiant Pi", (profile && (profile.piUsername || profile.username)) || "—"],
         ["Membre depuis", (profile && profile.joined) || "—"],
-        ["Ville / lieu", (profile && profile.city) || "—"],
         ["Pays", (profile && profile.country) || "—"],
+        ["Ville / lieu", (profile && profile.city) || "—"],
         ["Adresse / remise", (profile && profile.address) || "—"],
         ["Téléphone", (profile && profile.phone) || "—"],
         ["Catégories", (merchant.categoryList || []).join(", ") || "—"],
+        [
+          "Fourchette de prix",
+          merchant.minPrice === merchant.maxPrice
+            ? merchant.minPrice + " π"
+            : merchant.minPrice + " – " + merchant.maxPrice + " π"
+        ],
         ["Paiement accepté", "PI COIN uniquement"],
         ["Livraison", "Rendez-vous via Messages Marketplace"]
       ];
@@ -1821,7 +1776,7 @@
             '<div class="seller-profile-info-row"><span>' +
             escapeHtml(r[0]) +
             "</span><strong>" +
-            escapeHtml(r[1]) +
+            escapeHtml(String(r[1])) +
             "</strong></div>"
           );
         })
@@ -1944,26 +1899,16 @@
   }
 
   function filteredArticles() {
-    const q = (marketFilter.query || "").trim().toLowerCase().replace(/^@+/, "");
+    const q = (marketFilter.query || "").trim().toLowerCase();
     return (DCS.marketplace || []).filter((a) => {
       if (marketFilter.seller !== "all" && a.author !== marketFilter.seller) return false;
       if (!q) return true;
-      const profile =
-        (a.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[a.sellerId]) || null;
-      const hay = [
-        a.title,
-        a.author,
-        a.category,
-        a.excerpt,
-        profile && profile.piUsername,
-        profile && profile.username,
-        profile && profile.displayName,
-        profile && profile.city
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.indexOf(q) !== -1;
+      return (
+        (a.title || "").toLowerCase().includes(q) ||
+        (a.author || "").toLowerCase().includes(q) ||
+        (a.category || "").toLowerCase().includes(q) ||
+        (a.excerpt || "").toLowerCase().includes(q)
+      );
     });
   }
 
@@ -2673,11 +2618,8 @@
       refreshMarketplaceMessages().then(function () {
         renderMarketConversations();
         renderMarketThread();
-        updateMessagesTabBadge();
-        updateMarketMsgAlert();
       });
     }
-    updateMessagesTabBadge();
     try {
       const hash =
         target === "sell"
@@ -2718,16 +2660,6 @@
     if (search) {
       search.addEventListener("input", () => {
         marketFilter.query = search.value;
-        const q = (marketFilter.query || "").trim();
-        /* Recherche vendeur (@pseudo Pi / boutique) → vue Vendeurs */
-        if (q) {
-          const hits = filterMerchantsByQuery(getMerchants(), q);
-          if (hits.length) {
-            if (marketFilter.catalogMode !== "merchants") setCatalogMode("merchants");
-            else renderMerchantsP2P();
-            return;
-          }
-        }
         if (marketFilter.catalogMode === "merchants") renderMerchantsP2P();
         else renderMarketplace();
       });
