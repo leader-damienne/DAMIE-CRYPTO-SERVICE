@@ -329,6 +329,10 @@ grant execute on function public.dcs_transfer(text, numeric, numeric, text) to a
 grant execute on function public.dcs_transfer_p2p(text, numeric, numeric, text, text) to authenticated;
 
 -- ---------- 4) Profil : colonnes protégées ----------
+-- Prérequis : deposit_pi_address (voir deposit-addresses.sql / fix-profile-deposit-column.sql)
+alter table public.profiles
+  add column if not exists deposit_pi_address text;
+
 create or replace function public.dcs_protect_profile_columns()
 returns trigger
 language plpgsql
