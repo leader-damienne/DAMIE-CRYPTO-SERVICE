@@ -1714,8 +1714,10 @@
         ["Boutique", merchant.shopName],
         ["Identifiant", (profile && (profile.piUsername || profile.username)) || "—"],
         ["Membre depuis", (profile && profile.joined) || "—"],
-        ["Ville", (profile && profile.city) || "—"],
+        ["Ville / lieu", (profile && profile.city) || "—"],
         ["Pays", (profile && profile.country) || "—"],
+        ["Adresse / remise", (profile && profile.address) || "—"],
+        ["Téléphone", (profile && profile.phone) || "—"],
         ["Catégories", (merchant.categoryList || []).join(", ") || "—"],
         ["Paiement accepté", "PI COIN uniquement"],
         ["Livraison", "Rendez-vous via Messages Marketplace"]
@@ -2252,9 +2254,169 @@
     renderBuyerOrders();
   }
 
+  function sellerOnboardKey() {
+    const id = DCS.user && DCS.user.id;
+    return id ? "dcs_seller_onboarded_" + id : "";
+  }
+
+  function getSellerShopName() {
+    try {
+      const key = sellerOnboardKey();
+      if (key) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.shop) return String(parsed.shop);
+        }
+      }
+    } catch (e) {}
+    return (
+      (DCS.user && (DCS.user.displayName || DCS.user.piUsername || DCS.user.username)) ||
+      ""
+    );
+  }
+
+  function isSellerOnboarded() {
+    const u = DCS.user || {};
+    if (!(u.id && u.loggedIn)) return false;
+    const first = String(u.firstName || "").trim();
+    const last = String(u.lastName || "").trim();
+    const country = String(u.country || "").trim();
+    const city = String(u.city || "").trim();
+    const phone = String(u.phone || "").replace(/\s+/g, "");
+    const address = String(u.address || "").trim();
+    const shop = getSellerShopName().trim();
+    if (!first || !last || !country || !city || !address || !shop) return false;
+    if (phone.length < 8) return false;
+    try {
+      const key = sellerOnboardKey();
+      if (key && localStorage.getItem(key)) return true;
+    } catch (e) {}
+    /* Profil déjà complet (ex. rempli ailleurs) → considérer inscrit */
+    return !!(first && last && country && city && phone.length >= 8 && address);
+  }
+
+  function fillSellerOnboardForm() {
+    const u = DCS.user || {};
+    const set = function (id, val) {
+      const el = document.getElementById(id);
+      if (el) el.value = val || "";
+    };
+    set("sv-firstname", u.firstName);
+    set("sv-lastname", u.lastName);
+    set("sv-country", u.country);
+    set("sv-city", u.city);
+    set("sv-phone", u.phone);
+    set("sv-address", u.address);
+    set("sv-bio", u.bio);
+    set("sv-shop", getSellerShopName());
+    const status = document.getElementById("seller-onboard-status");
+    if (status) {
+      status.textContent = isSellerOnboarded()
+        ? "Profil vendeur complet. Vous pouvez publier des articles."
+        : "Tous les champs marqués * sont obligatoires.";
+    }
+  }
+
+  function updateSellerSpaceUI(forceEdit) {
+    const onboard = document.getElementById("seller-onboard-panel");
+    const publish = document.getElementById("seller-publish-wrap");
+    if (!onboard || !publish) return;
+    const ready = !forceEdit && isSellerOnboarded();
+    onboard.hidden = !!ready;
+    publish.hidden = !ready;
+    fillSellerOnboardForm();
+    if (ready) {
+      const shopInput = document.getElementById("seller-name");
+      const shop = getSellerShopName();
+      if (shopInput && shop) shopInput.value = shop;
+    }
+  }
+
+  function setupSellerOnboardForm() {
+    const form = document.getElementById("seller-onboard-form");
+    if (!form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      if (!(DCS.user && DCS.user.id)) {
+        alert("Connectez-vous avec Pi pour vous inscrire comme vendeur.");
+        return;
+      }
+      const firstName = (document.getElementById("sv-firstname") || {}).value.trim();
+      const lastName = (document.getElementById("sv-lastname") || {}).value.trim();
+      const shop = (document.getElementById("sv-shop") || {}).value.trim();
+      const country = (document.getElementById("sv-country") || {}).value.trim();
+      const city = (document.getElementById("sv-city") || {}).value.trim();
+      const phone = (document.getElementById("sv-phone") || {}).value.trim();
+      const address = (document.getElementById("sv-address") || {}).value.trim();
+      const bio = ((document.getElementById("sv-bio") || {}).value || "").trim();
+      if (!firstName || !lastName || !shop || !country || !city || !phone || !address) {
+        alert("Remplissez tous les champs obligatoires de l’inscription vendeur.");
+        return;
+      }
+      if (phone.replace(/\s+/g, "").length < 8) {
+        alert("Indiquez un numéro de téléphone valide (indicatif inclus).");
+        return;
+      }
+      const btn = form.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Enregistrement…";
+      }
+      DCS.user.firstName = firstName;
+      DCS.user.lastName = lastName;
+      DCS.user.displayName = shop;
+      DCS.user.country = country;
+      DCS.user.city = city;
+      DCS.user.phone = phone;
+      DCS.user.address = address;
+      if (bio) DCS.user.bio = bio;
+      if (typeof DCS.buildShareLinks === "function") DCS.buildShareLinks();
+      const res = await DCS.backend.persistProfile();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Enregistrer et continuer";
+      }
+      if (!res || !res.ok) {
+        alert((res && res.error) || "Impossible d’enregistrer l’inscription vendeur.");
+        return;
+      }
+      try {
+        localStorage.setItem(
+          sellerOnboardKey(),
+          JSON.stringify({
+            shop: shop,
+            at: Date.now(),
+            firstName: firstName,
+            lastName: lastName,
+            country: country,
+            city: city
+          })
+        );
+      } catch (eLs) {}
+      const shopInput = document.getElementById("seller-name");
+      if (shopInput) shopInput.value = shop;
+      updateSellerSpaceUI(false);
+      renderSellerDashboard();
+      alert("Inscription vendeur enregistrée. Vous pouvez publier vos articles.");
+    });
+    const editBtn = document.getElementById("seller-edit-onboard");
+    if (editBtn && editBtn.dataset.bound !== "1") {
+      editBtn.dataset.bound = "1";
+      editBtn.addEventListener("click", function () {
+        updateSellerSpaceUI(true);
+        const panel = document.getElementById("seller-onboard-panel");
+        if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
   function setupMarketplaceForm() {
     const form = document.getElementById("seller-form");
     if (!form) return;
+    setupSellerOnboardForm();
+    updateSellerSpaceUI(false);
 
     const photoInput = document.getElementById("article-photos");
     const preview = document.getElementById("photo-preview");
@@ -2312,7 +2474,16 @@
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const name = document.getElementById("seller-name").value.trim();
+      if (!isSellerOnboarded()) {
+        alert("Complétez d’abord le formulaire d’inscription vendeur (étape 1).");
+        updateSellerSpaceUI(true);
+        return;
+      }
+      if (!(DCS.user && DCS.user.id)) {
+        alert("Connectez-vous avec Pi pour publier.");
+        return;
+      }
+      const name = document.getElementById("seller-name").value.trim() || getSellerShopName();
       const title = document.getElementById("article-title").value.trim();
       const price = parseFloat(document.getElementById("article-price").value) || 1;
       const excerpt = document.getElementById("article-excerpt").value.trim();
@@ -2391,7 +2562,10 @@
     const searchWrap = document.getElementById("buyer-search-wrap");
     if (searchWrap) searchWrap.style.display = target === "buy" ? "" : "none";
     if (target === "orders") renderBuyerOrders();
-    if (target === "sell") renderSellerDashboard();
+    if (target === "sell") {
+      updateSellerSpaceUI(false);
+      renderSellerDashboard();
+    }
     if (target === "messages") {
       refreshMarketplaceMessages().then(function () {
         renderMarketConversations();
@@ -5302,6 +5476,11 @@
     setupLanguage();
     updateAuthNav();
     const page = pageName();
+    if (isLoggedIn()) {
+      try {
+        sessionStorage.removeItem("dcs_pi_just_entered");
+      } catch (eClr) {}
+    }
 
     /* Auth Pi avant requireAuth — attendre Allow puis ouvrir l’app */
     if (isEcosystemMode()) {
@@ -5312,21 +5491,13 @@
       if (!isLoggedIn()) setupPiLoginButton(piErrEarly);
       try {
         var authRes = await maybeAutoPiLogin(piErrEarly);
-        /* Si enterAppAfterPiAuth a lancé un reload/replace, stoppe ce boot */
         if (authRes && authRes.entered) return;
       } catch (eAuto) {}
     }
 
     if (!requireAuth(page)) {
-      /* Ecosystem : ne pas couper tout le boot si auth encore en cours —
-         mais si vraiment non connecté, laisser la page + bouton Pi. */
       if (!isEcosystemMode()) return;
       updateAuthNav();
-      if (!isPublicPage(page) && !isLoggedIn()) {
-        /* Continuer le boot minimal (nav) ; les modules protégés s’activeront après Allow */
-      } else if (!isLoggedIn()) {
-        return;
-      }
     }
 
     if (document.getElementById("ticker-track")) {

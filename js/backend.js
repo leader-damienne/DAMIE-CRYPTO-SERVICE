@@ -1343,7 +1343,7 @@
       return gate.client
         .from("profiles")
         .select(
-          "id, username, display_name, pi_username, bio, city, country, avatar, kyc, created_at, phone_linked, gmail_linked"
+          "id, username, display_name, pi_username, bio, city, country, address, phone, avatar, kyc, created_at, phone_linked, gmail_linked"
         )
         .in("id", unique)
         .then(function (res) {
@@ -1361,6 +1361,8 @@
               bio: row.bio || "",
               city: row.city || "",
               country: row.country || "",
+              address: row.address || "",
+              phone: row.phone || "",
               avatar: row.avatar || "",
               kyc: row.kyc || "none",
               phoneLinked: !!row.phone_linked,

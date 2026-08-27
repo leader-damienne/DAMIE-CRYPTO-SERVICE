@@ -190,10 +190,79 @@
         <div class="market-stat"><span>Paiement</span><strong>PI COIN</strong></div>
       </div>
 
-      <div class="grid-2" style="padding-bottom:3rem">
+      <!-- Étape 1 : inscription vendeur (obligatoire) -->
+      <div class="panel" id="seller-onboard-panel" style="margin-bottom:1.25rem">
+        <div class="seller-step-badge">Étape 1 / 2</div>
+        <h3>Inscription vendeur</h3>
+        <p class="panel-note" style="margin-bottom:1rem">
+          Avant de publier des articles, renseignez vos informations vendeur. Elles apparaissent sur votre fiche boutique et facilitent les rendez-vous de livraison.
+        </p>
+        <form id="seller-onboard-form">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="sv-firstname">Prénom <span class="label-hint">*</span></label>
+              <input id="sv-firstname" class="form-control" type="text" required autocomplete="given-name" placeholder="Votre prénom" />
+            </div>
+            <div class="form-group">
+              <label for="sv-lastname">Nom <span class="label-hint">*</span></label>
+              <input id="sv-lastname" class="form-control" type="text" required autocomplete="family-name" placeholder="Votre nom" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="sv-shop">Nom de boutique <span class="label-hint">*</span></label>
+            <input id="sv-shop" class="form-control" type="text" required placeholder="Ex. Damie Mode Boutique" />
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="sv-country">Pays <span class="label-hint">*</span></label>
+              <select id="sv-country" class="form-control" required>
+                <option value="">— Sélectionner —</option>
+                <option>Bénin</option>
+                <option>Sénégal</option>
+                <option>Côte d'Ivoire</option>
+                <option>Cameroun</option>
+                <option>Gabon</option>
+                <option>Togo</option>
+                <option>Mali</option>
+                <option>Burkina Faso</option>
+                <option>Niger</option>
+                <option>Tchad</option>
+                <option>Congo</option>
+                <option>RD Congo</option>
+                <option>Guinée</option>
+                <option>Autre</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sv-city">Ville / lieu <span class="label-hint">*</span></label>
+              <input id="sv-city" class="form-control" type="text" required placeholder="Ex. Cotonou, Akpakpa" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="sv-phone">Numéro de téléphone <span class="label-hint">*</span></label>
+            <input id="sv-phone" class="form-control" type="tel" required autocomplete="tel" placeholder="Ex. +229 01 00 00 00 00" />
+          </div>
+          <div class="form-group">
+            <label for="sv-address">Lieu de remise / adresse <span class="label-hint">*</span></label>
+            <input id="sv-address" class="form-control" type="text" required placeholder="Quartier, point de rencontre pour la livraison" />
+          </div>
+          <div class="form-group">
+            <label for="sv-bio">Présentation boutique</label>
+            <textarea id="sv-bio" class="form-control" rows="3" placeholder="Décrivez brièvement votre activité (prêt-à-porter, horaires, zone de livraison…)" style="resize:vertical"></textarea>
+          </div>
+          <p class="panel-note" id="seller-onboard-status" style="margin-bottom:0.85rem"></p>
+          <button class="btn btn-gold" type="submit" style="width:100%">Enregistrer et continuer</button>
+        </form>
+      </div>
+
+      <div class="grid-2" id="seller-publish-wrap" style="padding-bottom:3rem" hidden>
         <div class="panel" id="seller-panel">
+          <div class="seller-step-badge">Étape 2 / 2</div>
           <h3>Publier un article</h3>
-          <p class="panel-note" style="margin-bottom:1rem">Les acheteurs paient uniquement en PI COIN (314 159 $). Remplissez les champs puis publiez. Complétez aussi votre <a href="profil.html">Profil</a> (photo, bio, ville) — visible sur votre fiche vendeur.</p>
+          <p class="panel-note" style="margin-bottom:1rem">
+            Inscription vendeur validée. Les acheteurs paient uniquement en PI COIN.
+            <button type="button" class="btn btn-outline" id="seller-edit-onboard" style="margin-top:0.55rem;padding:0.35rem 0.75rem;font-size:0.78rem">Modifier mes infos vendeur</button>
+          </p>
           <form id="seller-form">
             <div class="form-group">
               <label for="seller-name">Nom de boutique</label>
