@@ -138,7 +138,17 @@
         ? payment.transaction.txid
         : "";
 
-    /* Toujours traiter via le backend — ne jamais ignorer */
+    function clearStuck() {
+      /* Annule côté Pi pour débloquer « Pending Payment Found » */
+      return callPiBackend("cancel", {
+        paymentId: paymentId,
+        amount: amount,
+        memo: memo,
+        kind: DEPOSIT_PRODUCT.kind
+      });
+    }
+
+    /* Toujours traiter via le backend — ne jamais laisser un paiement orphelin */
     return callPiBackend("approve", {
       paymentId: paymentId,
       amount: amount,
@@ -147,37 +157,24 @@
     })
       .then(function (apr) {
         if (!apr || !apr.ok) {
-          return callPiBackend("incomplete", {
-            paymentId: paymentId,
-            amount: amount,
-            memo: memo,
-            kind: DEPOSIT_PRODUCT.kind,
-            error: (apr && apr.error) || "approve incomplete failed"
-          });
+          return clearStuck();
         }
         if (!txid) {
-          return callPiBackend("incomplete", {
-            paymentId: paymentId,
-            amount: amount,
-            memo: memo,
-            kind: DEPOSIT_PRODUCT.kind
-          });
+          /* Approuvé mais pas de tx blockchain → annuler pour libérer la file */
+          return clearStuck();
         }
         return callPiBackend("complete", {
           paymentId: paymentId,
           txid: txid,
           amount: amount,
           kind: DEPOSIT_PRODUCT.kind
+        }).then(function (done) {
+          if (!done || !done.ok) return clearStuck();
+          return done;
         });
       })
-      .catch(function (err) {
-        return callPiBackend("incomplete", {
-          paymentId: paymentId,
-          amount: amount,
-          memo: memo,
-          kind: DEPOSIT_PRODUCT.kind,
-          error: (err && err.message) || String(err)
-        });
+      .catch(function () {
+        return clearStuck();
       });
   }
 

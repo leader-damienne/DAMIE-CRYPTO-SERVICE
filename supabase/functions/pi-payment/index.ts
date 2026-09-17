@@ -200,12 +200,54 @@ Deno.serve(async (req) => {
     }
 
     if (action === "cancel" || action === "incomplete") {
-      await db
-        .from("pi_payments")
-        .update({ status: action === "cancel" ? "cancelled" : "incomplete" })
-        .eq("payment_id", paymentId)
-        .eq("user_id", user.id);
-      return json({ ok: true, action });
+      /* Annuler aussi côté Pi — sinon « Pending Payment Found » bloque tous les dépôts */
+      let piCancelled = false;
+      let piError = "";
+      try {
+        await piFetch(`/payments/${paymentId}/cancel`, "POST");
+        piCancelled = true;
+      } catch (cancelErr) {
+        piError =
+          cancelErr instanceof Error ? cancelErr.message : String(cancelErr);
+        /* Déjà annulé / complété côté Pi : OK pour débloquer le client */
+        if (/cancelled|already_completed|forbidden|not_found/i.test(piError)) {
+          piCancelled = true;
+        }
+      }
+
+      await db.from("pi_payments").upsert(
+        {
+          payment_id: paymentId,
+          user_id: user.id,
+          amount: amountHint > 0 ? amountHint : 0.00000001,
+          memo: memo,
+          status: piCancelled || action === "cancel" ? "cancelled" : "incomplete",
+          meta: {
+            stage: action,
+            kind: "deposit",
+            piCancelled,
+            piError: piError || null,
+          },
+        },
+        { onConflict: "payment_id" }
+      );
+
+      if (!piCancelled && action === "cancel") {
+        return json({
+          ok: false,
+          error:
+            piError ||
+            "Impossible d’annuler le paiement Pi. Vérifiez PI_API_KEY Mainnet.",
+        }, 500);
+      }
+
+      return json({
+        ok: true,
+        action: "cancel",
+        paymentId,
+        piCancelled,
+        cleared: true,
+      });
     }
 
     return json({ ok: false, error: "action inconnue (approve|complete|cancel)" }, 400);
