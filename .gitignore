@@ -20,6 +20,7 @@ Thumbs.db
 .supabase/
 PI_ISSUER_SECRET*
 PI_DISTRIBUTOR_SECRET*
+scripts/.local/
 _deploy_tools.txt
 assets/_logo-crop-check.png
 *.log

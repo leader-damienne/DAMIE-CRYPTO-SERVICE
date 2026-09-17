@@ -545,6 +545,21 @@
         alert("Module Pi non chargé. Rechargez dans le Pi Browser.");
         return;
       }
+      if (typeof DCS.pi.isAvailable === "function" && !DCS.pi.isAvailable()) {
+        setStatus(
+          "Pi SDK introuvable. Ouvrez wallet.html dans le Pi Browser (pas Chrome).",
+          true
+        );
+        alert(
+          "Ouvrez DCS dans le Pi Browser pour déposer.\n\nURL : https://damie-crypto-service.netlify.app/wallet.html"
+        );
+        return;
+      }
+      if (!(DCS.user && DCS.user.id && DCS.user.loggedIn)) {
+        setStatus("Connectez-vous avec Pi avant de déposer.", true);
+        alert("Connectez-vous avec Pi (Allow), puis réessayez Déposer.");
+        return;
+      }
       const amount = parseFloat(amountEl && amountEl.value) || 0;
       if (!(amount >= MIN_DEPOSIT_PI)) {
         setStatus("Montant minimum : 0,0000001 PI.", true);
@@ -554,7 +569,9 @@
       const prevLabel = btn.textContent;
       btn.disabled = true;
       btn.textContent = "Ouverture Pi…";
-      setStatus("Ouverture du paiement Pi… (ne fermez pas la fenêtre)");
+      setStatus(
+        "1) Fenêtre Allow / paiement Pi… 2) Validez dans Pi. Ne changez pas d’onglet."
+      );
       let res;
       try {
         res = await Promise.race([
@@ -564,7 +581,7 @@
               resolve({
                 ok: false,
                 error:
-                  "Délai dépassé. Ouvrez le site dans le Pi Browser et réessayez."
+                  "Délai dépassé (2 min). Si aucune fenêtre Pi : rechargez wallet.html dans le Pi Browser, Allow, puis Déposer."
               });
             }, 120000);
           })
@@ -1087,6 +1104,7 @@
     if (!DCS.backend || !DCS.backend.loadMarketplaceMessages) return;
     if (!(DCS.user && DCS.user.id)) {
       DCS.marketplaceMessages = [];
+      updateMessagesBadge();
       return;
     }
     try {
@@ -1094,20 +1112,110 @@
     } catch (e) {
       console.warn(e);
     }
+    updateMessagesBadge();
+  }
+
+  function countUnreadMessages() {
+    const uid = DCS.user && DCS.user.id;
+    if (!uid) return 0;
+    return (DCS.marketplaceMessages || []).filter(function (m) {
+      return m.recipient_id === uid && !m.read_at;
+    }).length;
+  }
+
+  function formatUnreadLabel(n) {
+    if (n > 99) return "99+";
+    return String(n);
+  }
+
+  function updateMessagesBadge() {
+    const n = countUnreadMessages();
+    const label = formatUnreadLabel(n);
+    const badge = document.getElementById("messages-badge");
+    const tab = document.getElementById("messages-tab-btn");
+    const pill = document.getElementById("messages-unread-pill");
+    const pillCount = document.getElementById("messages-unread-pill-count");
+    if (badge) {
+      badge.textContent = label;
+      badge.hidden = n < 1;
+      badge.setAttribute(
+        "aria-label",
+        n ? n + " message" + (n > 1 ? "s" : "") + " non lu" + (n > 1 ? "s" : "") : "Aucun non lu"
+      );
+    }
+    if (tab) {
+      tab.classList.toggle("has-unread", n > 0);
+      tab.setAttribute(
+        "title",
+        n ? "Conversations · " + n + " non lu" + (n > 1 ? "s" : "") : "Conversations"
+      );
+    }
+    if (pill) pill.hidden = n < 1;
+    if (pillCount) pillCount.textContent = label;
+  }
+
+  function markLocalThreadRead(peerId, listingId) {
+    const uid = DCS.user && DCS.user.id;
+    if (!uid || !peerId) return;
+    const now = new Date().toISOString();
+    (DCS.marketplaceMessages || []).forEach(function (m) {
+      if (m.recipient_id !== uid || m.sender_id !== peerId || m.read_at) return;
+      if (listingId) {
+        if (String(m.listing_id || "") !== String(listingId)) return;
+      } else if (m.listing_id) {
+        return;
+      }
+      m.read_at = now;
+    });
+    updateMessagesBadge();
+  }
+
+  function chatAvatarHtml(label, extraClass) {
+    const initials = sellerInitials(label || "?");
+    return (
+      '<span class="fb-avatar' +
+      (extraClass ? " " + extraClass : "") +
+      '" aria-hidden="true">' +
+      escapeHtml(initials) +
+      "</span>"
+    );
+  }
+
+  function setMessengerView(openThread) {
+    const shell = document.getElementById("fb-messenger");
+    const back = document.getElementById("fb-chat-back");
+    if (!shell) return;
+    shell.classList.toggle("is-thread-open", !!openThread);
+    if (back) {
+      back.hidden = !openThread;
+      back.style.display = openThread ? "" : "none";
+    }
   }
 
   function renderMarketConversations() {
     const list = document.getElementById("market-conv-list");
     if (!list) return;
+    updateMessagesBadge();
     if (!(DCS.user && DCS.user.id)) {
       list.innerHTML =
-        '<p class="panel-note">Connectez-vous pour voir vos conversations.</p>';
+        '<div class="fb-empty compact"><strong>Connexion requise</strong><p>Connectez-vous avec Pi pour voir vos discussions.</p></div>';
       return;
     }
-    const convs = buildConversations();
+    let convs = buildConversations();
+    const qEl = document.getElementById("fb-conv-search");
+    const q = ((qEl && qEl.value) || "").trim().toLowerCase();
+    if (q) {
+      convs = convs.filter(function (c) {
+        return (
+          String(c.peerLabel || "").toLowerCase().indexOf(q) !== -1 ||
+          String(c.listingTitle || "").toLowerCase().indexOf(q) !== -1 ||
+          String(c.lastBody || "").toLowerCase().indexOf(q) !== -1
+        );
+      });
+    }
     if (!convs.length) {
       list.innerHTML =
-        '<p class="panel-note">Aucune conversation. Ouvrez un article et cliquez sur « Message / RDV ».</p>';
+        '<div class="fb-empty compact"><strong>Aucune discussion</strong><p>Ouvrez un article → <em>Message / RDV</em> pour démarrer.</p></div>';
       return;
     }
     list.innerHTML = convs
@@ -1115,9 +1223,18 @@
         const active =
           activeChat.peerId === c.peerId &&
           String(activeChat.listingId || "") === String(c.listingId || "");
+        const when = c.lastAt
+          ? new Date(c.lastAt).toLocaleString("fr-FR", {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit"
+            })
+          : "";
         return (
-          '<button type="button" class="market-conv-item' +
-          (active ? " active" : "") +
+          '<button type="button" class="fb-conv' +
+          (active ? " is-active" : "") +
+          (c.unread ? " has-unread" : "") +
           '" data-peer="' +
           escapeHtml(c.peerId) +
           '" data-listing="' +
@@ -1126,24 +1243,36 @@
           escapeHtml(c.peerLabel || "") +
           '" data-listing-title="' +
           escapeHtml(c.listingTitle || "") +
-          '">' +
+          '" role="listitem">' +
+          chatAvatarHtml(c.peerLabel) +
+          '<span class="fb-conv-body">' +
+          '<span class="fb-conv-top">' +
           "<strong>" +
           escapeHtml(c.peerLabel || "Contact") +
           "</strong>" +
-          "<small>" +
-          escapeHtml(c.listingTitle || "") +
-          "</small>" +
-          '<span class="market-conv-preview">' +
-          escapeHtml((c.lastBody || "").slice(0, 80)) +
+          (when ? "<time>" + escapeHtml(when) + "</time>" : "") +
+          "</span>" +
+          '<span class="fb-conv-sub">' +
+          escapeHtml(c.listingTitle || "Marketplace") +
+          "</span>" +
+          '<span class="fb-conv-preview">' +
+          escapeHtml((c.lastBody || "").slice(0, 90)) +
+          "</span>" +
           "</span>" +
           (c.unread
-            ? '<span class="market-conv-unread">' + c.unread + "</span>"
-            : "") +
+            ? '<span class="fb-conv-badge" title="' +
+              c.unread +
+              " non lu" +
+              (c.unread > 1 ? "s" : "") +
+              '">' +
+              formatUnreadLabel(c.unread) +
+              "</span>"
+            : '<span class="fb-conv-dot" aria-hidden="true"></span>') +
           "</button>"
         );
       })
       .join("");
-    list.querySelectorAll(".market-conv-item").forEach(function (btn) {
+    list.querySelectorAll(".fb-conv").forEach(function (btn) {
       btn.addEventListener("click", function () {
         openMarketThread(
           btn.getAttribute("data-peer"),
@@ -1160,36 +1289,66 @@
     const peerEl = document.getElementById("market-chat-peer");
     const listingEl = document.getElementById("market-chat-listing");
     const form = document.getElementById("market-chat-form");
+    const avatarEl = document.getElementById("fb-thread-avatar");
     if (!box) return;
     if (!activeChat.peerId) {
-      if (peerEl) peerEl.textContent = "Sélectionnez une conversation";
-      if (listingEl) listingEl.textContent = "";
-      box.innerHTML = '<p class="panel-note">Choisissez une conversation à gauche.</p>';
+      if (peerEl) peerEl.textContent = "Sélectionnez une discussion";
+      if (listingEl) listingEl.textContent = "Vos messages apparaissent ici";
+      if (avatarEl) avatarEl.textContent = "?";
+      box.innerHTML =
+        '<div class="fb-empty"><div class="fb-empty-icon" aria-hidden="true">💬</div><strong>Vos discussions</strong><p>Choisissez une conversation à gauche, ou ouvrez un article et tapez sur <em>Message / RDV</em>.</p></div>';
       if (form) form.hidden = true;
+      setMessengerView(false);
       return;
     }
     if (peerEl) peerEl.textContent = activeChat.peerLabel || "Contact";
     if (listingEl) {
       listingEl.textContent = activeChat.listingTitle
-        ? "Article : " + activeChat.listingTitle
-        : "";
+        ? "À propos de : " + activeChat.listingTitle
+        : "Discussion Marketplace";
     }
+    if (avatarEl) avatarEl.textContent = sellerInitials(activeChat.peerLabel || "?");
     if (form) form.hidden = false;
+    setMessengerView(true);
     const uid = DCS.user && DCS.user.id;
     const msgs = threadMessages(activeChat.peerId, activeChat.listingId);
     if (!msgs.length) {
       box.innerHTML =
-        '<p class="panel-note">Aucun message pour l’instant. Proposez un créneau de livraison.</p>';
+        '<div class="fb-empty compact"><strong>Commencez la discussion</strong><p>Proposez un créneau ou un lieu de remise.</p></div>';
       return;
     }
     box.innerHTML = msgs
-      .map(function (m) {
+      .map(function (m, idx) {
         const mine = m.sender_id === uid;
         const when = m.created_at
-          ? new Date(m.created_at).toLocaleString("fr-FR")
+          ? new Date(m.created_at).toLocaleString("fr-FR", {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit"
+            })
+          : "";
+        const prev = msgs[idx - 1];
+        const showDay =
+          !prev ||
+          new Date(prev.created_at || 0).toDateString() !==
+            new Date(m.created_at || 0).toDateString();
+        const dayLabel = m.created_at
+          ? new Date(m.created_at).toLocaleDateString("fr-FR", {
+              weekday: "short",
+              day: "numeric",
+              month: "short"
+            })
           : "";
         return (
-          '<div class="market-chat-bubble' +
+          (showDay
+            ? '<div class="fb-day-sep"><span>' + escapeHtml(dayLabel) + "</span></div>"
+            : "") +
+          '<div class="fb-bubble-row' +
+          (mine ? " is-mine" : "") +
+          '">' +
+          (mine ? "" : chatAvatarHtml(activeChat.peerLabel, "sm")) +
+          '<div class="fb-bubble' +
           (mine ? " mine" : "") +
           '">' +
           "<p>" +
@@ -1198,7 +1357,7 @@
           "<time>" +
           escapeHtml(when) +
           "</time>" +
-          "</div>"
+          "</div></div>"
         );
       })
       .join("");
@@ -1208,12 +1367,15 @@
   async function openMarketThread(peerId, listingId, peerLabel, listingTitle) {
     if (!peerId || !requireMarketLogin()) return;
     const art = listingId ? findArticle(listingId) : null;
+    window.__dcsOpenMsgThread = true;
     activeChat = {
       peerId: peerId,
       listingId: listingId || null,
       peerLabel: peerLabel || (art && art.author) || "Contact",
       listingTitle: listingTitle || (art && art.title) || ""
     };
+    markLocalThreadRead(peerId, listingId || null);
+    setMessengerView(true);
     renderMarketConversations();
     renderMarketThread();
     try {
@@ -1221,7 +1383,9 @@
       await refreshMarketplaceMessages();
       renderMarketConversations();
       renderMarketThread();
-    } catch (e) {}
+    } catch (e) {
+      updateMessagesBadge();
+    }
   }
 
   function openComposeMessage(article) {
@@ -1278,6 +1442,7 @@
     closeComposeMessage();
     closeArticleModal();
     await refreshMarketplaceMessages();
+    window.__dcsOpenMsgThread = true;
     openMarketView("messages");
     const art = listingId ? findArticle(listingId) : null;
     await openMarketThread(
@@ -1286,7 +1451,7 @@
       art ? art.author : "Vendeur",
       art ? art.title : ""
     );
-    alert("Message envoyé. Suivez la conversation dans Messages.");
+    alert("Message envoyé. Suivez la conversation dans Conversations.");
   }
 
   async function sendThreadReply(e) {
@@ -1318,29 +1483,78 @@
 
   function setupMarketplaceMessaging() {
     const form = document.getElementById("market-chat-form");
-    if (form) form.addEventListener("submit", sendThreadReply);
-    document.querySelectorAll("[data-quick]").forEach(function (btn) {
+    if (form && form.dataset.bound !== "1") {
+      form.dataset.bound = "1";
+      form.addEventListener("submit", sendThreadReply);
+    }
+    const input = document.getElementById("market-chat-input");
+    if (input && input.dataset.bound !== "1") {
+      input.dataset.bound = "1";
+      input.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", { cancelable: true }));
+        }
+      });
+      input.addEventListener("input", function () {
+        input.style.height = "auto";
+        input.style.height = Math.min(110, input.scrollHeight) + "px";
+      });
+    }
+    document.querySelectorAll("#market-chat-quick [data-quick]").forEach(function (btn) {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
       btn.addEventListener("click", function () {
-        const input = document.getElementById("market-chat-input");
-        if (input) {
-          input.value = btn.getAttribute("data-quick") || "";
-          input.focus();
+        const el = document.getElementById("market-chat-input");
+        if (el) {
+          el.value = btn.getAttribute("data-quick") || "";
+          el.focus();
+          el.dispatchEvent(new Event("input"));
         }
       });
     });
+    const backBtn = document.getElementById("fb-chat-back");
+    if (backBtn && backBtn.dataset.bound !== "1") {
+      backBtn.dataset.bound = "1";
+      backBtn.addEventListener("click", function () {
+        activeChat = { peerId: null, listingId: null, peerLabel: "", listingTitle: "" };
+        setMessengerView(false);
+        renderMarketConversations();
+        renderMarketThread();
+      });
+    }
+    const search = document.getElementById("fb-conv-search");
+    if (search && search.dataset.bound !== "1") {
+      search.dataset.bound = "1";
+      search.addEventListener("input", function () {
+        renderMarketConversations();
+      });
+    }
     const composeForm = document.getElementById("compose-message-form");
-    if (composeForm) composeForm.addEventListener("submit", sendComposeMessage);
+    if (composeForm && composeForm.dataset.bound !== "1") {
+      composeForm.dataset.bound = "1";
+      composeForm.addEventListener("submit", sendComposeMessage);
+    }
     const closeBtn = document.getElementById("compose-msg-close");
     const cancelBtn = document.getElementById("compose-msg-cancel");
-    if (closeBtn) closeBtn.addEventListener("click", closeComposeMessage);
-    if (cancelBtn) cancelBtn.addEventListener("click", closeComposeMessage);
+    if (closeBtn && closeBtn.dataset.bound !== "1") {
+      closeBtn.dataset.bound = "1";
+      closeBtn.addEventListener("click", closeComposeMessage);
+    }
+    if (cancelBtn && cancelBtn.dataset.bound !== "1") {
+      cancelBtn.dataset.bound = "1";
+      cancelBtn.addEventListener("click", closeComposeMessage);
+    }
     const composeModal = document.getElementById("compose-message-modal");
-    if (composeModal) {
+    if (composeModal && composeModal.dataset.bound !== "1") {
+      composeModal.dataset.bound = "1";
       composeModal.addEventListener("click", function (e) {
         if (e.target === composeModal) closeComposeMessage();
       });
     }
     document.querySelectorAll("[data-compose-quick]").forEach(function (btn) {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
       btn.addEventListener("click", function () {
         const body = document.getElementById("compose-msg-body");
         if (body) {
@@ -1349,6 +1563,24 @@
         }
       });
     });
+    updateMessagesBadge();
+    if (!window.__dcsMsgBadgeTimer) {
+      window.__dcsMsgBadgeTimer = setInterval(function () {
+        if (!(DCS.user && DCS.user.id)) {
+          updateMessagesBadge();
+          return;
+        }
+        if (document.hidden) return;
+        refreshMarketplaceMessages().then(function () {
+          if (document.querySelector('[data-view-panel="messages"]:not([hidden])')) {
+            renderMarketConversations();
+            if (activeChat.peerId) renderMarketThread();
+          } else {
+            updateMessagesBadge();
+          }
+        });
+      }, 20000);
+    }
   }
 
   function getSellers() {
@@ -1371,6 +1603,8 @@
           key: key,
           sellerId: a.sellerId || null,
           shopName: a.author || "Boutique",
+          country: a.sellerCountry || "",
+          city: a.sellerCity || "",
           count: 0,
           minPrice: Infinity,
           maxPrice: 0,
@@ -1381,6 +1615,8 @@
       }
       const m = map[key];
       m.count += 1;
+      if (!m.country && a.sellerCountry) m.country = a.sellerCountry;
+      if (!m.city && a.sellerCity) m.city = a.sellerCity;
       const price = Number(a.pricePi) || 0;
       if (price > 0 && price < m.minPrice) m.minPrice = price;
       if (price > m.maxPrice) m.maxPrice = price;
@@ -1436,19 +1672,93 @@
       chad: "td",
       congo: "cg",
       "congo-brazzaville": "cg",
+      "republique du congo": "cg",
       "rd congo": "cd",
-      "rdc": "cd",
+      rdc: "cd",
       "republique democratique du congo": "cd",
       "democratic republic of the congo": "cd",
       guinee: "gn",
       guinea: "gn",
+      "guinee-bissau": "gw",
+      "guinee bissau": "gw",
+      "guinea-bissau": "gw",
+      "guinee equatoriale": "gq",
+      "guinee equatoriale": "gq",
+      "equatorial guinea": "gq",
       france: "fr",
       nigeria: "ng",
       ghana: "gh",
       maroc: "ma",
-      morocco: "ma"
+      morocco: "ma",
+      "centrafrique": "cf",
+      "republique centrafricaine": "cf",
+      "cabo verde": "cv",
+      "cap-vert": "cv",
+      "cap vert": "cv",
+      gambie: "gm",
+      gambia: "gm",
+      liberia: "lr",
+      "sierra leone": "sl",
+      burundi: "bi",
+      djibouti: "dj",
+      erythree: "er",
+      eritrea: "er",
+      ethiopie: "et",
+      ethiopia: "et",
+      kenya: "ke",
+      ouganda: "ug",
+      uganda: "ug",
+      rwanda: "rw",
+      seychelles: "sc",
+      somalie: "so",
+      somalia: "so",
+      soudan: "sd",
+      sudan: "sd",
+      "soudan du sud": "ss",
+      "south sudan": "ss",
+      tanzanie: "tz",
+      tanzania: "tz",
+      angola: "ao",
+      "sao tome-et-principe": "st",
+      "sao tome et principe": "st",
+      "afrique du sud": "za",
+      "south africa": "za",
+      botswana: "bw",
+      eswatini: "sz",
+      swaziland: "sz",
+      lesotho: "ls",
+      malawi: "mw",
+      mozambique: "mz",
+      namibie: "na",
+      namibia: "na",
+      zambie: "zm",
+      zambia: "zm",
+      zimbabwe: "zw",
+      algerie: "dz",
+      algeria: "dz",
+      egypte: "eg",
+      egypt: "eg",
+      libye: "ly",
+      libya: "ly",
+      mauritanie: "mr",
+      mauritania: "mr",
+      tunisie: "tn",
+      tunisia: "tn",
+      comores: "km",
+      madagascar: "mg",
+      maurice: "mu",
+      mauritius: "mu"
     };
     return map[n] || "";
+  }
+
+  function isoToFlagEmoji(iso) {
+    const code = String(iso || "").toLowerCase();
+    if (!/^[a-z]{2}$/.test(code)) return "";
+    return String.fromCodePoint(
+      0x1f1e6 + (code.charCodeAt(0) - 97),
+      0x1f1e6 + (code.charCodeAt(1) - 97)
+    );
   }
 
   function countryFlagHtml(country) {
@@ -1468,17 +1778,81 @@
         '">🏳️</span>'
       );
     }
+    const emoji = isoToFlagEmoji(iso);
     return (
-      '<img class="seller-flag" src="https://flagcdn.com/w40/' +
-      iso +
-      '.png" srcset="https://flagcdn.com/w80/' +
-      iso +
-      '.png 2x" width="22" height="16" alt="' +
+      '<span class="seller-flag-wrap" title="' +
       escapeHtml(label) +
-      '" title="' +
+      '">' +
+      '<span class="seller-flag seller-flag-emoji" aria-label="' +
       escapeHtml(label) +
-      '" loading="lazy" decoding="async" />'
+      '">' +
+      emoji +
+      "</span>" +
+      "</span>"
     );
+  }
+
+  /** Pays vendeur : profil public OU dénormalisé sur l’annonce (visible pour tous) */
+  function resolveSellerCountry(sellerId, hint) {
+    const fromHint = hint && (hint.country || hint.sellerCountry);
+    if (fromHint) return String(fromHint).trim();
+    const prof =
+      sellerId && DCS.sellerProfiles && DCS.sellerProfiles[sellerId]
+        ? DCS.sellerProfiles[sellerId]
+        : null;
+    if (prof && prof.country) return String(prof.country).trim();
+    if (!sellerId) return "";
+    const listing = (DCS.marketplace || []).find(function (a) {
+      return a.sellerId === sellerId && a.sellerCountry;
+    });
+    return listing ? String(listing.sellerCountry).trim() : "";
+  }
+
+  function resolveSellerCity(sellerId, hint) {
+    const fromHint = hint && (hint.city || hint.sellerCity);
+    if (fromHint) return String(fromHint).trim();
+    const prof =
+      sellerId && DCS.sellerProfiles && DCS.sellerProfiles[sellerId]
+        ? DCS.sellerProfiles[sellerId]
+        : null;
+    if (prof && prof.city) return String(prof.city).trim();
+    if (!sellerId) return "";
+    const listing = (DCS.marketplace || []).find(function (a) {
+      return a.sellerId === sellerId && a.sellerCity;
+    });
+    return listing ? String(listing.sellerCity).trim() : "";
+  }
+
+  function populateCountrySelects() {
+    const names = ((DCS.africaPayout || []).map(function (c) {
+      return c.name;
+    }) || []).concat(["France", "Autre"]);
+    const unique = [];
+    const seen = {};
+    names.forEach(function (name) {
+      if (!name || seen[name]) return;
+      seen[name] = true;
+      unique.push(name);
+    });
+    ["sv-country", "edit-country", "su-country"].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (!el || el.tagName !== "SELECT") return;
+      const prev = el.value;
+      const first = el.querySelector('option[value=""]');
+      const placeholder = first
+        ? first.outerHTML
+        : '<option value="">— Sélectionner —</option>';
+      el.innerHTML =
+        placeholder +
+        unique
+          .map(function (name) {
+            return (
+              '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + "</option>"
+            );
+          })
+          .join("");
+      if (prev) el.value = prev;
+    });
   }
 
   function kycLabel(kyc) {
@@ -1516,6 +1890,12 @@
     try {
       if (DCS.backend.loadSellerPublicProfiles) await DCS.backend.loadSellerPublicProfiles(ids);
     } catch (e) {}
+    /* Re-render après chargement pays / drapeaux (tous les visiteurs) */
+    if (marketFilter.catalogMode === "merchants") renderMerchantsP2P();
+    else {
+      renderSellers();
+      renderMarketplace();
+    }
   }
 
   function renderMerchantsP2P() {
@@ -1531,8 +1911,10 @@
           m.shopName,
           m.sampleTitle,
           (m.categoryList || []).join(" "),
-          profile && profile.city,
-          profile && profile.country,
+          m.city,
+          m.country,
+          resolveSellerCity(m.sellerId, m),
+          resolveSellerCountry(m.sellerId, m),
           profile && profile.username,
           profile && profile.piUsername,
           profile && profile.bio
@@ -1560,10 +1942,10 @@
           (profile && (profile.displayName || profile.piUsername)) || m.shopName;
         const avatarUrl = profile && profile.avatar ? safeUrl(profile.avatar) : "";
         const verified = profile ? kycLabel(profile.kyc) : "";
-        const cityLine = [profile && profile.city, profile && profile.country]
-          .filter(Boolean)
-          .join(", ");
-        const flagHtml = countryFlagHtml(profile && profile.country);
+        const country = resolveSellerCountry(m.sellerId, m);
+        const city = resolveSellerCity(m.sellerId, m);
+        const cityLine = [city, country].filter(Boolean).join(", ");
+        const flagHtml = countryFlagHtml(country);
         const priceLabel =
           m.minPrice === m.maxPrice
             ? String(m.minPrice) + " π"
@@ -1790,11 +2172,13 @@
       " · Boutique « " +
       merchant.shopName +
       " »";
-    const loc = [profile && profile.city, profile && profile.country].filter(Boolean).join(", ");
+    const country = resolveSellerCountry(merchant.sellerId, merchant);
+    const city = resolveSellerCity(merchant.sellerId, merchant);
+    const loc = [city, country].filter(Boolean).join(", ");
     const locEl = document.getElementById("sp-location");
     if (locEl) {
       locEl.innerHTML = loc
-        ? countryFlagHtml(profile && profile.country) +
+        ? countryFlagHtml(country) +
           ' <span class="sp-loc-text">' +
           escapeHtml(loc) +
           "</span>"
@@ -1832,8 +2216,8 @@
         ["Nom", (profile && profile.lastName) || "—"],
         ["Identifiant Pi", (profile && (profile.piUsername || profile.username)) || "—"],
         ["Membre depuis", (profile && profile.joined) || "—"],
-        ["Pays", (profile && profile.country) || "—", "country"],
-        ["Ville / lieu", (profile && profile.city) || "—"],
+        ["Pays", country || "—", "country"],
+        ["Ville / lieu", city || "—"],
         ["Adresse / remise", (profile && profile.address) || "—"],
         ["Téléphone", (profile && profile.phone) || "—"],
         ["Catégories", (merchant.categoryList || []).join(", ") || "—"],
@@ -1981,6 +2365,258 @@
     return (DCS.purchases || []).some((p) => String(p.articleId) === String(articleId));
   }
 
+  function cartStorageKey() {
+    const id = DCS.user && DCS.user.id;
+    return id ? "dcs_cart_" + id : "dcs_cart_guest";
+  }
+
+  function loadCart() {
+    try {
+      const raw = localStorage.getItem(cartStorageKey());
+      const parsed = raw ? JSON.parse(raw) : [];
+      DCS.cart = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      DCS.cart = [];
+    }
+    updateCartBadge();
+  }
+
+  function saveCart() {
+    try {
+      localStorage.setItem(cartStorageKey(), JSON.stringify(DCS.cart || []));
+    } catch (e) {}
+    updateCartBadge();
+  }
+
+  function updateCartBadge() {
+    const badge = document.getElementById("cart-badge");
+    const n = (DCS.cart || []).length;
+    if (!badge) return;
+    badge.textContent = String(n);
+    badge.hidden = n < 1;
+  }
+
+  function cartTotalPi() {
+    return (DCS.cart || []).reduce(function (sum, item) {
+      return sum + (Number(item.pricePi) || 0);
+    }, 0);
+  }
+
+  function isInCart(articleId) {
+    return (DCS.cart || []).some(function (item) {
+      return String(item.id) === String(articleId);
+    });
+  }
+
+  function addToCart(id) {
+    const article = findArticle(id);
+    if (!article) return;
+    if (isPurchased(article.id)) {
+      alert("Vous avez déjà acheté cet article.");
+      return;
+    }
+    if (DCS.user && DCS.user.id && article.sellerId === DCS.user.id) {
+      alert("Vous ne pouvez pas ajouter votre propre article au panier.");
+      return;
+    }
+    if (isInCart(article.id)) {
+      alert("Cet article est déjà dans votre panier.");
+      openMarketView("cart");
+      return;
+    }
+    if (!article.id || typeof article.id === "number") {
+      alert(
+        "Cet article n’est pas encore synchronisé avec la base. Rechargez après publication."
+      );
+      return;
+    }
+    const photos = article.photos || [];
+    DCS.cart.push({
+      id: article.id,
+      title: article.title || "Article",
+      author: article.author || "Vendeur",
+      pricePi: Number(article.pricePi) || 0,
+      sellerId: article.sellerId || "",
+      photo: photos[0] || "",
+      addedAt: Date.now(),
+    });
+    saveCart();
+    renderCart();
+    alert("Ajouté au panier · « " + (article.title || "Article") + " »");
+  }
+
+  function removeFromCart(id) {
+    DCS.cart = (DCS.cart || []).filter(function (item) {
+      return String(item.id) !== String(id);
+    });
+    saveCart();
+    renderCart();
+  }
+
+  function clearCart() {
+    if (!(DCS.cart || []).length) return;
+    if (!confirm("Vider entièrement le panier ?")) return;
+    DCS.cart = [];
+    saveCart();
+    renderCart();
+  }
+
+  function renderCart() {
+    const list = document.getElementById("cart-list");
+    const countEl = document.getElementById("cart-stat-count");
+    const totalEl = document.getElementById("cart-stat-total");
+    const checkoutTotal = document.getElementById("cart-checkout-total");
+    const bar = document.getElementById("cart-checkout-bar");
+    if (!list) return;
+    const items = DCS.cart || [];
+    const total = cartTotalPi();
+    if (countEl) countEl.textContent = String(items.length);
+    if (totalEl) totalEl.textContent = total.toLocaleString("fr-FR") + " π";
+    if (checkoutTotal) checkoutTotal.textContent = total.toLocaleString("fr-FR") + " π";
+    if (bar) bar.hidden = items.length < 1;
+    if (!items.length) {
+      list.innerHTML =
+        '<div class="mkt-empty"><p class="panel-note">Votre panier est vide. Parcourez le catalogue et ajoutez des articles.</p>' +
+        '<button type="button" class="btn btn-gold" data-open-view="buy" style="margin-top:0.75rem">Voir le catalogue</button></div>';
+      list.querySelectorAll("[data-open-view]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          openMarketView(btn.getAttribute("data-open-view"));
+        });
+      });
+      return;
+    }
+    list.innerHTML = items
+      .map(function (item) {
+        const thumb = safeUrl(item.photo);
+        const live = findArticle(item.id);
+        const unavailable = !live;
+        return (
+          '<article class="cart-item' +
+          (unavailable ? " is-unavailable" : "") +
+          '">' +
+          '<div class="cart-item-media">' +
+          (thumb
+            ? '<img src="' + escapeHtml(thumb) + '" alt="" loading="lazy" />'
+            : '<div class="mkt-card-placeholder">π</div>') +
+          "</div>" +
+          '<div class="cart-item-body">' +
+          "<h4>" +
+          escapeHtml(item.title || "Article") +
+          "</h4>" +
+          '<p class="panel-note">' +
+          escapeHtml(item.author || "Vendeur") +
+          (unavailable ? " · indisponible" : "") +
+          "</p>" +
+          '<div class="cart-item-meta">' +
+          '<span class="price-pi">' +
+          escapeHtml(String(item.pricePi || 0)) +
+          " π</span>" +
+          '<div class="cart-item-actions">' +
+          (unavailable
+            ? ""
+            : '<button type="button" class="btn btn-outline" data-cart-visit="' +
+              escapeHtml(item.id) +
+              '">Détails</button>') +
+          '<button type="button" class="btn btn-outline" data-cart-remove="' +
+          escapeHtml(item.id) +
+          '">Retirer</button>' +
+          "</div></div></div></article>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-cart-remove]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        removeFromCart(btn.getAttribute("data-cart-remove"));
+      });
+    });
+    list.querySelectorAll("[data-cart-visit]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openArticle(btn.getAttribute("data-cart-visit"));
+      });
+    });
+  }
+
+  async function checkoutCart() {
+    const items = (DCS.cart || []).slice();
+    if (!items.length) {
+      alert("Votre panier est vide.");
+      return;
+    }
+    if (!(DCS.user && DCS.user.id && DCS.user.loggedIn)) {
+      alert("Connectez-vous avec Pi pour payer le panier.");
+      return;
+    }
+    const payable = items.filter(function (item) {
+      const a = findArticle(item.id);
+      return a && !isPurchased(a.id) && a.sellerId !== DCS.user.id;
+    });
+    if (!payable.length) {
+      alert("Aucun article achetable dans le panier (déjà achetés ou indisponibles).");
+      renderCart();
+      return;
+    }
+    const total = payable.reduce(function (sum, item) {
+      return sum + (Number(item.pricePi) || 0);
+    }, 0);
+    const ok = confirm(
+      "Payer " +
+        payable.length +
+        " article(s) pour " +
+        total +
+        " PI COIN ?\n\nPaiement exclusivement en PI COIN."
+    );
+    if (!ok) return;
+    const checkoutBtn = document.getElementById("cart-checkout-btn");
+    if (checkoutBtn) checkoutBtn.disabled = true;
+    let okCount = 0;
+    let failMsg = "";
+    try {
+      await DCS.withTimeout(
+        (async function () {
+          for (let i = 0; i < payable.length; i++) {
+            const item = payable[i];
+            const article = findArticle(item.id);
+            if (!article) continue;
+            const res = await DCS.backend.buyListing(article.id);
+            if (!res || !res.ok) {
+              failMsg = (res && res.error) || "Achat impossible pour « " + article.title + " ».";
+              break;
+            }
+            okCount += 1;
+            removeFromCart(article.id);
+            pushTxNotice(
+              "Achat Marketplace",
+              article.title + " · " + article.pricePi + " PI",
+              "market"
+            );
+          }
+        })(),
+        DCS.ACTION_TIMEOUT_MS || 5000,
+        "Paiement trop long (5 s). Réessayez avec moins d’articles."
+      );
+    } catch (errCart) {
+      failMsg = (errCart && errCart.message) || "Paiement trop long (5 s). Réessayez.";
+    }
+    if (checkoutBtn) checkoutBtn.disabled = false;
+    renderMarketplace();
+    renderBuyerOrders();
+    renderCart();
+    if (okCount && !failMsg) {
+      alert(
+        "Panier payé.\n" +
+          okCount +
+          " article(s) · " +
+          total +
+          " PI COIN.\nRetrouvez-les dans « Mes achats »."
+      );
+      openMarketView("orders");
+    } else if (okCount && failMsg) {
+      alert(okCount + " achat(s) OK, puis interruption :\n" + failMsg);
+    } else {
+      alert(failMsg || "Paiement du panier impossible.");
+    }
+  }
+
   function filteredArticles() {
     const q = (marketFilter.query || "").trim().toLowerCase();
     return (DCS.marketplace || []).filter((a) => {
@@ -2076,7 +2712,7 @@
           excerpt.length > 110 ? excerpt.slice(0, 107).trim() + "…" : excerpt;
         const sellerProf =
           (a.sellerId && DCS.sellerProfiles && DCS.sellerProfiles[a.sellerId]) || null;
-        const shopFlag = countryFlagHtml(sellerProf && sellerProf.country);
+        const shopFlag = countryFlagHtml(resolveSellerCountry(a.sellerId, a));
         return (
           '<article class="mkt-card' +
           (owned ? " is-owned" : "") +
@@ -2123,7 +2759,12 @@
           '">Détails</button>' +
           (owned
             ? '<button type="button" class="btn btn-outline" disabled>Acheté</button>'
-            : '<button type="button" class="btn btn-gold" data-buy="' +
+            : '<button type="button" class="btn btn-outline" data-add-cart="' +
+              escapeHtml(a.id) +
+              '">' +
+              (isInCart(a.id) ? "Dans le panier" : "Panier") +
+              "</button>" +
+              '<button type="button" class="btn btn-gold" data-buy="' +
               escapeHtml(a.id) +
               '">Acheter</button>') +
           "</div></div>" +
@@ -2147,6 +2788,12 @@
     el.querySelectorAll("[data-buy]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         buyArticle(btn.getAttribute("data-buy"));
+      });
+    });
+    el.querySelectorAll("[data-add-cart]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        addToCart(btn.getAttribute("data-add-cart"));
+        renderMarketplace();
       });
     });
     el.querySelectorAll("[data-message]").forEach(function (btn) {
@@ -2310,6 +2957,19 @@
       buyBtn.disabled = owned;
       buyBtn.textContent = owned ? "Déjà acheté" : "Acheter en PI COIN";
     }
+    const addCartBtn = document.getElementById("modal-add-cart");
+    if (addCartBtn) {
+      const isOwnListing = DCS.user && DCS.user.id && article.sellerId === DCS.user.id;
+      const inCart = isInCart(article.id);
+      addCartBtn.disabled = owned || !!isOwnListing;
+      addCartBtn.textContent = owned
+        ? "Déjà acheté"
+        : isOwnListing
+          ? "Votre article"
+          : inCart
+            ? "Dans le panier"
+            : "Ajouter au panier";
+    }
     const msgBtn = document.getElementById("modal-message");
     if (msgBtn) {
       const isOwn = DCS.user && DCS.user.id && article.sellerId === DCS.user.id;
@@ -2378,6 +3038,12 @@
       article.title + " · " + article.pricePi + " PI",
       "market"
     );
+    if (isInCart(article.id)) {
+      DCS.cart = (DCS.cart || []).filter(function (item) {
+        return String(item.id) !== String(article.id);
+      });
+      saveCart();
+    }
     alert(
       "Achat confirmé.\nVous avez payé " +
         article.pricePi +
@@ -2388,6 +3054,7 @@
     closeArticleModal();
     renderMarketplace();
     renderBuyerOrders();
+    renderCart();
   }
 
   function sellerOnboardKey() {
@@ -2473,7 +3140,7 @@
     const form = document.getElementById("seller-onboard-form");
     if (!form || form.dataset.bound === "1") return;
     form.dataset.bound = "1";
-    form.addEventListener("submit", async function (e) {
+    form.addEventListener("submit", function (e) {
       e.preventDefault();
       if (!(DCS.user && DCS.user.id)) {
         alert("Connectez-vous avec Pi pour vous inscrire comme vendeur.");
@@ -2500,6 +3167,9 @@
         btn.disabled = true;
         btn.textContent = "Enregistrement…";
       }
+      const status = document.getElementById("seller-onboard-status");
+      if (status) status.textContent = "Enregistrement en cours…";
+
       DCS.user.firstName = firstName;
       DCS.user.lastName = lastName;
       DCS.user.displayName = shop;
@@ -2509,15 +3179,8 @@
       DCS.user.address = address;
       if (bio) DCS.user.bio = bio;
       if (typeof DCS.buildShareLinks === "function") DCS.buildShareLinks();
-      const res = await DCS.backend.persistProfile();
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "Enregistrer et continuer";
-      }
-      if (!res || !res.ok) {
-        alert((res && res.error) || "Impossible d’enregistrer l’inscription vendeur.");
-        return;
-      }
+
+      /* Débloquer l’étape 2 immédiatement (local) — sync serveur en fond */
       try {
         localStorage.setItem(
           sellerOnboardKey(),
@@ -2535,7 +3198,46 @@
       if (shopInput) shopInput.value = shop;
       updateSellerSpaceUI(false);
       renderSellerDashboard();
-      alert("Inscription vendeur enregistrée. Vous pouvez publier vos articles.");
+      const publishNote = document.getElementById("seller-publish-ready-note");
+      if (publishNote) {
+        publishNote.textContent =
+          "Inscription vendeur enregistrée. Vous pouvez publier vos articles.";
+        publishNote.hidden = false;
+      }
+
+      const unlockBtn = function () {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Enregistrer et continuer";
+        }
+      };
+
+      Promise.resolve()
+        .then(function () {
+          return DCS.backend.persistProfile();
+        })
+        .then(function (res) {
+          unlockBtn();
+          if (!res || !res.ok) {
+            if (publishNote) {
+              publishNote.textContent =
+                "Inscription locale OK. Sync profil : " +
+                ((res && res.error) || "réessayez plus tard depuis Profil.");
+            }
+            return;
+          }
+          if (publishNote) {
+            publishNote.textContent =
+              "Inscription vendeur synchronisée. Publiez vos articles ci-dessous.";
+          }
+        })
+        .catch(function () {
+          unlockBtn();
+          if (publishNote) {
+            publishNote.textContent =
+              "Inscription locale OK. Sync profil différée — vous pouvez déjà publier.";
+          }
+        });
     });
     const editBtn = document.getElementById("seller-edit-onboard");
     if (editBtn && editBtn.dataset.bound !== "1") {
@@ -2634,47 +3336,61 @@
         submitBtn.disabled = true;
         submitBtn.textContent = "Publication…";
       }
-      const photoUrls = [];
-      for (let i = 0; i < pendingPhotos.length; i++) {
-        const item = pendingPhotos[i];
-        if (item.file && DCS.backend.uploadMarketplacePhoto) {
-          const up = await DCS.backend.uploadMarketplacePhoto(item.file);
-          if (up.ok && up.url) photoUrls.push(up.url);
-          else photoUrls.push(item.url);
-        } else if (item.url) {
-          photoUrls.push(item.url);
+      try {
+        const res = await DCS.withTimeout(
+          (async function () {
+            const uploads = await Promise.all(
+              pendingPhotos.map(function (item) {
+                if (item.file && DCS.backend.uploadMarketplacePhoto) {
+                  return DCS.backend.uploadMarketplacePhoto(item.file).then(function (up) {
+                    if (up && up.ok && up.url) return up.url;
+                    return item.url || "";
+                  });
+                }
+                return Promise.resolve(item.url || "");
+              })
+            );
+            const photoUrls = uploads.filter(Boolean);
+            return DCS.backend.createListing({
+              sellerName: name,
+              title: title,
+              pricePi: price,
+              category: category,
+              excerpt: excerpt,
+              content: content.trim(),
+              photos: photoUrls,
+              sellerCountry: (DCS.user && DCS.user.country) || "",
+              sellerCity: (DCS.user && DCS.user.city) || ""
+            });
+          })(),
+          DCS.ACTION_TIMEOUT_MS || 5000,
+          "Publication trop longue (5 s). Réessayez avec moins de photos."
+        );
+        if (!res || !res.ok) {
+          alert((res && res.error) || "Publication impossible. Réessayez plus tard.");
+          return;
+        }
+        pendingPhotos = [];
+        renderPreview();
+        await DCS.backend.loadListings();
+        marketFilter.seller = "all";
+        renderSellers();
+        renderMarketplace();
+        renderSellerDashboard();
+        form.reset();
+        if (document.getElementById("seller-name")) {
+          document.getElementById("seller-name").value = name;
+        }
+        alert("Article publié. Il apparaît dans le catalogue et dans vos publications.");
+        openMarketView("sell");
+      } catch (errPub) {
+        alert((errPub && errPub.message) || "Publication trop longue (5 s). Réessayez.");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Publier l'article";
         }
       }
-      const res = await DCS.backend.createListing({
-        sellerName: name,
-        title,
-        pricePi: price,
-        category,
-        excerpt,
-        content: content.trim(),
-        photos: photoUrls
-      });
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Publier l'article";
-      }
-      if (!res.ok) {
-        alert(res.error || "Publication impossible. Réessayez plus tard.");
-        return;
-      }
-      pendingPhotos = [];
-      renderPreview();
-      await DCS.backend.loadListings();
-      marketFilter.seller = "all";
-      renderSellers();
-      renderMarketplace();
-      renderSellerDashboard();
-      form.reset();
-      if (document.getElementById("seller-name")) {
-        document.getElementById("seller-name").value = name;
-      }
-      alert("Article publié. Il apparaît dans le catalogue et dans vos publications.");
-      openMarketView("sell");
     });
   }
 
@@ -2684,6 +3400,7 @@
     let target = "buy";
     if (view === "sell" || view === "vendeur") target = "sell";
     else if (view === "orders" || view === "achats") target = "orders";
+    else if (view === "cart" || view === "panier") target = "cart";
     else if (view === "messages" || view === "message" || view === "msg") target = "messages";
     tabs.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.getAttribute("data-view") === target);
@@ -2698,14 +3415,22 @@
     const searchWrap = document.getElementById("buyer-search-wrap");
     if (searchWrap) searchWrap.style.display = target === "buy" ? "" : "none";
     if (target === "orders") renderBuyerOrders();
+    if (target === "cart") renderCart();
     if (target === "sell") {
       updateSellerSpaceUI(false);
       renderSellerDashboard();
     }
     if (target === "messages") {
+      /* Toujours la liste d’abord ; le chat s’ouvre seulement après clic (openMarketThread) */
+      if (!window.__dcsOpenMsgThread) {
+        activeChat = { peerId: null, listingId: null, peerLabel: "", listingTitle: "" };
+        setMessengerView(false);
+      }
+      window.__dcsOpenMsgThread = false;
       refreshMarketplaceMessages().then(function () {
         renderMarketConversations();
         renderMarketThread();
+        updateMessagesBadge();
       });
     }
     try {
@@ -2714,9 +3439,11 @@
           ? "#espace-vendeur"
           : target === "orders"
             ? "#mes-achats"
-            : target === "messages"
-              ? "#messages"
-              : "#catalogue";
+            : target === "cart"
+              ? "#panier"
+              : target === "messages"
+                ? "#messages"
+                : "#catalogue";
       history.replaceState(null, "", hash);
     } catch (e) {}
   }
@@ -2724,6 +3451,8 @@
   function setupMarketplaceViews() {
     const tabs = document.getElementById("market-tabs");
     if (!tabs) return;
+
+    loadCart();
 
     tabs.querySelectorAll("button").forEach((btn) => {
       btn.addEventListener("click", () => openMarketView(btn.getAttribute("data-view")));
@@ -2733,9 +3462,16 @@
       btn.addEventListener("click", () => openMarketView(btn.getAttribute("data-open-view")));
     });
 
+    const clearBtn = document.getElementById("cart-clear-btn");
+    const checkoutBtn = document.getElementById("cart-checkout-btn");
+    if (clearBtn) clearBtn.addEventListener("click", clearCart);
+    if (checkoutBtn) checkoutBtn.addEventListener("click", checkoutCart);
+
     const hash = (location.hash || "").toLowerCase();
     if (hash.includes("vendeur") || hash.includes("sell") || hash.includes("vendre")) {
       openMarketView("sell");
+    } else if (hash.includes("panier") || hash.includes("cart")) {
+      openMarketView("cart");
     } else if (hash.includes("achat") || hash.includes("order")) {
       openMarketView("orders");
     } else if (hash.includes("message")) {
@@ -2757,6 +3493,7 @@
     const closeBtn = document.getElementById("article-modal-close");
     const backBtn = document.getElementById("modal-back");
     const buyBtn = document.getElementById("modal-buy");
+    const addCartBtn = document.getElementById("modal-add-cart");
     const reportBtn = document.getElementById("modal-report");
     const messageBtn = document.getElementById("modal-message");
     if (closeBtn) closeBtn.addEventListener("click", closeArticleModal);
@@ -2764,6 +3501,19 @@
     if (buyBtn) {
       buyBtn.addEventListener("click", () => {
         if (activeArticleId != null) buyArticle(activeArticleId);
+      });
+    }
+    if (addCartBtn) {
+      addCartBtn.addEventListener("click", () => {
+        if (activeArticleId == null) return;
+        if (isInCart(activeArticleId)) {
+          closeArticleModal();
+          openMarketView("cart");
+          return;
+        }
+        addToCart(activeArticleId);
+        openArticle(activeArticleId);
+        renderMarketplace();
       });
     }
     if (messageBtn) {
@@ -2795,6 +3545,7 @@
     setupMarketplaceMessaging();
     renderBuyerOrders();
     renderSellerDashboard();
+    renderCart();
   }
 
   function openReportSeller(sellerName, articleId) {
@@ -5610,6 +6361,7 @@
     applyEcosystemCompliance();
     setupNav();
     setupLanguage();
+    populateCountrySelects();
     updateAuthNav();
     const page = pageName();
     if (isLoggedIn()) {

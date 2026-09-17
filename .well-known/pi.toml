@@ -3,6 +3,7 @@
 #
 # Remplacez ISSUER_PUBLIC_KEY par la clé publique G… du wallet Issuer
 # après création du token (étape script).
+# Quand damiecrypto.com sera branché sur Netlify, mettez à jour image + commentaires.
 
 [[CURRENCIES]]
 code="DCS"

@@ -1207,12 +1207,36 @@
               title: row.title,
               author: row.seller_name,
               sellerId: row.seller_id,
+              sellerCountry: row.seller_country || "",
+              sellerCity: row.seller_city || "",
               pricePi: Number(row.price_pi),
               category: row.category || "Divers",
               excerpt: row.excerpt || "",
               content: row.content || "",
               photos: Array.isArray(row.photos) ? row.photos : []
             };
+          });
+          /* Hydrate drapeaux même si la RPC profils n’est pas encore installée */
+          if (!DCS.sellerProfiles) DCS.sellerProfiles = {};
+          (DCS.marketplace || []).forEach(function (a) {
+            if (!a.sellerId) return;
+            if (!DCS.sellerProfiles[a.sellerId]) {
+              DCS.sellerProfiles[a.sellerId] = {
+                id: a.sellerId,
+                displayName: a.author || "",
+                country: "",
+                city: ""
+              };
+            }
+            if (a.sellerCountry && !DCS.sellerProfiles[a.sellerId].country) {
+              DCS.sellerProfiles[a.sellerId].country = a.sellerCountry;
+            }
+            if (a.sellerCity && !DCS.sellerProfiles[a.sellerId].city) {
+              DCS.sellerProfiles[a.sellerId].city = a.sellerCity;
+            }
+            if (a.author && !DCS.sellerProfiles[a.sellerId].displayName) {
+              DCS.sellerProfiles[a.sellerId].displayName = a.author;
+            }
           });
           return DCS.marketplace;
         })
@@ -1269,25 +1293,41 @@
       var gate = this.requireClient();
       if (!gate.ok) return Promise.resolve(gate);
       if (!DCS.user.id) return Promise.resolve({ ok: false, error: "Non connecté." });
-      return gate.client
-        .from("marketplace_listings")
-        .insert({
-          seller_id: DCS.user.id,
-          seller_name: payload.sellerName || DCS.user.displayName || DCS.user.username,
-          title: payload.title,
-          price_pi: payload.pricePi,
-          category: payload.category || "Divers",
-          excerpt: payload.excerpt || "",
-          content: payload.content || "",
-          photos: payload.photos || [],
-          active: true
-        })
-        .select("*")
-        .single()
-        .then(function (res) {
-          if (res.error) return { ok: false, error: res.error.message };
-          return { ok: true, listing: res.data };
-        });
+      var base = {
+        seller_id: DCS.user.id,
+        seller_name: payload.sellerName || DCS.user.displayName || DCS.user.username,
+        title: payload.title,
+        price_pi: payload.pricePi,
+        category: payload.category || "Divers",
+        excerpt: payload.excerpt || "",
+        content: payload.content || "",
+        photos: payload.photos || [],
+        active: true
+      };
+      var withGeo = Object.assign({}, base, {
+        seller_country:
+          payload.sellerCountry || (DCS.user && DCS.user.country) || "",
+        seller_city: payload.sellerCity || (DCS.user && DCS.user.city) || ""
+      });
+      function insertRow(row) {
+        return gate.client
+          .from("marketplace_listings")
+          .insert(row)
+          .select("*")
+          .single()
+          .then(function (res) {
+            if (res.error) return { ok: false, error: res.error.message, _err: res.error };
+            return { ok: true, listing: res.data };
+          });
+      }
+      return insertRow(withGeo).then(function (res) {
+        if (res.ok) return res;
+        var msg = String((res && res.error) || "");
+        if (/seller_country|seller_city|column/i.test(msg)) {
+          return insertRow(base);
+        }
+        return { ok: false, error: res.error || "Publication impossible." };
+      });
     },
 
     buyListing: function (listingId) {
@@ -1340,43 +1380,55 @@
           unique.push(id);
         }
       });
-      return gate.client
-        .from("profiles")
-        .select(
-          "id, username, display_name, first_name, last_name, pi_username, bio, city, country, address, phone, avatar, kyc, created_at, phone_linked, gmail_linked"
-        )
-        .in("id", unique)
-        .then(function (res) {
-          if (!DCS.sellerProfiles) DCS.sellerProfiles = {};
-          if (res.error) {
-            console.warn(res.error);
-            return DCS.sellerProfiles;
-          }
-          (res.data || []).forEach(function (row) {
-            DCS.sellerProfiles[row.id] = {
-              id: row.id,
-              username: row.username || "",
-              displayName: row.display_name || row.pi_username || row.username || "",
-              firstName: row.first_name || "",
-              lastName: row.last_name || "",
-              piUsername: row.pi_username || "",
-              bio: row.bio || "",
-              city: row.city || "",
-              country: row.country || "",
-              address: row.address || "",
-              phone: row.phone || "",
-              avatar: row.avatar || "",
-              kyc: row.kyc || "none",
-              phoneLinked: !!row.phone_linked,
-              gmailLinked: !!row.gmail_linked,
-              joined: row.created_at
-                ? new Date(row.created_at).toLocaleDateString("fr-FR")
-                : "",
-              joinedRaw: row.created_at || null
-            };
-          });
-          return DCS.sellerProfiles;
+      function mapRows(rows) {
+        if (!DCS.sellerProfiles) DCS.sellerProfiles = {};
+        (rows || []).forEach(function (row) {
+          if (!row || !row.id) return;
+          DCS.sellerProfiles[row.id] = {
+            id: row.id,
+            username: row.username || "",
+            displayName: row.display_name || row.pi_username || row.username || "",
+            firstName: row.first_name || "",
+            lastName: row.last_name || "",
+            piUsername: row.pi_username || "",
+            bio: row.bio || "",
+            city: row.city || "",
+            country: row.country || "",
+            address: row.address || "",
+            phone: row.phone || "",
+            avatar: row.avatar || "",
+            kyc: row.kyc || "none",
+            phoneLinked: !!row.phone_linked,
+            gmailLinked: !!row.gmail_linked,
+            joined: row.created_at
+              ? new Date(row.created_at).toLocaleDateString("fr-FR")
+              : "",
+            joinedRaw: row.created_at || null
+          };
         });
+        return DCS.sellerProfiles;
+      }
+      /* RPC security definer — visible pour tous (anon + auth), hors RLS own-only */
+      return gate.client.rpc("dcs_seller_public_profiles", { p_ids: unique }).then(function (res) {
+        if (!res.error && Array.isArray(res.data)) {
+          return mapRows(res.data);
+        }
+        if (res.error) console.warn(res.error);
+        /* Fallback legacy (souvent vide pour les autres vendeurs sous RLS) */
+        return gate.client
+          .from("profiles")
+          .select(
+            "id, username, display_name, first_name, last_name, pi_username, bio, city, country, address, phone, avatar, kyc, created_at, phone_linked, gmail_linked"
+          )
+          .in("id", unique)
+          .then(function (fallback) {
+            if (fallback.error) {
+              console.warn(fallback.error);
+              return DCS.sellerProfiles || {};
+            }
+            return mapRows(fallback.data);
+          });
+      });
     },
 
     loadSellerStats: function () {
@@ -2043,4 +2095,127 @@
   /* Soldes vides par défaut (remplacés après hydrate) */
   DCS.wallet = emptyWallet();
   DCS.history = [];
+
+  /* Plafond 5 s sur les actions utilisateur (sauf flux Pi SDK longs) */
+  DCS.ACTION_TIMEOUT_MS = 5000;
+  DCS.withTimeout = function (promise, ms, label) {
+    ms = ms == null ? DCS.ACTION_TIMEOUT_MS : ms;
+    var settled = false;
+    return Promise.race([
+      Promise.resolve(promise).then(
+        function (v) {
+          settled = true;
+          return v;
+        },
+        function (err) {
+          settled = true;
+          return Promise.reject(err);
+        }
+      ),
+      new Promise(function (_, reject) {
+        setTimeout(function () {
+          if (!settled) {
+            reject(new Error(label || "Délai dépassé (5 s). Réessayez."));
+          }
+        }, ms);
+      })
+    ]);
+  };
+  (function applyActionTimeouts() {
+    var MS = DCS.ACTION_TIMEOUT_MS || 5000;
+    function softWrap(orig) {
+      return function () {
+        return DCS.withTimeout(orig.apply(this, arguments), MS).catch(function (err) {
+          return {
+            ok: false,
+            error: (err && err.message) || "Délai dépassé (5 s). Réessayez.",
+            timeout: true
+          };
+        });
+      };
+    }
+    function loadWrap(orig, empty) {
+      return function () {
+        var self = this;
+        var args = arguments;
+        return DCS.withTimeout(orig.apply(self, args), MS).catch(function () {
+          return typeof empty === "function" ? empty() : empty;
+        });
+      };
+    }
+    var softNames = [
+      "persistProfile",
+      "buyListing",
+      "createListing",
+      "uploadMarketplacePhoto",
+      "sendMarketplaceMessage",
+      "markMarketplaceMessagesRead",
+      "reportListing",
+      "swap",
+      "transfer",
+      "createPayout",
+      "uploadAvatar",
+      "submitKyc",
+      "updatePassword",
+      "enrollCourse",
+      "createPost",
+      "createDepositRequest",
+      "createTicket",
+      "savePhoneUnverified",
+      "startTotpEnroll",
+      "verifyTotpEnroll",
+      "disableTotp",
+      "login",
+      "register",
+      "resendSignupOtp",
+      "persistCurrentUser"
+    ];
+    softNames.forEach(function (name) {
+      if (typeof DCS.backend[name] === "function") {
+        DCS.backend[name] = softWrap(DCS.backend[name]);
+      }
+    });
+    if (typeof DCS.backend.loadSellerPublicProfiles === "function") {
+      DCS.backend.loadSellerPublicProfiles = loadWrap(DCS.backend.loadSellerPublicProfiles, function () {
+        return DCS.sellerProfiles || {};
+      });
+    }
+    if (typeof DCS.backend.loadSellerStats === "function") {
+      DCS.backend.loadSellerStats = loadWrap(DCS.backend.loadSellerStats, function () {
+        return DCS.sellerStats || {};
+      });
+    }
+    if (typeof DCS.backend.loadListings === "function") {
+      DCS.backend.loadListings = loadWrap(DCS.backend.loadListings, function () {
+        return DCS.marketplace || [];
+      });
+    }
+    if (typeof DCS.backend.loadMarketplaceMessages === "function") {
+      DCS.backend.loadMarketplaceMessages = loadWrap(DCS.backend.loadMarketplaceMessages, function () {
+        return DCS.marketplaceMessages || [];
+      });
+    }
+    /* loadWallet / loadHistory / loadNotifications : PAS de timeout 5 s.
+       Sur PiNet un délai court affichait 0 PI alors que la DB avait le solde. */
+    if (typeof DCS.backend.loadCommunity === "function") {
+      DCS.backend.loadCommunity = loadWrap(DCS.backend.loadCommunity, function () {
+        return DCS.community || [];
+      });
+    }
+    if (typeof DCS.backend.loadCourses === "function") {
+      DCS.backend.loadCourses = loadWrap(DCS.backend.loadCourses, function () {
+        return DCS.courses || [];
+      });
+    }
+    if (typeof DCS.backend.loadArticles === "function") {
+      DCS.backend.loadArticles = loadWrap(DCS.backend.loadArticles, function () {
+        return DCS.articles || [];
+      });
+    }
+    if (typeof DCS.backend.loadReferrals === "function") {
+      DCS.backend.loadReferrals = loadWrap(DCS.backend.loadReferrals, function () {
+        return DCS.referrals || [];
+      });
+    }
+  })();
 })();

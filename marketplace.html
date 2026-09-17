@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" /><noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" /></noscript>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=flags2" />
 </head>
 <body>
   <div class="ticker"><div class="ticker-track" id="ticker-track"></div></div>
@@ -65,13 +65,19 @@
     <div class="market-toolbar">
       <div class="tabs" id="market-tabs">
         <button type="button" class="active" data-view="buy">Catalogue</button>
+        <button type="button" data-view="cart">
+          Panier <span class="cart-badge" id="cart-badge" hidden>0</span>
+        </button>
         <button type="button" data-view="orders">Mes achats</button>
-        <button type="button" data-view="messages">Messages</button>
+        <button type="button" data-view="messages" id="messages-tab-btn" class="tab-messages" title="Conversations">
+          <span class="tab-msg-label">Conversations</span>
+          <span class="msg-badge" id="messages-badge" hidden aria-live="polite">0</span>
+        </button>
         <button type="button" data-view="sell">Espace vendeur</button>
       </div>
       <div class="search-box" id="buyer-search-wrap">
         <span aria-hidden="true">⌕</span>
-        <input id="buyer-search" type="search" placeholder="Boutique, @pseudo Pi, ville, article…" autocomplete="off" />
+        <input id="buyer-search" type="search" placeholder="Rechercher un article ou un vendeur…" autocomplete="off" />
       </div>
     </div>
 
@@ -120,6 +126,33 @@
       </div>
     </section>
 
+    <!-- PANIER ACHETEUR -->
+    <section id="buyer-cart" class="market-view" data-view-panel="cart" hidden>
+      <div class="panel" style="margin-bottom:3rem">
+        <div class="section-head" style="margin-bottom:0.85rem">
+          <div>
+            <h2 class="market-section-title">Panier</h2>
+            <p class="panel-note">Articles réservés · paiement exclusif en PI COIN</p>
+          </div>
+        </div>
+        <div class="market-stats" id="cart-stats">
+          <div class="market-stat"><span>Articles</span><strong id="cart-stat-count">0</strong></div>
+          <div class="market-stat"><span>Total</span><strong id="cart-stat-total">0 π</strong></div>
+        </div>
+        <div id="cart-list" class="cart-list" style="margin-top:1rem"></div>
+        <div class="cart-checkout-bar" id="cart-checkout-bar" hidden>
+          <div>
+            <strong id="cart-checkout-total">0 π</strong>
+            <span class="panel-note">Total à payer en PI COIN</span>
+          </div>
+          <div class="cart-checkout-actions">
+            <button type="button" class="btn btn-outline" id="cart-clear-btn">Vider</button>
+            <button type="button" class="btn btn-gold" id="cart-checkout-btn">Payer le panier</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- MES ACHATS -->
     <section id="buyer-orders" class="market-view" data-view-panel="orders" hidden>
       <div class="panel" style="margin-bottom:3rem">
@@ -147,38 +180,54 @@
       </div>
     </section>
 
-    <!-- MESSAGES (RDV livraison) -->
+    <!-- DISCUSSIONS (type Facebook Messenger) -->
     <section id="market-messages" class="market-view" data-view-panel="messages" hidden>
-      <div class="panel" style="margin-bottom:3rem">
-        <h3>Messagerie vendeurs</h3>
-        <p class="panel-note" style="margin-bottom:1rem">
-          Échangez avec un vendeur pour convenir d’un rendez-vous de livraison. Connectez-vous avec Pi pour envoyer et lire vos messages.
-        </p>
-        <div id="market-msg-alert" class="market-msg-alert" hidden></div>
-        <div class="market-chat-layout">
-          <aside class="market-chat-list panel" style="margin:0;padding:0.85rem">
-            <h4 class="market-section-title" style="font-size:0.95rem;margin-bottom:0.65rem">Conversations</h4>
-            <div id="market-conv-list" class="market-conv-list"></div>
-          </aside>
-          <div class="market-chat-thread panel" style="margin:0">
-            <div id="market-chat-head" class="market-chat-head">
-              <strong id="market-chat-peer">Sélectionnez une conversation</strong>
-              <span id="market-chat-listing" class="panel-note"></span>
+      <div class="fb-messenger" id="fb-messenger">
+        <aside class="fb-inbox" id="fb-inbox">
+          <div class="fb-inbox-head">
+            <div class="fb-inbox-title">
+              <h3>Conversations</h3>
+              <span class="fb-inbox-sub">Touchez une conversation pour ouvrir le chat</span>
             </div>
-            <div id="market-chat-msgs" class="market-chat-msgs" aria-live="polite"></div>
-            <form id="market-chat-form" class="market-chat-form" hidden>
-              <div class="market-chat-quick" id="market-chat-quick" aria-label="Suggestions">
-                <button type="button" class="btn btn-outline" data-quick="Bonjour, je souhaite prendre rendez-vous pour la livraison.">RDV livraison</button>
-                <button type="button" class="btn btn-outline" data-quick="Quel créneau vous arrange cette semaine ?">Créneau</button>
-                <button type="button" class="btn btn-outline" data-quick="Pouvez-vous confirmer le lieu de remise ?">Lieu</button>
-              </div>
-              <div class="form-group" style="margin:0">
-                <label for="market-chat-input">Votre message</label>
-                <textarea id="market-chat-input" class="form-control" rows="3" maxlength="2000" placeholder="Écrire un message…" required style="resize:vertical"></textarea>
-              </div>
-              <button class="btn btn-gold" type="submit">Envoyer</button>
-            </form>
+            <span class="fb-inbox-badge" id="messages-unread-pill" hidden>
+              <span id="messages-unread-pill-count">0</span>
+            </span>
           </div>
+          <div class="fb-inbox-search">
+            <input id="fb-conv-search" type="search" placeholder="Rechercher une discussion…" autocomplete="off" />
+          </div>
+          <div id="market-conv-list" class="fb-conv-list" role="list"></div>
+        </aside>
+
+        <div class="fb-thread" id="fb-thread">
+          <div id="market-chat-head" class="fb-thread-head">
+            <button type="button" class="fb-back-btn" id="fb-chat-back" aria-label="Retour aux discussions" hidden>←</button>
+            <div class="fb-thread-avatar" id="fb-thread-avatar" aria-hidden="true">?</div>
+            <div class="fb-thread-meta">
+              <strong id="market-chat-peer">Sélectionnez une discussion</strong>
+              <span id="market-chat-listing" class="fb-thread-sub">Vos messages apparaissent ici</span>
+            </div>
+          </div>
+
+          <div id="market-chat-msgs" class="fb-thread-msgs" aria-live="polite">
+            <div class="fb-empty">
+              <div class="fb-empty-icon" aria-hidden="true">💬</div>
+              <strong>Vos discussions</strong>
+              <p>Choisissez une conversation à gauche, ou ouvrez un article et tapez sur <em>Message / RDV</em>.</p>
+            </div>
+          </div>
+
+          <form id="market-chat-form" class="fb-composer" hidden>
+            <div class="fb-quick" id="market-chat-quick" aria-label="Réponses rapides">
+              <button type="button" data-quick="Bonjour, je souhaite prendre rendez-vous pour la livraison.">📍 RDV</button>
+              <button type="button" data-quick="Quel créneau vous arrange cette semaine ?">🕒 Créneau</button>
+              <button type="button" data-quick="Pouvez-vous confirmer le lieu de remise ?">📌 Lieu</button>
+            </div>
+            <div class="fb-composer-row">
+              <textarea id="market-chat-input" rows="1" maxlength="2000" placeholder="Aa" required></textarea>
+              <button class="fb-send-btn" type="submit" aria-label="Envoyer">Envoyer</button>
+            </div>
+          </form>
         </div>
       </div>
     </section>
@@ -260,6 +309,7 @@
         <div class="panel" id="seller-panel">
           <div class="seller-step-badge">Étape 2 / 2</div>
           <h3>Publier un article</h3>
+          <p class="panel-note" id="seller-publish-ready-note" style="margin-bottom:0.65rem" hidden></p>
           <p class="panel-note" style="margin-bottom:1rem">
             Inscription vendeur validée. Les acheteurs paient uniquement en PI COIN.
             <button type="button" class="btn btn-outline" id="seller-edit-onboard" style="margin-top:0.55rem;padding:0.35rem 0.75rem;font-size:0.78rem">Modifier mes infos vendeur</button>
@@ -342,6 +392,7 @@
         <div class="article-modal-actions">
           <button type="button" class="btn btn-outline" id="modal-back">Retour</button>
           <button type="button" class="btn btn-outline" id="modal-message">Message / RDV</button>
+          <button type="button" class="btn btn-outline" id="modal-add-cart">Ajouter au panier</button>
           <button type="button" class="btn btn-outline btn-report" id="modal-report">Signaler</button>
           <button type="button" class="btn btn-gold" id="modal-buy">Acheter en PI COIN</button>
         </div>
@@ -447,10 +498,10 @@
     </div>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/config.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/backend.js"></script>
-  <script src="js/i18n.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/config.js?v=flags2"></script>
+  <script src="js/data.js?v=flags2"></script>
+  <script src="js/backend.js?v=flags2"></script>
+  <script src="js/i18n.js?v=flags2"></script>
+  <script src="js/app.js?v=flags2"></script>
 </body>
 </html>

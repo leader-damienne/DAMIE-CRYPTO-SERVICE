@@ -4,10 +4,10 @@ Plateforme web — wallet PI COIN, swap, transferts, marketplace, academy et par
 
 ## Lien
 
-**Production** : hébergement via **Cloudflare Pages** (voir [`SETUP-CLOUDFLARE.md`](SETUP-CLOUDFLARE.md)).  
-Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE
+**Production** : `https://damie-crypto-service.netlify.app`  
+Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE  
 
-*(Ancienne URL Netlify éventuelle : `damie-crypto-service.netlify.app` — à remplacer dans le Pi Developer Portal après migration.)*
+*(Migration future vers `damiecrypto.com` : uniquement après achat du domaine + DNS Netlify OK — ne pas pousser d’URL morte.)*
 
 ## Mode production
 

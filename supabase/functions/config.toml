@@ -1,3 +1,6 @@
 # Edge Functions config (optionnel)
 [functions.pi-payment]
 verify_jwt = true
+
+[functions.pi-a2u]
+verify_jwt = false

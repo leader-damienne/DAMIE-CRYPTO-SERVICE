@@ -239,6 +239,7 @@ DCS.marketplace = [];
 DCS.marketplaceMessages = [];
 DCS.sellerProfiles = {};
 DCS.sellerStats = {};
+DCS.cart = [];
 
 DCS.purchases = [];
 

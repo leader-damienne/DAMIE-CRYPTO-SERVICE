@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <script src="js/gate.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>DCS Admin — A2U Testnet</title>
+  <link rel="icon" href="assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .a2u-log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 0.85rem;
+      max-height: 280px;
+      overflow: auto;
+      color: var(--muted);
+    }
+    .a2u-log.is-ok { color: #9dcca0; }
+    .a2u-log.is-err { color: #e8a0a0; }
+    .recipient-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin: 0.25rem 0.25rem 0 0;
+      padding: 0.35rem 0.55rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--text);
+    }
+    .recipient-chip:hover { border-color: var(--gold); }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/logo.png" alt="Logo DCS" />
+        <div class="brand-text">
+          <span class="brand-name" translate="no" lang="en"><span class="g">DAMIE</span> <span class="w">CRYPTO</span> <span class="g">SERVICE</span></span>
+          <span class="brand-sub">Admin A2U · Testnet</span>
+        </div>
+      </a>
+      <div class="header-actions">
+        <a class="btn btn-outline" href="wallet.html">Wallet</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container" style="padding-bottom:3rem">
+    <div class="page-hero">
+      <h1>Admin <span>A2U</span></h1>
+      <p>Envois App → User (Testnet) pour débloquer le wallet Mainnet (5 wallets uniques).</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Accès</h3>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">
+          Connecté DCS + secret <code>DCS_ADMIN_SECRET</code> (Supabase Secrets). Jamais de seed wallet dans le navigateur.
+        </p>
+        <div class="form-group">
+          <label for="a2u-admin-secret">Secret admin</label>
+          <input id="a2u-admin-secret" class="form-control" type="password" autocomplete="off" placeholder="DCS_ADMIN_SECRET" />
+        </div>
+        <button type="button" class="btn btn-outline" id="a2u-check-btn" style="width:100%">Vérifier la config serveur</button>
+        <p id="a2u-status" style="font-size:0.8rem;color:var(--muted);margin-top:0.75rem">—</p>
+      </div>
+
+      <div class="panel">
+        <h3>Envoyer 1 A2U</h3>
+        <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.85rem">
+          Le destinataire doit s’être connecté à DCS via Pi (même app Testnet) pour avoir un <strong>pi_uid</strong>.
+          Répète avec <strong>5 comptes / wallets différents</strong>.
+        </p>
+        <div class="form-group">
+          <label for="a2u-username">Username Pi (DCS)</label>
+          <input id="a2u-username" class="form-control" type="text" placeholder="ex. Elie2000" />
+        </div>
+        <div class="form-group">
+          <label for="a2u-uid">ou Pi uid (si connu)</label>
+          <input id="a2u-uid" class="form-control" type="text" placeholder="uuid Pi…" />
+        </div>
+        <div class="form-group">
+          <label for="a2u-amount">Montant (Test-Pi)</label>
+          <input id="a2u-amount" class="form-control" type="number" min="0.0000001" step="any" value="0.0000001" />
+        </div>
+        <div class="form-group">
+          <label for="a2u-memo">Mémo</label>
+          <input id="a2u-memo" class="form-control" type="text" maxlength="32" value="DCS A2U Testnet" />
+        </div>
+        <button type="button" class="btn btn-gold" id="a2u-send-btn" style="width:100%">Envoyer A2U</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:1.25rem">
+      <h3>Destinataires récents (pi_uid)</h3>
+      <button type="button" class="btn btn-outline" id="a2u-list-btn" style="margin-bottom:0.75rem">Charger la liste</button>
+      <div id="a2u-recipients"></div>
+    </div>
+
+    <div class="panel" style="margin-top:1.25rem">
+      <h3>Paiements incomplets</h3>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">
+        <button type="button" class="btn btn-outline" id="a2u-incomplete-btn">Lister</button>
+        <button type="button" class="btn btn-outline" id="a2u-resume-btn">Reprendre (1er)</button>
+        <button type="button" class="btn btn-outline" id="a2u-cancel-btn">Annuler (1er)</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem">
+        Si Pi refuse un nouvel envoi (« ongoing payment »), annule ou complète d’abord.
+      </p>
+    </div>
+
+    <div class="panel" style="margin-top:1.25rem">
+      <h3>Journal</h3>
+      <div class="a2u-log" id="a2u-log">Prêt.</div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/admin-a2u.js"></script>
+</body>
+</html>

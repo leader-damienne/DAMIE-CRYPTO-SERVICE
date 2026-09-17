@@ -56,6 +56,68 @@ function piEmail(piUid: string) {
   return `pi.${safe || "user"}@auth.dcs.app`;
 }
 
+/** Fusionne les soldes des profils doublons (même username / pi_uid) vers le compte actif. */
+async function consolidateWalletsToTarget(
+  db: ReturnType<typeof admin>,
+  targetId: string,
+  username: string,
+  piUid: string
+) {
+  if (!targetId) return;
+  const name = String(username || "").trim();
+  const seen: Record<string, true> = { [targetId]: true };
+  const sourceIds: string[] = [];
+
+  const pushIds = (rows: Array<{ id: string }> | null) => {
+    (rows || []).forEach((row) => {
+      if (!row?.id || seen[row.id]) return;
+      seen[row.id] = true;
+      sourceIds.push(row.id);
+    });
+  };
+
+  if (name) {
+    const byUser = await db.from("profiles").select("id").ilike("username", name).limit(30);
+    pushIds(byUser.data);
+    const byPiUser = await db.from("profiles").select("id").ilike("pi_username", name).limit(30);
+    pushIds(byPiUser.data);
+  }
+  if (piUid) {
+    const byUid = await db.from("profiles").select("id").eq("pi_uid", piUid).limit(30);
+    pushIds(byUid.data);
+  }
+
+  for (let i = 0; i < sourceIds.length; i++) {
+    const sourceId = sourceIds[i];
+    const { data: srcWallets } = await db
+      .from("wallets")
+      .select("symbol, amount")
+      .eq("user_id", sourceId);
+    for (let k = 0; k < (srcWallets || []).length; k++) {
+      const w = srcWallets![k];
+      const addAmt = Number(w.amount) || 0;
+      if (!(addAmt > 0) || !w.symbol) continue;
+      const sym = String(w.symbol).toUpperCase();
+      const { data: tgtW } = await db
+        .from("wallets")
+        .select("amount")
+        .eq("user_id", targetId)
+        .eq("symbol", sym)
+        .maybeSingle();
+      const newAmt = (Number(tgtW?.amount) || 0) + addAmt;
+      await db.from("wallets").upsert(
+        { user_id: targetId, symbol: sym, amount: newAmt },
+        { onConflict: "user_id,symbol" }
+      );
+      await db
+        .from("wallets")
+        .update({ amount: 0 })
+        .eq("user_id", sourceId)
+        .eq("symbol", sym);
+    }
+  }
+}
+
 /** Valide le accessToken Pi : GET https://api.minepi.com/v2/me (Bearer) — pas de PI_API_KEY. */
 async function verifyPiUser(accessToken: string) {
   const res = await fetch(`${PI_API_BASE}/v2/me`, {
@@ -313,6 +375,13 @@ Deno.serve(async (req) => {
         display_name: piUser.username,
       })
       .eq("id", authUserId);
+
+    /* Récupérer les soldes restés sur d’anciens profils (même pseudo / uid) */
+    try {
+      await consolidateWalletsToTarget(db, authUserId, piUser.username, piUser.uid);
+    } catch (_mergeErr) {
+      /* Ne pas bloquer le login si la fusion échoue */
+    }
 
     /* Rattacher le parrain uniquement au 1er enregistrement (referred_by vide) */
     if (referredMeta) {

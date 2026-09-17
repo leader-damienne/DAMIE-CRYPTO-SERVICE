@@ -81,3 +81,48 @@ Pi Browser
 
 - Clé Pi = secret Edge Function uniquement
 - Comptes Pi liés via `profiles.pi_uid`
+
+## A2U Testnet (5 wallets uniques → wallet Mainnet)
+
+Pi exige **5 paiements App → User** depuis le **wallet app Testnet** vers **5 wallets utilisateurs** distincts avant d’accepter la demande de wallet Mainnet.
+
+### Secrets Supabase (Edge Functions)
+
+```bash
+supabase secrets set PI_A2U_API_KEY="SERVER_API_KEY_APP_TESTNET"
+supabase secrets set PI_APP_WALLET_SEED="S......................................................."
+supabase secrets set DCS_ADMIN_SECRET="mot-de-passe-fort-admin"
+# optionnel : restreindre aux usernames Pi fondateur
+# supabase secrets set DCS_ADMIN_USERNAMES="TonPseudoPi"
+supabase functions deploy pi-a2u --no-verify-jwt
+```
+
+- `PI_APP_WALLET_SEED` = seed **S…** du wallet de l’app **Testnet** (Develop → App wallet). **Jamais** dans Git / front.
+- `PI_A2U_API_KEY` = Server API Key de la **même** app Testnet (ne pas mélanger avec Mainnet).
+
+### UI admin
+
+1. 5 Pioneers ouvrissent DCS (Sandbox / app Testnet) et **Allow** (auth Pi) → `profiles.pi_uid` renseigné
+2. Ouvre `https://damie-crypto-service.netlify.app/admin-a2u.html` (connecté DCS)
+3. Secret admin → **Vérifier la config** (API key + seed OK)
+4. **Charger la liste** → choisir un destinataire → **Envoyer A2U** (montant min. `0.0000001`)
+5. Répéter pour **5 users / wallets différents**
+6. Retour Develop Mainnet → redemander le wallet app
+
+### Script local (secours)
+
+```powershell
+$env:PI_A2U_API_KEY="..."
+$env:PI_APP_WALLET_SEED="S..."
+node scripts/pi-a2u-send.mjs --uid <PI_UID> --amount 0.0000001
+node scripts/pi-a2u-send.mjs --incomplete
+```
+
+### Dépannage A2U
+
+| Problème | Cause |
+|----------|--------|
+| `private_seed_mismatch` | Seed ≠ wallet app Testnet (Develop) |
+| `ongoing_payment_found` | Admin → Lister incomplets → Reprendre ou Annuler |
+| Destinataire introuvable | User pas encore auth Pi sur cette app |
+| Approve/U2A casse après secrets | Garder `PI_API_KEY` Mainnet pour `pi-payment` ; A2U utilise `PI_A2U_API_KEY` |

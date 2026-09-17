@@ -28,13 +28,40 @@
     }
   } catch (e) {}
 
-  /* Pi Browser / App Studio : jamais ouvrir un autre onglet depuis cette page */
+  /* Pi Browser : bloquer seulement les sorties hors site pendant Verify.
+     Ne PAS neutraliser window.open partout — le SDK Pi (Allow / paiement) en a besoin. */
   try {
-    if (/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
-      window.open = function () {
-        return null;
-      };
-    }
+    var _dcsOpen = window.open.bind(window);
+    window.open = function (url, name, features) {
+      try {
+        var qp = new URLSearchParams(location.search || "");
+        var verifyMode =
+          qp.get("verify") === "1" ||
+          qp.get("stay") === "1";
+        var u = url == null ? "" : String(url);
+        if (
+          verifyMode &&
+          u &&
+          u !== "about:blank" &&
+          u.indexOf("javascript:") !== 0
+        ) {
+          var abs = u;
+          try {
+            abs = new URL(u, location.href).href;
+          } catch (eAbs) {}
+          var sameHost = false;
+          try {
+            sameHost = new URL(abs).hostname === location.hostname;
+          } catch (eHost) {}
+          var piRelated =
+            /minepi\.com|pinet\.com|pi\.net|sdk\.minepi/i.test(abs);
+          if (!sameHost && !piRelated) {
+            return null;
+          }
+        }
+      } catch (eGate) {}
+      return _dcsOpen(url, name, features);
+    };
   } catch (eOpen) {}
 
   /* Capturer parrainage : /=pseudo · ?ref= · ?=pseudo · host=pseudo */
