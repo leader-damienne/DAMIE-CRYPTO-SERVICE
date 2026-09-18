@@ -360,18 +360,33 @@
                 })
                   .then(function (res) {
                     if (!res || !res.ok) {
-                      finish({
-                        ok: false,
-                        error:
-                          (res && res.error) ||
-                          "Paiement refusé (approve). Vérifiez PI_NETWORK_API_KEY."
+                      /* Sinon le paiement reste « pending » et bloque tous les dépôts suivants */
+                      return callPiBackend("cancel", {
+                        paymentId: paymentId,
+                        amount: amt,
+                        memo: memo,
+                        kind: DEPOSIT_PRODUCT.kind
+                      }).then(function () {
+                        finish({
+                          ok: false,
+                          error:
+                            (res && res.error) ||
+                            "Approve échoué. Vérifiez PI_API_KEY Mainnet dans Supabase, puis réessayez."
+                        });
                       });
                     }
                   })
                   .catch(function (err) {
-                    finish({
-                      ok: false,
-                      error: (err && err.message) || "Erreur réseau approve Pi."
+                    return callPiBackend("cancel", {
+                      paymentId: paymentId,
+                      amount: amt,
+                      memo: memo,
+                      kind: DEPOSIT_PRODUCT.kind
+                    }).then(function () {
+                      finish({
+                        ok: false,
+                        error: (err && err.message) || "Erreur réseau approve Pi."
+                      });
                     });
                   });
               },

@@ -616,6 +616,34 @@
       startDeposit();
     });
 
+    const clearBtn = document.getElementById("pi-clear-pending-btn");
+    if (clearBtn && clearBtn.dataset.piBound !== "1") {
+      clearBtn.dataset.piBound = "1";
+      clearBtn.addEventListener("click", async function (e) {
+        e.preventDefault();
+        if (!(DCS.pi && DCS.pi.authenticate)) {
+          setStatus("Module Pi indisponible.", true);
+          return;
+        }
+        clearBtn.disabled = true;
+        setStatus("Déblocage : Allow Pi puis annulation du paiement en attente…");
+        try {
+          await DCS.pi.authenticate(["username", "payments"]);
+          setStatus(
+            "Si le message « Pending Payment » a disparu, réessayez Déposer. Sinon : PI_API_KEY Mainnet + redéployer pi-payment."
+          );
+          alert(
+            "Déblocage tenté.\n\n1) Si Allow s’est ouvert, c’est bon — réessayez Déposer.\n2) Sinon mettez la Server API Key Mainnet dans Supabase (PI_API_KEY) et redéployez pi-payment."
+          );
+        } catch (err) {
+          const msg = (err && err.message) || String(err);
+          setStatus(msg, true);
+          alert(msg);
+        }
+        clearBtn.disabled = false;
+      });
+    }
+
     /* Lien « Dépôt Pi » du haut : scroll + focus sur le vrai bouton */
     document.querySelectorAll('a[href="#wallet-deposit"]').forEach(function (a) {
       a.addEventListener("click", function () {
