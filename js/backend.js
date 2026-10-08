@@ -2175,11 +2175,7 @@
         DCS.backend[name] = softWrap(DCS.backend[name]);
       }
     });
-    if (typeof DCS.backend.loadSellerPublicProfiles === "function") {
-      DCS.backend.loadSellerPublicProfiles = loadWrap(DCS.backend.loadSellerPublicProfiles, function () {
-        return DCS.sellerProfiles || {};
-      });
-    }
+    /* loadSellerPublicProfiles : pas de coupure 5 s — sinon pays vendeur vide sur réseau mobile */
     if (typeof DCS.backend.loadSellerStats === "function") {
       DCS.backend.loadSellerStats = loadWrap(DCS.backend.loadSellerStats, function () {
         return DCS.sellerStats || {};

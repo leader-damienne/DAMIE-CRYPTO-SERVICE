@@ -1807,13 +1807,18 @@
       );
     }
     const emoji = isoToFlagEmoji(iso);
+    /* Image d’abord : les emoji drapeaux ne s’affichent pas sur Windows / certains WebView */
     return (
       '<span class="seller-flag-wrap" title="' +
       escapeHtml(label) +
       '">' +
-      '<span class="seller-flag seller-flag-emoji" aria-label="' +
+      '<img class="seller-flag seller-flag-img" src="https://flagcdn.com/w40/' +
+      iso +
+      '.png" alt="' +
       escapeHtml(label) +
-      '">' +
+      '" width="22" height="16" loading="lazy" referrerpolicy="no-referrer"' +
+      " onerror=\"this.style.display='none';if(this.nextSibling)this.nextSibling.style.display='inline-block';\" />" +
+      '<span class="seller-flag seller-flag-emoji" style="display:none" aria-hidden="true">' +
       emoji +
       "</span>" +
       "</span>"
