@@ -306,24 +306,50 @@ Deno.serve(async (req) => {
     }
 
     let authUserId = existing.data?.id as string | undefined;
-    let loginEmail = (existing.data?.email as string) || email;
+    /* Toujours l’e-mail du profil existant — ne jamais le réécrire vers
+     * pi.{testnetUid}@… (UID Testnet ≠ Mainnet → « Error updating user » / doublon). */
+    let loginEmail = String(existing.data?.email || "").trim() || email;
 
     if (authUserId) {
-      const upd = await db.auth.admin.updateUserById(authUserId, {
+      const userMeta = {
+        pi_uid: piUser.uid,
+        pi_username: piUser.username,
+        username: existing.data?.username || piUser.username,
+        auth_provider: "pi",
+        pi_network: isSandbox ? "testnet" : "mainnet",
+      };
+
+      /* Password + metadata uniquement — pas d’email (évite conflit Auth). */
+      let upd = await db.auth.admin.updateUserById(authUserId, {
         password,
-        /* Garder l’e-mail existant s’il n’est pas synthétique — sinon e-mail Pi */
-        email: loginEmail && !/@auth\.dcs\.app$/i.test(loginEmail) ? loginEmail : email,
-        user_metadata: {
-          pi_uid: piUser.uid,
-          pi_username: piUser.username,
-          username: existing.data?.username || piUser.username,
-          auth_provider: "pi",
-          pi_network: isSandbox ? "testnet" : "mainnet",
-        },
+        user_metadata: userMeta,
       });
-      if (upd.error) throw new Error(upd.error.message);
-      if (!loginEmail || /@auth\.dcs\.app$/i.test(loginEmail)) {
-        loginEmail = email;
+
+      if (upd.error) {
+        /* Soft retry : password seul si metadata rejetée */
+        const retryPwd = await db.auth.admin.updateUserById(authUserId, {
+          password,
+        });
+        if (retryPwd.error) {
+          const raw =
+            retryPwd.error.message ||
+            upd.error.message ||
+            "Error updating user";
+          if (/email|already|registered|exists|duplicate|unique/i.test(raw)) {
+            throw new Error(
+              "Compte existant : conflit e-mail Auth. Allow Testnet n’a pas besoin de changer l’e-mail — redéployez pi-auth (fix PR) puis réessayez."
+            );
+          }
+          throw new Error(
+            "Impossible de rafraîchir le mot de passe du compte existant (" +
+              raw +
+              "). Réessayez Allow Testnet."
+          );
+        }
+        /* Metadata best-effort (ne bloque pas Allow) */
+        await db.auth.admin.updateUserById(authUserId, {
+          user_metadata: userMeta,
+        });
       }
     } else {
       const created = await db.auth.admin.createUser({
@@ -376,13 +402,18 @@ Deno.serve(async (req) => {
 
     /* Libérer les uids sur les autres profils avant rattachement */
     if (isSandbox) {
-      await db
+      const clearOther = await db
         .from("profiles")
         .update({ pi_uid_testnet: null })
         .eq("pi_uid_testnet", piUser.uid)
         .neq("id", authUserId);
+      if (clearOther.error && /pi_uid_testnet|column/i.test(clearOther.error.message)) {
+        throw new Error(
+          "Colonne pi_uid_testnet absente. Exécutez supabase/pi-uid-testnet.sql dans le SQL Editor, puis redéployez pi-auth."
+        );
+      }
       /* Testnet : ne PAS écraser pi_uid Mainnet (sinon A2U/list confond les réseaux) */
-      await db
+      const updTestnet = await db
         .from("profiles")
         .update({
           pi_uid_testnet: piUser.uid,
@@ -390,14 +421,29 @@ Deno.serve(async (req) => {
           pi_last_auth_network: "testnet",
           display_name: piUser.username,
         })
-        .eq("id", authUserId);
+        .eq("id", authUserId)
+        .select("id, pi_uid_testnet, pi_last_auth_network")
+        .maybeSingle();
+      if (updTestnet.error) {
+        if (/pi_uid_testnet|pi_last_auth_network|column/i.test(updTestnet.error.message)) {
+          throw new Error(
+            "Colonne pi_uid_testnet absente. Exécutez supabase/pi-uid-testnet.sql, puis : supabase functions deploy pi-auth --no-verify-jwt"
+          );
+        }
+        throw new Error(updTestnet.error.message);
+      }
+      if (!updTestnet.data?.pi_uid_testnet) {
+        throw new Error(
+          "Allow Testnet OK côté Pi, mais pi_uid_testnet non enregistré. Vérifiez le SQL pi-uid-testnet.sql et redéployez pi-auth."
+        );
+      }
     } else {
       await db
         .from("profiles")
         .update({ pi_uid: null })
         .eq("pi_uid", piUser.uid)
         .neq("id", authUserId);
-      await db
+      const updMain = await db
         .from("profiles")
         .update({
           pi_uid: piUser.uid,
@@ -406,6 +452,7 @@ Deno.serve(async (req) => {
           display_name: piUser.username,
         })
         .eq("id", authUserId);
+      if (updMain.error) throw new Error(updMain.error.message);
     }
 
     /* Récupérer les soldes restés sur d’anciens profils (même pseudo / uid) */
@@ -452,6 +499,7 @@ Deno.serve(async (req) => {
         pi_uid: piUser.uid,
         username: piUser.username,
         network: isSandbox ? "testnet" : "mainnet",
+        pi_uid_testnet: isSandbox ? piUser.uid : undefined,
       },
     });
   } catch (e) {

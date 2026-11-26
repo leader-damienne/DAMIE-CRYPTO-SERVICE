@@ -510,12 +510,83 @@
       });
   }
 
+  /**
+   * A2U — Retrait PI DCS → wallet Pi (tous les users).
+   * Réseau = session actuelle (Testnet si sandbox, sinon Mainnet).
+   * Sur Testnet, bonus : compte pour le seuil Develop 5 wallets.
+   */
+  function withdrawWithPi(amount) {
+    var MIN_PI = 0.0000001;
+    var amt = Number(amount);
+    if (!(amt >= MIN_PI)) {
+      return Promise.resolve({
+        ok: false,
+        error: "Montant minimum de retrait : 0,0000001 PI."
+      });
+    }
+    if (!DCS.user || !DCS.user.id) {
+      return Promise.resolve({ ok: false, error: "Connectez-vous à DCS." });
+    }
+    if (!DCS.backend || !DCS.backend.client) {
+      return Promise.resolve({ ok: false, error: "Backend DCS non prêt." });
+    }
+
+    var sandbox = useSandbox();
+    return DCS.backend.client.auth.getSession().then(function (sessRes) {
+      var token =
+        sessRes &&
+        sessRes.data &&
+        sessRes.data.session &&
+        sessRes.data.session.access_token;
+      if (!token) {
+        return { ok: false, error: "Session DCS expirée. Reconnectez-vous avec Pi." };
+      }
+      return fetch(functionsUrl("pi-a2u"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+          apikey: cfg().supabaseAnonKey || ""
+        },
+        body: JSON.stringify({
+          action: "withdraw_self",
+          amount: amt,
+          memo: "DCS retrait PI",
+          network: sandbox ? "testnet" : "mainnet",
+          sandbox: sandbox
+        })
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok || !data || !data.ok) {
+            return {
+              ok: false,
+              error: (data && data.error) || "Retrait refusé (" + res.status + ")",
+              signinTestnetUrl: data && data.signinTestnetUrl,
+              network: data && data.network,
+              countsTowardFiveWallets: !!(data && data.countsTowardFiveWallets)
+            };
+          }
+          return {
+            ok: true,
+            amount: data.amount,
+            paymentId: data.paymentId,
+            txid: data.txid,
+            network: data.withdrawNetwork || data.network,
+            countsTowardFiveWallets: !!data.countsTowardFiveWallets,
+            note: data.note || ""
+          };
+        });
+      });
+    });
+  }
+
   DCS.pi = {
     init: initPi,
     authenticate: authenticate,
     sessionFromPiAuth: sessionFromPiAuth,
     loginWithPi: loginWithPi,
     depositWithPi: depositWithPi,
+    withdrawWithPi: withdrawWithPi,
     isAvailable: isPiBrowser,
     ecosystemMode: ecosystemMode,
     useSandbox: useSandbox,

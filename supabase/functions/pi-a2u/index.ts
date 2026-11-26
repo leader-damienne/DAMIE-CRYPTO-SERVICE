@@ -1,8 +1,10 @@
 // Supabase Edge Function — paiements A2U (App → User) Pi Network
 // Deploy: supabase functions deploy pi-a2u --no-verify-jwt
 // Secrets:
-//   PI_API_KEY ou PI_A2U_API_KEY  (clé Server de l’app Testnet pour le seuil 5 wallets)
-//   PI_APP_WALLET_SEED            (seed S… du wallet app Testnet — jamais dans le front)
+//   PI_A2U_API_KEY                (Server API Key app Testnet — admin A2U + retrait Testnet)
+//   PI_APP_WALLET_SEED            (seed S… wallet app Testnet)
+//   PI_API_KEY                    (Server API Key app Mainnet — dépôts + retrait Mainnet)
+//   PI_APP_WALLET_SEED_MAINNET    (seed S… wallet app Mainnet — retrait PI universel Mainnet)
 //   DCS_ADMIN_SECRET              (mot de passe admin A2U)
 // Optionnel: DCS_ADMIN_USERNAMES (liste séparée par virgules de pi_username autorisés)
 
@@ -11,13 +13,19 @@ import * as StellarSdk from "npm:@stellar/stellar-sdk@13.3.0";
 
 const PI_API_BASE = Deno.env.get("PI_API_BASE") || "https://api.minepi.com";
 const HAS_DEDICATED_A2U_KEY = !!String(Deno.env.get("PI_A2U_API_KEY") || "").trim();
-/* Toujours préférer PI_A2U_API_KEY (Testnet). Fallback PI_API_KEY = risque Mainnet. */
+/* Admin A2U Testnet : toujours préférer PI_A2U_API_KEY. */
 const PI_API_KEY =
   Deno.env.get("PI_A2U_API_KEY") ||
   Deno.env.get("PI_API_KEY") ||
   Deno.env.get("PI_NETWORK_API_KEY") ||
   "";
+const PI_MAINNET_API_KEY =
+  Deno.env.get("PI_API_KEY") || Deno.env.get("PI_NETWORK_API_KEY") || "";
 const WALLET_SEED = Deno.env.get("PI_APP_WALLET_SEED") || "";
+const WALLET_SEED_MAINNET =
+  Deno.env.get("PI_APP_WALLET_SEED_MAINNET") ||
+  Deno.env.get("PI_MAINNET_APP_WALLET_SEED") ||
+  "";
 const ADMIN_SECRET = Deno.env.get("DCS_ADMIN_SECRET") || "";
 const ADMIN_USERS = String(Deno.env.get("DCS_ADMIN_USERNAMES") || "")
   .split(",")
@@ -85,16 +93,22 @@ function assertAdmin(req: Request, profile: { pi_username?: string | null; usern
   }
 }
 
-async function piFetch(path: string, method = "GET", body?: Record<string, unknown>) {
-  if (!PI_API_KEY) {
+async function piFetch(
+  path: string,
+  method = "GET",
+  body?: Record<string, unknown>,
+  apiKeyOverride?: string
+) {
+  const key = String(apiKeyOverride || PI_API_KEY || "").trim();
+  if (!key) {
     throw new Error(
-      "PI_A2U_API_KEY / PI_API_KEY manquant. Utilisez la Server API Key de l’app Testnet."
+      "PI_A2U_API_KEY / PI_API_KEY manquant. Utilisez la Server API Key de l’app Pi."
     );
   }
   const res = await fetch(`${PI_API_BASE}/v2${path}`, {
     method,
     headers: {
-      Authorization: `Key ${PI_API_KEY}`,
+      Authorization: `Key ${key}`,
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -140,26 +154,27 @@ function horizonFor(network: string) {
   return new StellarSdk.Horizon.Server(url);
 }
 
-function requireWalletSeed() {
-  if (!WALLET_SEED) {
+function requireWalletSeed(seedOverride?: string, label = "PI_APP_WALLET_SEED") {
+  const seed = String(seedOverride || WALLET_SEED || "").trim();
+  if (!seed) {
     throw new Error(
-      "PI_APP_WALLET_SEED manquant (seed S… du wallet app Testnet, Develop → App Wallet)."
+      label + " manquant (seed S… du wallet app Pi, Develop → App Wallet)."
     );
   }
-  if (!WALLET_SEED.startsWith("S") || WALLET_SEED.length !== 56) {
-    throw new Error("PI_APP_WALLET_SEED invalide (doit commencer par S, 56 caractères).");
+  if (!seed.startsWith("S") || seed.length !== 56) {
+    throw new Error(label + " invalide (doit commencer par S, 56 caractères).");
   }
-  if (!StellarSdk.StrKey.isValidEd25519SecretSeed(WALLET_SEED)) {
-    throw new Error("PI_APP_WALLET_SEED : seed Ed25519 invalide.");
+  if (!StellarSdk.StrKey.isValidEd25519SecretSeed(seed)) {
+    throw new Error(label + " : seed Ed25519 invalide.");
   }
-  return StellarSdk.Keypair.fromSecret(WALLET_SEED);
+  return StellarSdk.Keypair.fromSecret(seed);
 }
 
-async function submitOnChain(payment: PaymentDTO) {
-  const keypair = requireWalletSeed();
+async function submitOnChain(payment: PaymentDTO, seedOverride?: string, seedLabel?: string) {
+  const keypair = requireWalletSeed(seedOverride, seedLabel || "PI_APP_WALLET_SEED");
   if (payment.from_address !== keypair.publicKey()) {
     throw new Error(
-      "private_seed_mismatch : PI_APP_WALLET_SEED ≠ wallet de l’app Pi (from_address " +
+      "private_seed_mismatch : seed ≠ wallet de l’app Pi (from_address " +
         payment.from_address +
         ", seed → " +
         keypair.publicKey() +
@@ -330,15 +345,282 @@ Deno.serve(async (req) => {
     const db = adminDb();
     const { data: profile } = await db
       .from("profiles")
-      .select("id, pi_uid, pi_username, username")
+      .select(
+        "id, pi_uid, pi_uid_testnet, pi_username, username, pi_last_auth_network"
+      )
       .eq("id", user.id)
       .maybeSingle();
     if (!profile) return json({ ok: false, error: "Profil DCS introuvable." }, 403);
 
-    assertAdmin(req, profile);
-
     const payload = await req.json();
     const action = String(payload.action || "send");
+
+    /* Retrait PI universel (tous les users) → wallet Pi = A2U.
+     * Testnet : compte aussi pour le seuil 5 wallets. Mainnet : produit wallet normal.
+     * Pas de secret admin. */
+    if (action === "withdraw_self") {
+      const amount = Number(payload.amount);
+      if (!(amount > 0)) {
+        return json({ ok: false, error: "Montant invalide (ex. 0.0000001)." }, 400);
+      }
+      if (amount < 0.0000001) {
+        return json({ ok: false, error: "Minimum : 0,0000001 PI." }, 400);
+      }
+
+      const netHint = String(payload.network || "").toLowerCase();
+      const sandboxFlag =
+        payload.sandbox === true ||
+        payload.sandbox === "true" ||
+        netHint === "testnet";
+      /* Payload explicite gagne ; sinon dernier réseau d’auth du profil. */
+      const lastNet = String(
+        (profile as ProfileRow).pi_last_auth_network || ""
+      ).toLowerCase();
+      const wantTestnet =
+        netHint === "mainnet"
+          ? false
+          : sandboxFlag || (netHint !== "mainnet" && lastNet === "testnet");
+
+      const testnetUid = String((profile as ProfileRow).pi_uid_testnet || "").trim();
+      const mainnetUid = String((profile as ProfileRow).pi_uid || "").trim();
+      const recipientUid = wantTestnet ? testnetUid : mainnetUid;
+      const countsTowardFiveWallets = wantTestnet;
+
+      if (wantTestnet && !testnetUid) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Profil sans uid Testnet. Connectez-vous via " +
+              SIGNIN_TESTNET_URL +
+              " (Allow), ou retirez en Mainnet depuis l’app normale.",
+            signinTestnetUrl: SIGNIN_TESTNET_URL,
+            network: "testnet",
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+      if (!wantTestnet && !mainnetUid) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Profil sans uid Mainnet. Connectez-vous avec Pi (Allow) sur l’app, puis réessayez.",
+            network: "mainnet",
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+
+      const withdrawApiKey = wantTestnet
+        ? String(Deno.env.get("PI_A2U_API_KEY") || "").trim() || PI_API_KEY
+        : PI_MAINNET_API_KEY;
+      const withdrawSeed = wantTestnet ? WALLET_SEED : WALLET_SEED_MAINNET;
+      const seedLabel = wantTestnet
+        ? "PI_APP_WALLET_SEED"
+        : "PI_APP_WALLET_SEED_MAINNET";
+
+      if (!withdrawApiKey) {
+        return json(
+          {
+            ok: false,
+            error: wantTestnet
+              ? "PI_A2U_API_KEY (Testnet) manquant côté serveur."
+              : "PI_API_KEY (Mainnet) manquant côté serveur.",
+            network: wantTestnet ? "testnet" : "mainnet",
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+      if (!withdrawSeed) {
+        return json(
+          {
+            ok: false,
+            error: wantTestnet
+              ? "PI_APP_WALLET_SEED (Testnet) manquant."
+              : "PI_APP_WALLET_SEED_MAINNET manquant. Après création du wallet app Mainnet (Develop), ajoutez sa seed S… en secret Supabase.",
+            network: wantTestnet ? "testnet" : "mainnet",
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+
+      const { data: walletRow } = await db
+        .from("wallets")
+        .select("amount")
+        .eq("user_id", user.id)
+        .eq("symbol", "PI")
+        .maybeSingle();
+      const bal = Number(walletRow?.amount || 0);
+      if (!(bal >= amount)) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Solde PI insuffisant (" +
+              bal +
+              "). Déposez d’abord des PI sur DCS.",
+            balance: bal,
+          },
+          400
+        );
+      }
+
+      const memo = String(payload.memo || "DCS retrait PI").slice(0, 32);
+      const username = String(
+        (profile as ProfileRow).pi_username ||
+          (profile as ProfileRow).username ||
+          ""
+      ).trim();
+
+      const created = (await piFetch(
+        "/payments",
+        "POST",
+        {
+          payment: {
+            amount,
+            memo,
+            metadata: {
+              kind: "withdraw_pi",
+              app: "DCS",
+              purpose: "user_withdraw",
+              network: wantTestnet ? "testnet" : "mainnet",
+              counts_toward_five_wallets: countsTowardFiveWallets,
+              to_username: username || null,
+            },
+            uid: recipientUid,
+          },
+        },
+        withdrawApiKey
+      )) as PaymentDTO;
+
+      const paymentId = created.identifier;
+      if (!paymentId) throw new Error("Pi n’a pas renvoyé d’identifier.");
+
+      await db.from("pi_payments").upsert(
+        {
+          payment_id: paymentId,
+          user_id: user.id,
+          amount,
+          memo,
+          status: "a2u_created",
+          pi_username: username || recipientUid,
+          meta: {
+            kind: "withdraw_pi",
+            direction: "app_to_user",
+            recipient_uid: recipientUid,
+            stage: "created",
+            network: wantTestnet ? "testnet" : "mainnet",
+            countsTowardFiveWallets,
+          },
+        },
+        { onConflict: "payment_id" }
+      );
+
+      const txid = await submitOnChain(created, withdrawSeed, seedLabel);
+      const completed = await piFetch(
+        `/payments/${paymentId}/complete`,
+        "POST",
+        { txid },
+        withdrawApiKey
+      );
+
+      const { data: debit, error: debitErr } = await db.rpc(
+        "dcs_debit_pi_for_withdraw",
+        {
+          p_user: user.id,
+          p_amount: amount,
+          p_payment_id: paymentId,
+          p_txid: txid,
+        }
+      );
+
+      if (debitErr) {
+        await db.from("pi_payments").upsert(
+          {
+            payment_id: paymentId,
+            user_id: user.id,
+            amount,
+            memo,
+            status: "completed_debit_failed",
+            txid,
+            pi_username: username || recipientUid,
+            completed_at: new Date().toISOString(),
+            meta: {
+              kind: "withdraw_pi",
+              direction: "app_to_user",
+              recipient_uid: recipientUid,
+              debitError: debitErr.message,
+              payment: completed,
+              network: wantTestnet ? "testnet" : "mainnet",
+              countsTowardFiveWallets,
+            },
+          },
+          { onConflict: "payment_id" }
+        );
+        return json(
+          {
+            ok: false,
+            error:
+              "A2U Pi envoyé, mais débit DCS échoué : " +
+              debitErr.message +
+              ". Exécutez supabase/pi-withdraw.sql puis contactez le support avec paymentId " +
+              paymentId,
+            paymentId,
+            txid,
+            paymentCompleted: true,
+            network: wantTestnet ? "testnet" : "mainnet",
+            countsTowardFiveWallets,
+          },
+          500
+        );
+      }
+
+      await db.from("pi_payments").upsert(
+        {
+          payment_id: paymentId,
+          user_id: user.id,
+          amount,
+          memo,
+          status: "completed",
+          txid,
+          pi_username: username || recipientUid,
+          completed_at: new Date().toISOString(),
+          meta: {
+            kind: "withdraw_pi",
+            direction: "app_to_user",
+            recipient_uid: recipientUid,
+            payment: completed,
+            network: wantTestnet ? "testnet" : "mainnet",
+            countsTowardFiveWallets,
+          },
+        },
+        { onConflict: "payment_id" }
+      );
+
+      return json({
+        ok: true,
+        action: "withdraw_self",
+        paymentId,
+        txid,
+        amount,
+        recipientUid,
+        recipientUsername: username || null,
+        network: created.network,
+        withdrawNetwork: wantTestnet ? "testnet" : "mainnet",
+        debit,
+        countsTowardFiveWallets,
+        note: wantTestnet
+          ? "Retrait Testnet envoyé. (Bonus : compte pour le seuil Develop 5 wallets.)"
+          : "Retrait Mainnet envoyé vers votre wallet Pi.",
+      });
+    }
+
+    assertAdmin(req, profile);
 
     if (action === "status") {
       const keypairOk = !!WALLET_SEED;
@@ -347,6 +629,26 @@ Deno.serve(async (req) => {
         if (keypairOk) pub = StellarSdk.Keypair.fromSecret(WALLET_SEED).publicKey();
       } catch {
         pub = "";
+      }
+      let schemaReady = true;
+      let testnetProfiles = 0;
+      let schemaError: string | null = null;
+      try {
+        const probe = await db
+          .from("profiles")
+          .select("id, pi_uid_testnet")
+          .not("pi_uid_testnet", "is", null)
+          .neq("pi_uid_testnet", "")
+          .limit(50);
+        if (probe.error) {
+          schemaReady = false;
+          schemaError = probe.error.message;
+        } else {
+          testnetProfiles = (probe.data || []).length;
+        }
+      } catch (eProbe) {
+        schemaReady = false;
+        schemaError = eProbe instanceof Error ? eProbe.message : String(eProbe);
       }
       return json({
         ok: true,
@@ -357,9 +659,16 @@ Deno.serve(async (req) => {
         adminUsersRestricted: ADMIN_USERS.length > 0,
         networkHint: "testnet",
         usingDedicatedA2uKey: HAS_DEDICATED_A2U_KEY,
-        warning: HAS_DEDICATED_A2U_KEY
-          ? null
-          : "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found si vous envoyez vers des uids Testnet. Ajoutez PI_A2U_API_KEY = Server API Key de l’app Testnet.",
+        schemaReady,
+        testnetProfiles,
+        schemaError,
+        warning: !schemaReady
+          ? "Schéma incomplet (pi_uid_testnet). Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth + pi-a2u. Les Allow Testnet ne peuvent pas apparaître dans la liste."
+          : !HAS_DEDICATED_A2U_KEY
+            ? "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found. Ajoutez PI_A2U_API_KEY = Server API Key Testnet."
+            : testnetProfiles === 0
+              ? "Aucun pi_uid_testnet en base. Les testeurs doivent Allow sur signin-testnet.html APRÈS deploy de pi-auth à jour."
+              : null,
         signinTestnetUrl: SIGNIN_TESTNET_URL,
       });
     }
@@ -374,7 +683,9 @@ Deno.serve(async (req) => {
       if (error) throw new Error(error.message);
       const a2u = (data || []).filter((row) => {
         const meta = (row as { meta?: { kind?: string; direction?: string } }).meta;
-        return meta && meta.kind === "a2u" && meta.direction === "app_to_user";
+        if (!meta || meta.direction !== "app_to_user") return false;
+        /* Admin A2U + retraits user (withdraw_pi) comptent tous pour 5 wallets */
+        return meta.kind === "a2u" || meta.kind === "withdraw_pi";
       });
       const seen: Record<string, true> = {};
       const unique: Array<{
@@ -417,16 +728,50 @@ Deno.serve(async (req) => {
 
     if (action === "list_recipients") {
       const filter = String(payload.filter || "all").toLowerCase();
-      let q = db
+      const PROFILE_COLS =
+        "id, username, pi_username, pi_uid, pi_uid_testnet, pi_last_auth_network, created_at";
+
+      type ProfileRow = {
+        id: string;
+        username?: string | null;
+        pi_username?: string | null;
+        pi_uid?: string | null;
+        pi_uid_testnet?: string | null;
+        pi_last_auth_network?: string | null;
+        created_at?: string | null;
+      };
+
+      const mapRow = (r: ProfileRow) => {
+        const testnetUid = String(r.pi_uid_testnet || "").trim();
+        const mainnetUid = String(r.pi_uid || "").trim();
+        if (!testnetUid && !mainnetUid) return null;
+        const testnetReady = !!testnetUid;
+        return {
+          id: r.id,
+          username: r.username,
+          pi_username: r.pi_username,
+          pi_uid: mainnetUid || null,
+          pi_uid_testnet: testnetUid || null,
+          pi_last_auth_network: r.pi_last_auth_network || null,
+          created_at: r.created_at,
+          network: testnetReady ? "testnet" : "mainnet_only",
+          testnetReady,
+          a2uUid: testnetUid || null,
+        };
+      };
+
+      /* Toujours charger les Testnet prêts à part — un .limit(80) sur created_at
+       * enterrait les anciens profils (ex. amie100002) derrière 80 Mainnet récents. */
+      const testnetQ = await db
         .from("profiles")
-        .select(
-          "id, username, pi_username, pi_uid, pi_uid_testnet, pi_last_auth_network, created_at"
-        )
+        .select(PROFILE_COLS)
+        .not("pi_uid_testnet", "is", null)
+        .neq("pi_uid_testnet", "")
         .order("created_at", { ascending: false })
-        .limit(80);
-      const { data, error } = await q;
-      if (error) {
-        if (/pi_uid_testnet|column/i.test(error.message)) {
+        .limit(100);
+
+      if (testnetQ.error) {
+        if (/pi_uid_testnet|column/i.test(testnetQ.error.message)) {
           const legacy = await db
             .from("profiles")
             .select("id, username, pi_username, pi_uid, created_at")
@@ -442,6 +787,8 @@ Deno.serve(async (req) => {
             warning:
               "Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth/pi-a2u. En attendant, tous les uids listés sont traités comme Mainnet (risque user_not_found).",
             signinTestnetUrl: SIGNIN_TESTNET_URL,
+            testnetCount: 0,
+            mainnetOnlyCount: (legacy.data || []).length,
             recipients: (legacy.data || []).map((r) => ({
               ...r,
               pi_uid_testnet: null,
@@ -451,33 +798,47 @@ Deno.serve(async (req) => {
             })),
           });
         }
-        throw new Error(error.message);
+        throw new Error(testnetQ.error.message);
       }
-      let recipients = (data || [])
-        .map((r) => {
-          const testnetUid = String(r.pi_uid_testnet || "").trim();
-          const mainnetUid = String(r.pi_uid || "").trim();
-          if (!testnetUid && !mainnetUid) return null;
-          const testnetReady = !!testnetUid;
-          return {
-            id: r.id,
-            username: r.username,
-            pi_username: r.pi_username,
-            pi_uid: mainnetUid || null,
-            pi_uid_testnet: testnetUid || null,
-            pi_last_auth_network: r.pi_last_auth_network || null,
-            created_at: r.created_at,
-            network: testnetReady ? "testnet" : "mainnet_only",
-            testnetReady,
-            a2uUid: testnetUid || null,
-          };
-        })
+
+      const testnetRows = ((testnetQ.data || []) as ProfileRow[])
+        .map(mapRow)
         .filter(Boolean) as Array<Record<string, unknown>>;
 
+      let mainnetRows: Array<Record<string, unknown>> = [];
+      if (filter !== "testnet") {
+        const mainnetQ = await db
+          .from("profiles")
+          .select(PROFILE_COLS)
+          .not("pi_uid", "is", null)
+          .neq("pi_uid", "")
+          .order("created_at", { ascending: false })
+          .limit(120);
+        if (mainnetQ.error) throw new Error(mainnetQ.error.message);
+        mainnetRows = ((mainnetQ.data || []) as ProfileRow[])
+          .map(mapRow)
+          .filter((r): r is Record<string, unknown> => !!r && !r.testnetReady)
+          .slice(0, 80);
+      }
+
+      const seen: Record<string, true> = {};
+      let recipients: Array<Record<string, unknown>> = [];
+      const pushUnique = (rows: Array<Record<string, unknown>>) => {
+        for (let i = 0; i < rows.length; i++) {
+          const id = String(rows[i].id || "");
+          if (!id || seen[id]) continue;
+          seen[id] = true;
+          recipients.push(rows[i]);
+        }
+      };
+
       if (filter === "testnet") {
-        recipients = recipients.filter((r) => r.testnetReady);
+        recipients = testnetRows;
       } else if (filter === "mainnet") {
-        recipients = recipients.filter((r) => !r.testnetReady);
+        recipients = mainnetRows;
+      } else {
+        pushUnique(testnetRows);
+        pushUnique(mainnetRows);
       }
 
       recipients.sort((a, b) => Number(b.testnetReady) - Number(a.testnetReady));
@@ -488,8 +849,8 @@ Deno.serve(async (req) => {
         schemaReady: true,
         filter,
         signinTestnetUrl: SIGNIN_TESTNET_URL,
-        testnetCount: recipients.filter((r) => r.testnetReady).length,
-        mainnetOnlyCount: recipients.filter((r) => !r.testnetReady).length,
+        testnetCount: testnetRows.length,
+        mainnetOnlyCount: mainnetRows.length,
         recipients,
       });
     }
@@ -636,7 +997,7 @@ Deno.serve(async (req) => {
       {
         ok: false,
         error:
-          "action inconnue (status|progress|list_recipients|incomplete|cancel|resume|send)",
+          "action inconnue (withdraw_self|status|progress|list_recipients|incomplete|cancel|resume|send)",
       },
       400
     );
