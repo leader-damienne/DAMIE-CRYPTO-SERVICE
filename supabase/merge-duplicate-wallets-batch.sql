@@ -1,6 +1,8 @@
 -- Fusion batch (tous utilisateurs) : soldes restés sur profils doublons
 -- Critères : même pi_uid, même pi_uid_testnet, OU même stem de pseudo
 --   (lettres sans chiffres finaux : amie10000 ≈ amie100002).
+-- ATTENTION : Damie10000 (stem damie) ≠ amie* (stem amie) — ce batch
+--   ne les fusionne PAS. Pour Damienne : fix-damienne-wallet-now.sql
 -- SQL Editor → Run section 1 (diag), puis section 2 (fusion).
 -- Après : supabase functions deploy pi-auth --no-verify-jwt
 -- Puis chaque user Allow → fusion auto aussi à chaque login.
