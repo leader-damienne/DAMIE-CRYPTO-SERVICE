@@ -6617,6 +6617,12 @@
       setupMarketSearch();
     }
     if (isWallet) {
+      /* Après Allow → redirect, hydrate peut être incomplet : re-hydrate puis soldes */
+      try {
+        if (!(DCS.user && DCS.user.id) && DCS.auth && DCS.auth.hydrate) {
+          await DCS.auth.hydrate();
+        }
+      } catch (eHydraWallet) {}
       try {
         await DCS.backend.loadWallet();
         await DCS.backend.loadHistory();
@@ -6637,6 +6643,14 @@
         await DCS.backend.loadNotifications();
       } catch (e2) {}
       renderNotifications();
+      /* 2e passe si session arrivée juste après le 1er load */
+      try {
+        if (DCS.user && DCS.user.id) {
+          await DCS.backend.loadWallet();
+          renderWallet();
+          renderHistory();
+        }
+      } catch (eReload) {}
     }
     if (isSwap) {
       try {
