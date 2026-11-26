@@ -376,13 +376,18 @@ Deno.serve(async (req) => {
 
     /* Libérer les uids sur les autres profils avant rattachement */
     if (isSandbox) {
-      await db
+      const clearOther = await db
         .from("profiles")
         .update({ pi_uid_testnet: null })
         .eq("pi_uid_testnet", piUser.uid)
         .neq("id", authUserId);
+      if (clearOther.error && /pi_uid_testnet|column/i.test(clearOther.error.message)) {
+        throw new Error(
+          "Colonne pi_uid_testnet absente. Exécutez supabase/pi-uid-testnet.sql dans le SQL Editor, puis redéployez pi-auth."
+        );
+      }
       /* Testnet : ne PAS écraser pi_uid Mainnet (sinon A2U/list confond les réseaux) */
-      await db
+      const updTestnet = await db
         .from("profiles")
         .update({
           pi_uid_testnet: piUser.uid,
@@ -390,14 +395,29 @@ Deno.serve(async (req) => {
           pi_last_auth_network: "testnet",
           display_name: piUser.username,
         })
-        .eq("id", authUserId);
+        .eq("id", authUserId)
+        .select("id, pi_uid_testnet, pi_last_auth_network")
+        .maybeSingle();
+      if (updTestnet.error) {
+        if (/pi_uid_testnet|pi_last_auth_network|column/i.test(updTestnet.error.message)) {
+          throw new Error(
+            "Colonne pi_uid_testnet absente. Exécutez supabase/pi-uid-testnet.sql, puis : supabase functions deploy pi-auth --no-verify-jwt"
+          );
+        }
+        throw new Error(updTestnet.error.message);
+      }
+      if (!updTestnet.data?.pi_uid_testnet) {
+        throw new Error(
+          "Allow Testnet OK côté Pi, mais pi_uid_testnet non enregistré. Vérifiez le SQL pi-uid-testnet.sql et redéployez pi-auth."
+        );
+      }
     } else {
       await db
         .from("profiles")
         .update({ pi_uid: null })
         .eq("pi_uid", piUser.uid)
         .neq("id", authUserId);
-      await db
+      const updMain = await db
         .from("profiles")
         .update({
           pi_uid: piUser.uid,
@@ -406,6 +426,7 @@ Deno.serve(async (req) => {
           display_name: piUser.username,
         })
         .eq("id", authUserId);
+      if (updMain.error) throw new Error(updMain.error.message);
     }
 
     /* Récupérer les soldes restés sur d’anciens profils (même pseudo / uid) */
@@ -452,6 +473,7 @@ Deno.serve(async (req) => {
         pi_uid: piUser.uid,
         username: piUser.username,
         network: isSandbox ? "testnet" : "mainnet",
+        pi_uid_testnet: isSandbox ? piUser.uid : undefined,
       },
     });
   } catch (e) {

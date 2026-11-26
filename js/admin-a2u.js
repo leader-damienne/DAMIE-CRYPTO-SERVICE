@@ -131,13 +131,31 @@
       }
     }
     if (!list.length) {
-      box.innerHTML =
-        '<p style="font-size:0.85rem;color:var(--muted)">Aucun destinataire pour ce filtre. ' +
-        'Faites Allow via <a href="' +
-        SIGNIN_TESTNET +
-        '">' +
-        SIGNIN_TESTNET +
-        "</a>.</p>";
+      var emptyHint =
+        '<p style="font-size:0.85rem;color:var(--muted)">Aucun destinataire pour ce filtre.</p>';
+      if (res && res.filter === "testnet") {
+        emptyHint +=
+          '<p style="font-size:0.82rem;color:#e8a0a0;margin-top:0.5rem">' +
+          "<strong>0 Testnet prêts</strong> = <code>pi_uid_testnet</code> vide. " +
+          "1) SQL Editor → exécuter <code>supabase/pi-uid-testnet.sql</code>. " +
+          "2) <code>supabase functions deploy pi-auth --no-verify-jwt</code>. " +
+          "3) Les testeurs refont Allow sur " +
+          '<a href="' +
+          SIGNIN_TESTNET +
+          '">' +
+          SIGNIN_TESTNET +
+          "</a>. " +
+          "4) Filtre « Tous » pour voir s’il y a au moins des profils Mainnet.</p>";
+      } else {
+        emptyHint +=
+          '<p style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem">' +
+          'Allow testeurs : <a href="' +
+          SIGNIN_TESTNET +
+          '">' +
+          SIGNIN_TESTNET +
+          "</a></p>";
+      }
+      box.innerHTML = emptyHint;
       return;
     }
     box.innerHTML = list
@@ -282,9 +300,17 @@
             (res.usingDedicatedA2uKey ? " (PI_A2U_API_KEY)" : " (fallback PI_API_KEY ⚠)") +
             " · Seed: " +
             (res.hasWalletSeed ? "OK" : "MANQUANT") +
-            (res.walletPublicKey ? " · G… " + res.walletPublicKey.slice(0, 8) + "…" : "");
+            (res.walletPublicKey ? " · G… " + res.walletPublicKey.slice(0, 8) + "…" : "") +
+            " · Schéma pi_uid_testnet: " +
+            (res.schemaReady === false ? "MANQUANT ⚠" : "OK") +
+            " · Profils Testnet: " +
+            (res.testnetProfiles != null ? res.testnetProfiles : "—");
           document.getElementById("a2u-status").textContent = line;
-          var ok = res.hasApiKey && res.hasWalletSeed && res.usingDedicatedA2uKey;
+          var ok =
+            res.hasApiKey &&
+            res.hasWalletSeed &&
+            res.usingDedicatedA2uKey &&
+            res.schemaReady !== false;
           setLog(
             res.warning ? JSON.stringify(res, null, 2) : res,
             ok ? "ok" : "err"

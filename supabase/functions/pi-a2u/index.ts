@@ -348,6 +348,26 @@ Deno.serve(async (req) => {
       } catch {
         pub = "";
       }
+      let schemaReady = true;
+      let testnetProfiles = 0;
+      let schemaError: string | null = null;
+      try {
+        const probe = await db
+          .from("profiles")
+          .select("id, pi_uid_testnet")
+          .not("pi_uid_testnet", "is", null)
+          .neq("pi_uid_testnet", "")
+          .limit(50);
+        if (probe.error) {
+          schemaReady = false;
+          schemaError = probe.error.message;
+        } else {
+          testnetProfiles = (probe.data || []).length;
+        }
+      } catch (eProbe) {
+        schemaReady = false;
+        schemaError = eProbe instanceof Error ? eProbe.message : String(eProbe);
+      }
       return json({
         ok: true,
         action: "status",
@@ -357,9 +377,16 @@ Deno.serve(async (req) => {
         adminUsersRestricted: ADMIN_USERS.length > 0,
         networkHint: "testnet",
         usingDedicatedA2uKey: HAS_DEDICATED_A2U_KEY,
-        warning: HAS_DEDICATED_A2U_KEY
-          ? null
-          : "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found si vous envoyez vers des uids Testnet. Ajoutez PI_A2U_API_KEY = Server API Key de l’app Testnet.",
+        schemaReady,
+        testnetProfiles,
+        schemaError,
+        warning: !schemaReady
+          ? "Schéma incomplet (pi_uid_testnet). Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth + pi-a2u. Les Allow Testnet ne peuvent pas apparaître dans la liste."
+          : !HAS_DEDICATED_A2U_KEY
+            ? "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found. Ajoutez PI_A2U_API_KEY = Server API Key Testnet."
+            : testnetProfiles === 0
+              ? "Aucun pi_uid_testnet en base. Les testeurs doivent Allow sur signin-testnet.html APRÈS deploy de pi-auth à jour."
+              : null,
         signinTestnetUrl: SIGNIN_TESTNET_URL,
       });
     }
