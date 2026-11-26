@@ -444,16 +444,50 @@ Deno.serve(async (req) => {
 
     if (action === "list_recipients") {
       const filter = String(payload.filter || "all").toLowerCase();
-      let q = db
+      const PROFILE_COLS =
+        "id, username, pi_username, pi_uid, pi_uid_testnet, pi_last_auth_network, created_at";
+
+      type ProfileRow = {
+        id: string;
+        username?: string | null;
+        pi_username?: string | null;
+        pi_uid?: string | null;
+        pi_uid_testnet?: string | null;
+        pi_last_auth_network?: string | null;
+        created_at?: string | null;
+      };
+
+      const mapRow = (r: ProfileRow) => {
+        const testnetUid = String(r.pi_uid_testnet || "").trim();
+        const mainnetUid = String(r.pi_uid || "").trim();
+        if (!testnetUid && !mainnetUid) return null;
+        const testnetReady = !!testnetUid;
+        return {
+          id: r.id,
+          username: r.username,
+          pi_username: r.pi_username,
+          pi_uid: mainnetUid || null,
+          pi_uid_testnet: testnetUid || null,
+          pi_last_auth_network: r.pi_last_auth_network || null,
+          created_at: r.created_at,
+          network: testnetReady ? "testnet" : "mainnet_only",
+          testnetReady,
+          a2uUid: testnetUid || null,
+        };
+      };
+
+      /* Toujours charger les Testnet prêts à part — un .limit(80) sur created_at
+       * enterrait les anciens profils (ex. amie100002) derrière 80 Mainnet récents. */
+      const testnetQ = await db
         .from("profiles")
-        .select(
-          "id, username, pi_username, pi_uid, pi_uid_testnet, pi_last_auth_network, created_at"
-        )
+        .select(PROFILE_COLS)
+        .not("pi_uid_testnet", "is", null)
+        .neq("pi_uid_testnet", "")
         .order("created_at", { ascending: false })
-        .limit(80);
-      const { data, error } = await q;
-      if (error) {
-        if (/pi_uid_testnet|column/i.test(error.message)) {
+        .limit(100);
+
+      if (testnetQ.error) {
+        if (/pi_uid_testnet|column/i.test(testnetQ.error.message)) {
           const legacy = await db
             .from("profiles")
             .select("id, username, pi_username, pi_uid, created_at")
@@ -469,6 +503,8 @@ Deno.serve(async (req) => {
             warning:
               "Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth/pi-a2u. En attendant, tous les uids listés sont traités comme Mainnet (risque user_not_found).",
             signinTestnetUrl: SIGNIN_TESTNET_URL,
+            testnetCount: 0,
+            mainnetOnlyCount: (legacy.data || []).length,
             recipients: (legacy.data || []).map((r) => ({
               ...r,
               pi_uid_testnet: null,
@@ -478,33 +514,47 @@ Deno.serve(async (req) => {
             })),
           });
         }
-        throw new Error(error.message);
+        throw new Error(testnetQ.error.message);
       }
-      let recipients = (data || [])
-        .map((r) => {
-          const testnetUid = String(r.pi_uid_testnet || "").trim();
-          const mainnetUid = String(r.pi_uid || "").trim();
-          if (!testnetUid && !mainnetUid) return null;
-          const testnetReady = !!testnetUid;
-          return {
-            id: r.id,
-            username: r.username,
-            pi_username: r.pi_username,
-            pi_uid: mainnetUid || null,
-            pi_uid_testnet: testnetUid || null,
-            pi_last_auth_network: r.pi_last_auth_network || null,
-            created_at: r.created_at,
-            network: testnetReady ? "testnet" : "mainnet_only",
-            testnetReady,
-            a2uUid: testnetUid || null,
-          };
-        })
+
+      const testnetRows = ((testnetQ.data || []) as ProfileRow[])
+        .map(mapRow)
         .filter(Boolean) as Array<Record<string, unknown>>;
 
+      let mainnetRows: Array<Record<string, unknown>> = [];
+      if (filter !== "testnet") {
+        const mainnetQ = await db
+          .from("profiles")
+          .select(PROFILE_COLS)
+          .not("pi_uid", "is", null)
+          .neq("pi_uid", "")
+          .order("created_at", { ascending: false })
+          .limit(120);
+        if (mainnetQ.error) throw new Error(mainnetQ.error.message);
+        mainnetRows = ((mainnetQ.data || []) as ProfileRow[])
+          .map(mapRow)
+          .filter((r): r is Record<string, unknown> => !!r && !r.testnetReady)
+          .slice(0, 80);
+      }
+
+      const seen: Record<string, true> = {};
+      let recipients: Array<Record<string, unknown>> = [];
+      const pushUnique = (rows: Array<Record<string, unknown>>) => {
+        for (let i = 0; i < rows.length; i++) {
+          const id = String(rows[i].id || "");
+          if (!id || seen[id]) continue;
+          seen[id] = true;
+          recipients.push(rows[i]);
+        }
+      };
+
       if (filter === "testnet") {
-        recipients = recipients.filter((r) => r.testnetReady);
+        recipients = testnetRows;
       } else if (filter === "mainnet") {
-        recipients = recipients.filter((r) => !r.testnetReady);
+        recipients = mainnetRows;
+      } else {
+        pushUnique(testnetRows);
+        pushUnique(mainnetRows);
       }
 
       recipients.sort((a, b) => Number(b.testnetReady) - Number(a.testnetReady));
@@ -515,8 +565,8 @@ Deno.serve(async (req) => {
         schemaReady: true,
         filter,
         signinTestnetUrl: SIGNIN_TESTNET_URL,
-        testnetCount: recipients.filter((r) => r.testnetReady).length,
-        mainnetOnlyCount: recipients.filter((r) => !r.testnetReady).length,
+        testnetCount: testnetRows.length,
+        mainnetOnlyCount: mainnetRows.length,
         recipients,
       });
     }
