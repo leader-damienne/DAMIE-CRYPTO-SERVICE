@@ -703,22 +703,28 @@
         alert("Montant minimum de retrait : 0,0000001 PI.");
         return;
       }
+      const sandbox =
+        DCS.pi && typeof DCS.pi.useSandbox === "function" && DCS.pi.useSandbox();
+      const netLabel = sandbox ? "Testnet" : "Mainnet";
       if (
         !confirm(
           "Retirer " +
             amount +
-            " PI vers votre wallet Pi Testnet ?\n\n" +
+            " PI vers votre wallet Pi (" +
+            netLabel +
+            ") ?\n\n" +
             "• Débite votre solde DCS\n" +
-            "• Envoi A2U (App → User) — compte pour les 5 wallets uniques\n" +
-            "• Prérequis : Allow Testnet + PI_A2U_API_KEY + seed app"
+            "• Envoi vers votre wallet Pi\n" +
+            "• Réseau : " +
+            netLabel
         )
       ) {
         return;
       }
       const prevLabel = btn.textContent;
       btn.disabled = true;
-      btn.textContent = "Envoi A2U…";
-      setStatus("Retrait en cours (create → chaîne → complete)…");
+      btn.textContent = "Retrait en cours…";
+      setStatus("Retrait " + netLabel + " en cours…");
       let res;
       try {
         res = await DCS.pi.withdrawWithPi(amount);
@@ -730,18 +736,14 @@
       if (!res || !res.ok) {
         const errMsg = (res && res.error) || "Échec du retrait Pi.";
         setStatus(errMsg, true);
-        if (res && res.signinTestnetUrl) {
-          alert(errMsg + "\n\nAllow Testnet : " + res.signinTestnetUrl);
-        } else {
-          alert(errMsg);
-        }
+        alert(errMsg);
         return;
       }
       setStatus(
         "Retrait confirmé : −" +
           res.amount +
           " PI" +
-          (res.countsTowardFiveWallets ? " · compte pour 5 wallets" : "")
+          (res.network ? " · " + res.network : "")
       );
       if (DCS.backend) {
         await Promise.all([
@@ -758,7 +760,7 @@
         "Retrait réussi : −" +
           res.amount +
           " PI vers votre wallet Pi.\n" +
-          (res.note || "A2U Testnet — compte pour le seuil 5 wallets.")
+          (res.note || "")
       );
     }
 

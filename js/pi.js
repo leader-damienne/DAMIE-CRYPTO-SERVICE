@@ -511,9 +511,9 @@
   }
 
   /**
-   * A2U — Retrait PI DCS → wallet Pi de l’utilisateur (Testnet).
-   * Compte pour le seuil Develop « 5 unique wallets » (1 uid Testnet = 1 wallet).
-   * Ce n’est PAS un U2A (dépôt).
+   * A2U — Retrait PI DCS → wallet Pi (tous les users).
+   * Réseau = session actuelle (Testnet si sandbox, sinon Mainnet).
+   * Sur Testnet, bonus : compte pour le seuil Develop 5 wallets.
    */
   function withdrawWithPi(amount) {
     var MIN_PI = 0.0000001;
@@ -531,6 +531,7 @@
       return Promise.resolve({ ok: false, error: "Backend DCS non prêt." });
     }
 
+    var sandbox = useSandbox();
     return DCS.backend.client.auth.getSession().then(function (sessRes) {
       var token =
         sessRes &&
@@ -551,8 +552,8 @@
           action: "withdraw_self",
           amount: amt,
           memo: "DCS retrait PI",
-          network: "testnet",
-          sandbox: true
+          network: sandbox ? "testnet" : "mainnet",
+          sandbox: sandbox
         })
       }).then(function (res) {
         return res.json().then(function (data) {
@@ -561,6 +562,7 @@
               ok: false,
               error: (data && data.error) || "Retrait refusé (" + res.status + ")",
               signinTestnetUrl: data && data.signinTestnetUrl,
+              network: data && data.network,
               countsTowardFiveWallets: !!(data && data.countsTowardFiveWallets)
             };
           }
@@ -569,7 +571,8 @@
             amount: data.amount,
             paymentId: data.paymentId,
             txid: data.txid,
-            countsTowardFiveWallets: true,
+            network: data.withdrawNetwork || data.network,
+            countsTowardFiveWallets: !!data.countsTowardFiveWallets,
             note: data.note || ""
           };
         });
