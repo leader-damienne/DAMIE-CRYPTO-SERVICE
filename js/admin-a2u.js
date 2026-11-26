@@ -96,7 +96,7 @@
     if (!box) return;
     if (!list || !list.length) {
       box.innerHTML =
-        '<p style="font-size:0.85rem;color:var(--muted)">Aucun profil avec pi_uid. Les users doivent se connecter via Pi (app Testnet).</p>';
+        '<p style="font-size:0.85rem;color:var(--muted)">Aucun profil avec pi_uid. Les users doivent se connecter via Pi en mode Testnet (<code>?piSandbox=1</code>).</p>';
       return;
     }
     box.innerHTML = list
@@ -126,6 +126,42 @@
     });
   }
 
+  function renderProgress(res) {
+    var label = document.getElementById("a2u-progress-label");
+    var detail = document.getElementById("a2u-progress-detail");
+    if (!label) return;
+    if (!res || !res.ok) {
+      label.textContent = "Progression : — / 5";
+      if (detail) {
+        detail.textContent =
+          (res && res.error) ||
+          "Impossible de lire la progression (pi-a2u déployée ? secret OK ?).";
+      }
+      return;
+    }
+    var n = Number(res.uniqueCount) || 0;
+    var target = Number(res.target) || 5;
+    label.textContent =
+      "Progression : " + n + " / " + target + (res.ready ? " ✓ seuil atteint" : "");
+    if (detail) {
+      var names = (res.recipients || [])
+        .map(function (r) {
+          return (r.username || r.uid || "?").toString();
+        })
+        .slice(0, 8);
+      detail.textContent = names.length
+        ? "Wallets uniques : " + names.join(", ") + (res.remaining ? " · reste " + res.remaining : "")
+        : "Aucun A2U completed encore. Envoie vers 5 pi_uid distincts.";
+    }
+  }
+
+  function refreshProgress() {
+    return callA2u("progress").then(function (res) {
+      renderProgress(res);
+      return res;
+    });
+  }
+
   var lastIncompleteId = "";
 
   function bind() {
@@ -141,7 +177,11 @@
         setLog("Vérification…");
         callA2u("status").then(function (res) {
           if (!res.ok) {
-            setLog(res.error, "err");
+            setLog(
+              res.error +
+                "\n\nSi NOT_FOUND / Failed to fetch : déployez pi-a2u (voir guide A2U).",
+              "err"
+            );
             document.getElementById("a2u-status").textContent = res.error;
             return;
           }
@@ -153,6 +193,18 @@
             (res.walletPublicKey ? " · G… " + res.walletPublicKey.slice(0, 8) + "…" : "");
           document.getElementById("a2u-status").textContent = line;
           setLog(res, res.hasApiKey && res.hasWalletSeed ? "ok" : "err");
+          refreshProgress();
+        });
+      });
+    }
+
+    var progressBtn = document.getElementById("a2u-progress-btn");
+    if (progressBtn) {
+      progressBtn.addEventListener("click", function () {
+        setLog("Chargement progression…");
+        refreshProgress().then(function (res) {
+          if (!res.ok) setLog(res.error, "err");
+          else setLog(res, res.ready ? "ok" : "ok");
         });
       });
     }
@@ -197,6 +249,7 @@
             return;
           }
           setLog(res, "ok");
+          refreshProgress();
         });
       });
     }

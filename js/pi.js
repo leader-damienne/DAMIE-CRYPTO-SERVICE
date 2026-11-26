@@ -17,6 +17,33 @@
     return cfg().piEcosystemMode !== false;
   }
 
+  /**
+   * Sandbox / Testnet override sans redeploy :
+   *   ?piSandbox=1  → force Testnet (mémorisé en localStorage)
+   *   ?piSandbox=0  → force Mainnet (efface l’override)
+   * Prod par défaut : DCS_CONFIG.piSandbox === false → Mainnet.
+   */
+  function useSandbox() {
+    try {
+      var qp = new URLSearchParams(location.search || "");
+      var flag = qp.get("piSandbox") || qp.get("sandbox");
+      if (flag === "1" || flag === "true") {
+        try {
+          localStorage.setItem("dcs_pi_sandbox", "1");
+        } catch (eSet) {}
+        return true;
+      }
+      if (flag === "0" || flag === "false") {
+        try {
+          localStorage.removeItem("dcs_pi_sandbox");
+        } catch (eClr) {}
+        return false;
+      }
+      if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
+    } catch (eQp) {}
+    return cfg().piSandbox !== false;
+  }
+
   function getAccessToken() {
     try {
       if (DCS.backend && DCS.backend.client) {
@@ -104,7 +131,7 @@
     if (initPromise) return initPromise;
     initPromise = ensurePiSdk()
       .then(function (Pi) {
-        var sandbox = cfg().piSandbox !== false;
+        var sandbox = useSandbox();
         return Promise.resolve(Pi.init({ version: "2.0", sandbox: sandbox })).then(function () {
           return Pi;
         });
@@ -465,6 +492,7 @@
     depositWithPi: depositWithPi,
     isAvailable: isPiBrowser,
     ecosystemMode: ecosystemMode,
+    useSandbox: useSandbox,
     callBackend: callPiBackend,
     startEarlyPiAuth: startEarlyPiAuth,
     DEPOSIT_PRODUCT: DEPOSIT_PRODUCT

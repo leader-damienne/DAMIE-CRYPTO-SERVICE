@@ -281,6 +281,58 @@ Deno.serve(async (req) => {
         hasWalletSeed: keypairOk,
         walletPublicKey: pub || null,
         adminUsersRestricted: ADMIN_USERS.length > 0,
+        networkHint: "testnet",
+      });
+    }
+
+    if (action === "progress") {
+      const { data, error } = await db
+        .from("pi_payments")
+        .select("payment_id, pi_username, txid, amount, meta, completed_at, status")
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(300);
+      if (error) throw new Error(error.message);
+      const a2u = (data || []).filter((row) => {
+        const meta = (row as { meta?: { kind?: string; direction?: string } }).meta;
+        return meta && meta.kind === "a2u" && meta.direction === "app_to_user";
+      });
+      const seen: Record<string, true> = {};
+      const unique: Array<{
+        uid: string;
+        username: string | null;
+        paymentId: string;
+        txid: string | null;
+        completedAt: string | null;
+      }> = [];
+      for (let i = 0; i < a2u.length; i++) {
+        const row = a2u[i] as {
+          payment_id: string;
+          pi_username?: string | null;
+          txid?: string | null;
+          completed_at?: string | null;
+          meta?: { recipient_uid?: string };
+        };
+        const uid = String(row.meta?.recipient_uid || "").trim();
+        if (!uid || seen[uid]) continue;
+        seen[uid] = true;
+        unique.push({
+          uid,
+          username: row.pi_username || null,
+          paymentId: row.payment_id,
+          txid: row.txid || null,
+          completedAt: row.completed_at || null,
+        });
+      }
+      const target = 5;
+      return json({
+        ok: true,
+        action: "progress",
+        uniqueCount: unique.length,
+        target,
+        remaining: Math.max(0, target - unique.length),
+        ready: unique.length >= target,
+        recipients: unique,
       });
     }
 
@@ -437,7 +489,8 @@ Deno.serve(async (req) => {
     return json(
       {
         ok: false,
-        error: "action inconnue (status|list_recipients|incomplete|cancel|resume|send)",
+        error:
+          "action inconnue (status|progress|list_recipients|incomplete|cancel|resume|send)",
       },
       400
     );

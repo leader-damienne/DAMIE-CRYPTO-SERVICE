@@ -95,7 +95,9 @@ Pi Browser
 
 ## A2U Testnet (5 wallets uniques → wallet Mainnet)
 
-Pi exige **5 paiements App → User** depuis le **wallet app Testnet** vers **5 wallets utilisateurs** distincts avant d’accepter la demande de wallet Mainnet.
+Pi exige **5 paiements App → User** depuis le **wallet app Testnet** vers **5 wallets utilisateurs** distincts avant d’accepter la demande de wallet Mainnet (Outgoing / Incoming Multisig).
+
+Guide détaillé Damienne : Project store `docs/a2u-testnet-5-wallets.md`.
 
 ### Secrets Supabase (Edge Functions)
 
@@ -110,15 +112,17 @@ supabase functions deploy pi-a2u --no-verify-jwt
 
 - `PI_APP_WALLET_SEED` = seed **S…** du wallet de l’app **Testnet** (Develop → App wallet). **Jamais** dans Git / front.
 - `PI_A2U_API_KEY` = Server API Key de la **même** app Testnet (ne pas mélanger avec Mainnet).
+- Sans ce deploy, `…/functions/v1/pi-a2u` répond **404** — l’admin A2U ne peut pas fonctionner.
 
 ### UI admin
 
-1. 5 Pioneers ouvrissent DCS (Sandbox / app Testnet) et **Allow** (auth Pi) → `profiles.pi_uid` renseigné
-2. Ouvre `https://damie-crypto-service.netlify.app/admin-a2u.html` (connecté DCS)
-3. Secret admin → **Vérifier la config** (API key + seed OK)
+1. 5 Pioneers ouvrent `https://appdcs.com/signin.html?piSandbox=1` (Pi Browser) → **Allow** → `profiles.pi_uid` renseigné  
+   (`?piSandbox=1` force le SDK Testnet sans redeploy ; `?piSandbox=0` revient en Mainnet)
+2. Ouvre `https://appdcs.com/admin-a2u.html` (connecté DCS)
+3. Secret admin → **Vérifier la config** (API key + seed OK) → **Rafraîchir progression**
 4. **Charger la liste** → choisir un destinataire → **Envoyer A2U** (montant min. `0.0000001`)
-5. Répéter pour **5 users / wallets différents**
-6. Retour Develop Mainnet → redemander le wallet app
+5. Répéter pour **5 users / wallets différents** (progression **5 / 5**)
+6. Retour Develop Mainnet → créer Outgoing + Incoming Multisig
 
 ### Script local (secours)
 
@@ -133,7 +137,8 @@ node scripts/pi-a2u-send.mjs --incomplete
 
 | Problème | Cause |
 |----------|--------|
+| `NOT_FOUND` sur pi-a2u | Fonction non déployée → `supabase functions deploy pi-a2u --no-verify-jwt` |
 | `private_seed_mismatch` | Seed ≠ wallet app Testnet (Develop) |
 | `ongoing_payment_found` | Admin → Lister incomplets → Reprendre ou Annuler |
-| Destinataire introuvable | User pas encore auth Pi sur cette app |
+| Destinataire introuvable | User pas encore auth Pi en Testnet (`?piSandbox=1`) |
 | Approve/U2A casse après secrets | Garder `PI_API_KEY` Mainnet pour `pi-payment` ; A2U utilise `PI_A2U_API_KEY` |
