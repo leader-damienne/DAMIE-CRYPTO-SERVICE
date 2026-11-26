@@ -330,15 +330,237 @@ Deno.serve(async (req) => {
     const db = adminDb();
     const { data: profile } = await db
       .from("profiles")
-      .select("id, pi_uid, pi_username, username")
+      .select(
+        "id, pi_uid, pi_uid_testnet, pi_username, username, pi_last_auth_network"
+      )
       .eq("id", user.id)
       .maybeSingle();
     if (!profile) return json({ ok: false, error: "Profil DCS introuvable." }, 403);
 
-    assertAdmin(req, profile);
-
     const payload = await req.json();
     const action = String(payload.action || "send");
+
+    /* Retrait utilisateur → wallet Pi = vrai A2U (compte pour 5 wallets Testnet).
+     * Pas de secret admin. Admin-only actions ci-dessous. */
+    if (action === "withdraw_self") {
+      const amount = Number(payload.amount);
+      if (!(amount > 0)) {
+        return json({ ok: false, error: "Montant invalide (ex. 0.0000001)." }, 400);
+      }
+      if (amount < 0.0000001) {
+        return json({ ok: false, error: "Minimum : 0,0000001 PI." }, 400);
+      }
+
+      const wantTestnet =
+        payload.sandbox === true ||
+        payload.sandbox === "true" ||
+        String(payload.network || "").toLowerCase() === "testnet" ||
+        String((profile as ProfileRow).pi_last_auth_network || "").toLowerCase() ===
+          "testnet";
+
+      const testnetUid = String((profile as ProfileRow).pi_uid_testnet || "").trim();
+
+      /* Compteur Develop « 5 unique wallets » = A2U Testnet uniquement.
+       * Retrait Mainnet A2U nécessite wallet app Mainnet (pas encore ce flux). */
+      if (!wantTestnet && !testnetUid) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Retrait Pi Mainnet indisponible pour l’instant. Pour le seuil 5 wallets : Allow Testnet sur " +
+              SIGNIN_TESTNET_URL +
+              " puis retirez en Testnet.",
+            signinTestnetUrl: SIGNIN_TESTNET_URL,
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+
+      if (!testnetUid) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Aucun pi_uid_testnet. Ouvrez " +
+              SIGNIN_TESTNET_URL +
+              " → Continuer avec Pi → Allow, puis réessayez le retrait.",
+            signinTestnetUrl: SIGNIN_TESTNET_URL,
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+
+      if (!HAS_DEDICATED_A2U_KEY) {
+        return json(
+          {
+            ok: false,
+            error:
+              "PI_A2U_API_KEY (Testnet) manquant. Sans elle le retrait n’est pas garanti sur le réseau Testnet.",
+            countsTowardFiveWallets: false,
+          },
+          400
+        );
+      }
+
+      const { data: walletRow } = await db
+        .from("wallets")
+        .select("amount")
+        .eq("user_id", user.id)
+        .eq("symbol", "PI")
+        .maybeSingle();
+      const bal = Number(walletRow?.amount || 0);
+      if (!(bal >= amount)) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Solde PI insuffisant (" +
+              bal +
+              "). Déposez d’abord des PI (ou un min. 0,0000001) sur DCS.",
+            balance: bal,
+          },
+          400
+        );
+      }
+
+      const memo = String(payload.memo || "DCS retrait PI").slice(0, 32);
+      const username = String(
+        (profile as ProfileRow).pi_username ||
+          (profile as ProfileRow).username ||
+          ""
+      ).trim();
+
+      const created = (await piFetch("/payments", "POST", {
+        payment: {
+          amount,
+          memo,
+          metadata: {
+            kind: "withdraw_pi",
+            app: "DCS",
+            purpose: "user_withdraw",
+            counts_toward_five_wallets: true,
+            to_username: username || null,
+          },
+          uid: testnetUid,
+        },
+      })) as PaymentDTO;
+
+      const paymentId = created.identifier;
+      if (!paymentId) throw new Error("Pi n’a pas renvoyé d’identifier.");
+
+      await db.from("pi_payments").upsert(
+        {
+          payment_id: paymentId,
+          user_id: user.id,
+          amount,
+          memo,
+          status: "a2u_created",
+          pi_username: username || testnetUid,
+          meta: {
+            kind: "withdraw_pi",
+            direction: "app_to_user",
+            recipient_uid: testnetUid,
+            stage: "created",
+            countsTowardFiveWallets: true,
+          },
+        },
+        { onConflict: "payment_id" }
+      );
+
+      const txid = await submitOnChain(created);
+      const completed = await piFetch(`/payments/${paymentId}/complete`, "POST", {
+        txid,
+      });
+
+      const { data: debit, error: debitErr } = await db.rpc(
+        "dcs_debit_pi_for_withdraw",
+        {
+          p_user: user.id,
+          p_amount: amount,
+          p_payment_id: paymentId,
+          p_txid: txid,
+        }
+      );
+
+      if (debitErr) {
+        await db.from("pi_payments").upsert(
+          {
+            payment_id: paymentId,
+            user_id: user.id,
+            amount,
+            memo,
+            status: "completed_debit_failed",
+            txid,
+            pi_username: username || testnetUid,
+            completed_at: new Date().toISOString(),
+            meta: {
+              kind: "withdraw_pi",
+              direction: "app_to_user",
+              recipient_uid: testnetUid,
+              debitError: debitErr.message,
+              payment: completed,
+              countsTowardFiveWallets: true,
+            },
+          },
+          { onConflict: "payment_id" }
+        );
+        return json(
+          {
+            ok: false,
+            error:
+              "A2U Pi envoyé, mais débit DCS échoué : " +
+              debitErr.message +
+              ". Exécutez supabase/pi-withdraw.sql puis contactez le support avec paymentId " +
+              paymentId,
+            paymentId,
+            txid,
+            paymentCompleted: true,
+            countsTowardFiveWallets: true,
+          },
+          500
+        );
+      }
+
+      await db.from("pi_payments").upsert(
+        {
+          payment_id: paymentId,
+          user_id: user.id,
+          amount,
+          memo,
+          status: "completed",
+          txid,
+          pi_username: username || testnetUid,
+          completed_at: new Date().toISOString(),
+          meta: {
+            kind: "withdraw_pi",
+            direction: "app_to_user",
+            recipient_uid: testnetUid,
+            payment: completed,
+            countsTowardFiveWallets: true,
+          },
+        },
+        { onConflict: "payment_id" }
+      );
+
+      return json({
+        ok: true,
+        action: "withdraw_self",
+        paymentId,
+        txid,
+        amount,
+        recipientUid: testnetUid,
+        recipientUsername: username || null,
+        network: created.network,
+        debit,
+        countsTowardFiveWallets: true,
+        note:
+          "Retrait A2U Testnet : compte pour le seuil Develop « 5 unique wallets » (1 wallet = 1 uid Testnet distinct).",
+      });
+    }
+
+    assertAdmin(req, profile);
 
     if (action === "status") {
       const keypairOk = !!WALLET_SEED;
@@ -401,7 +623,9 @@ Deno.serve(async (req) => {
       if (error) throw new Error(error.message);
       const a2u = (data || []).filter((row) => {
         const meta = (row as { meta?: { kind?: string; direction?: string } }).meta;
-        return meta && meta.kind === "a2u" && meta.direction === "app_to_user";
+        if (!meta || meta.direction !== "app_to_user") return false;
+        /* Admin A2U + retraits user (withdraw_pi) comptent tous pour 5 wallets */
+        return meta.kind === "a2u" || meta.kind === "withdraw_pi";
       });
       const seen: Record<string, true> = {};
       const unique: Array<{
@@ -713,7 +937,7 @@ Deno.serve(async (req) => {
       {
         ok: false,
         error:
-          "action inconnue (status|progress|list_recipients|incomplete|cancel|resume|send)",
+          "action inconnue (withdraw_self|status|progress|list_recipients|incomplete|cancel|resume|send)",
       },
       400
     );

@@ -65,6 +65,7 @@
           <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem">1 PI = $314,159 · équivalence USD affichée ci-dessus</p>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
             <a class="btn btn-gold" href="#wallet-deposit">Dépôt Pi</a>
+            <a class="btn btn-outline" href="#wallet-withdraw">Retrait Pi</a>
             <a class="btn btn-outline" href="marketplace.html">Marketplace</a>
           </div>
         </div>
@@ -108,6 +109,30 @@
             </div>
             <button class="btn btn-outline" type="submit" style="width:100%">Demander le crédit</button>
           </form>
+        </div>
+
+        <div class="panel" id="wallet-withdraw">
+          <h3>Retrait PI → wallet Pi</h3>
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">
+            <strong>PI uniquement.</strong> Envoi App → User (A2U) vers <em>votre</em> wallet Pi.
+            Sur <strong>Testnet</strong>, chaque utilisateur distinct compte pour le seuil Develop
+            « 5 unique wallets ». Ce n’est <strong>pas</strong> un dépôt U2A.
+          </p>
+          <div class="panel" style="padding:0.9rem;margin-bottom:1rem;background:rgba(20,20,20,0.45)">
+            <div class="form-group" style="margin-bottom:0.65rem">
+              <label for="pi-withdraw-amount">Montant (PI)</label>
+              <input id="pi-withdraw-amount" class="form-control" type="number" min="0.0000001" step="any" value="0.0000001" placeholder="0.0000001" />
+              <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">
+                Minimum : 0,0000001 PI · débite votre solde DCS · réseau Testnet (Allow Testnet requis)
+              </p>
+            </div>
+            <button type="button" class="btn btn-gold" id="pi-withdraw-btn" style="width:100%">Retirer vers mon wallet Pi</button>
+            <p id="pi-withdraw-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">
+              Prérequis : Allow Testnet sur
+              <a href="https://appdcs.com/signin-testnet.html">signin-testnet.html</a>
+              + solde PI DCS + secrets <code>PI_A2U_API_KEY</code> / seed app.
+            </p>
+          </div>
         </div>
 
         <div class="panel">

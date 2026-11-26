@@ -671,6 +671,103 @@
     }
   }
 
+  function setupPiWithdraw() {
+    const MIN_PI = 0.0000001;
+    const btn = document.getElementById("pi-withdraw-btn");
+    const amountEl = document.getElementById("pi-withdraw-amount");
+    const status = document.getElementById("pi-withdraw-status");
+    if (!btn || btn.dataset.piBound === "1") return;
+    btn.dataset.piBound = "1";
+
+    function setStatus(msg, isErr) {
+      if (!status) return;
+      status.hidden = false;
+      status.style.display = "block";
+      status.textContent = msg;
+      status.style.color = isErr ? "#f6465d" : "var(--gold-bright)";
+    }
+
+    async function startWithdraw() {
+      if (!(DCS.user && DCS.user.id && DCS.user.loggedIn)) {
+        setStatus("Connectez-vous avec Pi avant de retirer.", true);
+        alert("Connectez-vous avec Pi (Allow), puis réessayez Retirer.");
+        return;
+      }
+      if (!(DCS.pi && typeof DCS.pi.withdrawWithPi === "function")) {
+        setStatus("Module retrait Pi indisponible. Rechargez la page.", true);
+        return;
+      }
+      const amount = parseFloat(amountEl && amountEl.value) || 0;
+      if (!(amount >= MIN_PI)) {
+        setStatus("Montant minimum : 0,0000001 PI.", true);
+        alert("Montant minimum de retrait : 0,0000001 PI.");
+        return;
+      }
+      if (
+        !confirm(
+          "Retirer " +
+            amount +
+            " PI vers votre wallet Pi Testnet ?\n\n" +
+            "• Débite votre solde DCS\n" +
+            "• Envoi A2U (App → User) — compte pour les 5 wallets uniques\n" +
+            "• Prérequis : Allow Testnet + PI_A2U_API_KEY + seed app"
+        )
+      ) {
+        return;
+      }
+      const prevLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Envoi A2U…";
+      setStatus("Retrait en cours (create → chaîne → complete)…");
+      let res;
+      try {
+        res = await DCS.pi.withdrawWithPi(amount);
+      } catch (err) {
+        res = { ok: false, error: (err && err.message) || String(err) };
+      }
+      btn.disabled = false;
+      btn.textContent = prevLabel || "Retirer vers mon wallet Pi";
+      if (!res || !res.ok) {
+        const errMsg = (res && res.error) || "Échec du retrait Pi.";
+        setStatus(errMsg, true);
+        if (res && res.signinTestnetUrl) {
+          alert(errMsg + "\n\nAllow Testnet : " + res.signinTestnetUrl);
+        } else {
+          alert(errMsg);
+        }
+        return;
+      }
+      setStatus(
+        "Retrait confirmé : −" +
+          res.amount +
+          " PI" +
+          (res.countsTowardFiveWallets ? " · compte pour 5 wallets" : "")
+      );
+      if (DCS.backend) {
+        await Promise.all([
+          DCS.backend.loadWallet(),
+          DCS.backend.loadHistory(),
+          DCS.backend.loadNotifications ? DCS.backend.loadNotifications() : Promise.resolve()
+        ]);
+      }
+      if (typeof renderWallet === "function") renderWallet();
+      if (typeof renderHistory === "function") renderHistory();
+      if (typeof renderNotifications === "function") renderNotifications();
+      showToast("Retrait Pi envoyé", "−" + res.amount + " PI vers votre wallet Pi");
+      alert(
+        "Retrait réussi : −" +
+          res.amount +
+          " PI vers votre wallet Pi.\n" +
+          (res.note || "A2U Testnet — compte pour le seuil 5 wallets.")
+      );
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      startWithdraw();
+    });
+  }
+
   function txStatusKind(status) {
     const s = String(status || "").toLowerCase();
     if (/attente|pending|queue|file|ouvert|processing|en cours/.test(s)) return "pending";
@@ -6540,6 +6637,7 @@
       renderWallet();
       if (!isEcosystemMode()) setupDeposit();
       setupPiDeposit();
+      setupPiWithdraw();
       if (!isEcosystemMode()) setupDepositRequest();
       /* Re-assurer le bouton Pi visible après compliance */
       const wd = document.getElementById("wallet-deposit");
