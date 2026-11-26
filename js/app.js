@@ -5886,20 +5886,16 @@
     const next = params.get("next") || "";
     if (next) {
       const n = normalizePage(next);
-      /* Ne jamais envoyer les testeurs vers l’admin A2U */
-      if (n === "admin-a2u.html" && sandboxModeActive()) {
-        return "signin-testnet.html?ok=1";
+      /* Ne jamais envoyer vers l’admin A2U après Allow public */
+      if (n === "admin-a2u.html") {
+        return sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html";
       }
       if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) {
         return sandboxModeActive() ? n + (n.indexOf("?") >= 0 ? "&" : "?") + "piSandbox=1" : n;
       }
     }
-    /*
-     * Après Allow Testnet : page succès Allow (pas admin-a2u).
-     * L’admin est réservé à Damienne ; les testeurs restent sur signin-testnet.
-     */
-    if (sandboxModeActive()) return "signin-testnet.html?ok=1";
-    return "index.html";
+    /* Après Allow Pi → wallet (plus de page « fermez cette page ») */
+    return sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html";
   }
 
   function showPiLoginError(errEl, msg) {
@@ -6259,14 +6255,10 @@
     try {
       var qpSign = new URLSearchParams(location.search || "");
       if (qpSign.get("ok") === "1") {
-        var okBanner = document.getElementById("testnet-ok-banner");
-        var loginBtn = document.getElementById("pi-login-btn");
-        if (okBanner) okBanner.hidden = false;
-        if (loginBtn) {
-          loginBtn.textContent = "Connexion enregistrée ✓";
-          loginBtn.disabled = true;
-        }
-        if (form) form.hidden = true;
+        /* Ancien deep-link succès → wallet */
+        window.location.replace(
+          sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html"
+        );
         return;
       }
     } catch (eOkUi) {}
