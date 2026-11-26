@@ -60,6 +60,17 @@ Reste **de votre côté** :
 2. Soumettre l’app au listing Ecosystem dans le Developer Portal
 3. Attendre la revue Pi (pas automatique)
 
+## Claim domaine `.pi` (damienneadilehou.pi)
+
+Erreur Pi Browser « **Requirements Not Met** » = checklist setup incomplete **et/ou** moins de 5 Pioneers KYC uniques engagés.
+
+URLs d’hébergement déjà prêtes (fichier `validation-key.txt` servi) :
+
+- `https://appdcs.com/`
+- `https://damie-crypto-service.netlify.app/`
+
+Guide détaillé (étapes Portal + 5 utilisateurs KYC + Confirm) : voir le document Project `docs/claim-domaine-pi.md`.
+
 ## Flux
 
 ```

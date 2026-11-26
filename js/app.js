@@ -5897,16 +5897,14 @@
     return runPiLoginFlow(errEl, null);
   }
 
-  /** Empêche notre page d’ouvrir un autre onglet (window.open / target=_blank). */
+  /**
+   * Empêche les sorties hors site (target=_blank) sans casser le SDK Pi.
+   * Pi.authenticate / createPayment peuvent utiliser window.open — ne jamais le neutraliser.
+   */
   function blockNewTabsInPi() {
     if (!isEcosystemMode()) return;
     if (window.__dcsBlockNewTabs) return;
     window.__dcsBlockNewTabs = true;
-    try {
-      window.open = function () {
-        return null;
-      };
-    } catch (eOpen) {}
     try {
       document.addEventListener(
         "click",

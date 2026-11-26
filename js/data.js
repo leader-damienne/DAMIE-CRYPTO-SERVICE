@@ -421,10 +421,10 @@ DCS.referralAliases = function (user) {
 
 DCS.buildShareLinks = function () {
   var cfg = window.DCS_CONFIG || {};
-  var origin = String(cfg.piNetBaseUrl || "https://damiecrypto3760.pinet.com/")
+  var origin = String(cfg.piNetBaseUrl || "https://damiecryptoservi2345.pinet.com/")
     .trim()
     .replace(/\/+$/, "");
-  if (!origin) origin = "https://damiecrypto3760.pinet.com";
+  if (!origin) origin = "https://damiecryptoservi2345.pinet.com";
   var code = DCS.primaryInviteCode(DCS.user);
   /* /=pseudo : le pseudo reste collé au lien une fois publié (messengers / Pi) */
   var join = origin + "/=" + code;
