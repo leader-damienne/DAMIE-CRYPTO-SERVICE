@@ -108,11 +108,15 @@ supabase secrets set DCS_ADMIN_SECRET="mot-de-passe-fort-admin"
 # optionnel : restreindre aux usernames Pi fondateur
 # supabase secrets set DCS_ADMIN_USERNAMES="TonPseudoPi"
 supabase functions deploy pi-a2u --no-verify-jwt
+supabase functions deploy pi-auth --no-verify-jwt
 ```
 
+Avant le deploy auth : exécuter **`supabase/pi-uid-testnet.sql`** (colonnes `pi_uid_testnet` / `pi_last_auth_network`).
+
 - `PI_APP_WALLET_SEED` = seed **S…** du wallet de l’app **Testnet** (Develop → App wallet). **Jamais** dans Git / front.
-- `PI_A2U_API_KEY` = Server API Key de la **même** app Testnet (ne pas mélanger avec Mainnet).
+- `PI_A2U_API_KEY` = Server API Key de la **même** app Testnet (**obligatoire** — ne pas se contenter de `PI_API_KEY` Mainnet).
 - Sans ce deploy, `…/functions/v1/pi-a2u` répond **404** — l’admin A2U ne peut pas fonctionner.
+- `user_not_found` = uid **Mainnet** envoyé à l’API Testnet → le user doit Allow via `?piSandbox=1` (badge vert dans l’admin).
 
 ### UI admin
 

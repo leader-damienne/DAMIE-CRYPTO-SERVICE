@@ -240,6 +240,9 @@
         accessToken: accessToken,
         uid: auth.user && auth.user.uid,
         username: auth.user && auth.user.username,
+        /* Indique à pi-auth de stocker pi_uid_testnet sans écraser pi_uid Mainnet */
+        sandbox: useSandbox(),
+        network: useSandbox() ? "testnet" : "mainnet",
         referred_by: (function () {
           try {
             var r = localStorage.getItem("dcs_ref") || "";

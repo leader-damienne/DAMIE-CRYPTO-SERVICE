@@ -41,6 +41,18 @@
       color: var(--text);
     }
     .recipient-chip:hover { border-color: var(--gold); }
+    .recipient-chip.is-testnet { border-color: rgba(120, 200, 140, 0.55); }
+    .recipient-chip.is-mainnet { border-color: rgba(232, 160, 160, 0.45); opacity: 0.85; }
+    .chip-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .recipient-chip.is-testnet .chip-badge { color: #9dcca0; }
+    .recipient-chip.is-mainnet .chip-badge { color: #e8a0a0; }
     .a2u-steps {
       list-style: none;
       padding: 0;
@@ -155,8 +167,21 @@
     </div>
 
     <div class="panel" style="margin-top:1.25rem">
-      <h3>Destinataires récents (pi_uid)</h3>
-      <button type="button" class="btn btn-outline" id="a2u-list-btn" style="margin-bottom:0.75rem">Charger la liste</button>
+      <h3>Destinataires (Testnet vs Mainnet)</h3>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">
+        Badge <strong style="color:#9dcca0">Testnet</strong> = uid utilisable pour A2U.
+        Badge <strong style="color:#e8a0a0">Mainnet seul</strong> = fera <code>user_not_found</code>
+        → envoyer le lien <a href="signin.html?piSandbox=1">signin.html?piSandbox=1</a>.
+      </p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem">
+        <button type="button" class="btn btn-outline" id="a2u-list-btn">Charger la liste</button>
+        <select id="a2u-filter" class="form-control" style="width:auto;min-width:10rem">
+          <option value="all">Tous</option>
+          <option value="testnet" selected>Testnet prêts</option>
+          <option value="mainnet">Mainnet seul</option>
+        </select>
+      </div>
+      <p id="a2u-list-meta" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem">—</p>
       <div id="a2u-recipients"></div>
     </div>
 

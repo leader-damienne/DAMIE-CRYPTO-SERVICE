@@ -10,6 +10,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import * as StellarSdk from "npm:@stellar/stellar-sdk@13.3.0";
 
 const PI_API_BASE = Deno.env.get("PI_API_BASE") || "https://api.minepi.com";
+const HAS_DEDICATED_A2U_KEY = !!String(Deno.env.get("PI_A2U_API_KEY") || "").trim();
+/* Toujours préférer PI_A2U_API_KEY (Testnet). Fallback PI_API_KEY = risque Mainnet. */
 const PI_API_KEY =
   Deno.env.get("PI_A2U_API_KEY") ||
   Deno.env.get("PI_API_KEY") ||
@@ -24,6 +26,12 @@ const ADMIN_USERS = String(Deno.env.get("DCS_ADMIN_USERNAMES") || "")
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
+const SIGNIN_TESTNET_URL = "https://appdcs.com/signin.html?piSandbox=1";
+const USER_NOT_FOUND_FR =
+  "user_not_found : ce pi_uid n’existe pas sur l’app Testnet (souvent un uid Mainnet). " +
+  "Le destinataire doit ouvrir " +
+  SIGNIN_TESTNET_URL +
+  " dans le Pi Browser → Continuer avec Pi → Allow, puis réessayez avec l’uid Testnet (badge vert dans la liste).";
 
 const HORIZON_TESTNET = "https://api.testnet.minepi.com";
 const HORIZON_MAINNET = "https://api.mainnet.minepi.com";
@@ -189,60 +197,126 @@ async function submitOnChain(payment: PaymentDTO) {
   return txid;
 }
 
+type ProfileRow = {
+  id: string;
+  pi_uid?: string | null;
+  pi_uid_testnet?: string | null;
+  pi_username?: string | null;
+  username?: string | null;
+  pi_last_auth_network?: string | null;
+};
+
 async function resolveRecipient(
   db: ReturnType<typeof adminDb>,
   uid: string,
   usernameHint: string
 ) {
-  let piUid = String(uid || "").trim();
+  const explicitUid = String(uid || "").trim();
   let profileId: string | null = null;
   let username = String(usernameHint || "").trim();
+  let row: ProfileRow | null = null;
+  const selectCols =
+    "id, pi_uid, pi_uid_testnet, pi_username, username, pi_last_auth_network";
 
-  if (piUid) {
-    const { data } = await db
+  if (explicitUid) {
+    const byTestnet = await db
       .from("profiles")
-      .select("id, pi_uid, pi_username, username")
-      .eq("pi_uid", piUid)
+      .select(selectCols)
+      .eq("pi_uid_testnet", explicitUid)
       .maybeSingle();
-    if (data) {
-      profileId = data.id;
-      username = data.pi_username || data.username || username;
-      piUid = data.pi_uid || piUid;
+    if (byTestnet.data) row = byTestnet.data as ProfileRow;
+    if (!row) {
+      const byMain = await db
+        .from("profiles")
+        .select(selectCols)
+        .eq("pi_uid", explicitUid)
+        .maybeSingle();
+      if (byMain.data) row = byMain.data as ProfileRow;
     }
   }
 
-  if (!piUid && username) {
+  if (!row && username) {
     const needle = username.replace(/^@+/, "");
     const { data: byPi } = await db
       .from("profiles")
-      .select("id, pi_uid, pi_username, username")
+      .select(selectCols)
       .ilike("pi_username", needle)
       .limit(1)
       .maybeSingle();
-    const row =
-      byPi ||
+    row =
+      (byPi as ProfileRow | null) ||
       (
-        await db
-          .from("profiles")
-          .select("id, pi_uid, pi_username, username")
-          .ilike("username", needle)
-          .limit(1)
-          .maybeSingle()
-      ).data;
-    if (row?.pi_uid) {
-      profileId = row.id;
-      piUid = row.pi_uid;
-      username = row.pi_username || row.username || needle;
-    }
+        (
+          await db
+            .from("profiles")
+            .select(selectCols)
+            .ilike("username", needle)
+            .limit(1)
+            .maybeSingle()
+        ).data as ProfileRow | null
+      );
   }
 
-  if (!piUid) {
+  if (row) {
+    profileId = row.id;
+    username = row.pi_username || row.username || username;
+  }
+
+  const testnetUid = String(row?.pi_uid_testnet || "").trim();
+  const mainnetUid = String(row?.pi_uid || "").trim();
+
+  if (testnetUid && (!explicitUid || explicitUid === testnetUid)) {
+    return { piUid: testnetUid, profileId, username, network: "testnet" };
+  }
+
+  if (explicitUid && mainnetUid && explicitUid === mainnetUid && !testnetUid) {
     throw new Error(
-      "Destinataire introuvable : indiquez le Pi uid (profiles.pi_uid) ou un username déjà connecté via Pi sur DCS."
+      "Destinataire Mainnet uniquement (uid Mainnet collé). @" +
+        (username || "?") +
+        " doit ouvrir " +
+        SIGNIN_TESTNET_URL +
+        " → Allow, puis rechargez la liste (badge Testnet)."
     );
   }
 
-  return { piUid, profileId, username };
+  if (explicitUid && testnetUid && explicitUid === mainnetUid) {
+    throw new Error(
+      "Vous avez collé l’uid Mainnet. Utilisez l’uid Testnet de @" +
+        (username || "?") +
+        " (chip vert) : " +
+        testnetUid.slice(0, 8) +
+        "…"
+    );
+  }
+
+  if (!testnetUid && mainnetUid && !explicitUid) {
+    throw new Error(
+      "Profil @" +
+        (username || "?") +
+        " n’a que l’uid Mainnet. Auth Testnet requis : " +
+        SIGNIN_TESTNET_URL
+    );
+  }
+
+  if (explicitUid && !row) {
+    /* uid inconnu en base : tentative brute (script / uid collé) */
+    return { piUid: explicitUid, profileId, username, network: "unknown" };
+  }
+
+  if (!testnetUid && !explicitUid) {
+    throw new Error(
+      "Destinataire introuvable : username déjà Allow en Testnet (" +
+        SIGNIN_TESTNET_URL +
+        ") ou pi_uid_testnet."
+    );
+  }
+
+  return {
+    piUid: testnetUid || explicitUid,
+    profileId,
+    username,
+    network: testnetUid ? "testnet" : "unknown",
+  };
 }
 
 Deno.serve(async (req) => {
@@ -282,6 +356,11 @@ Deno.serve(async (req) => {
         walletPublicKey: pub || null,
         adminUsersRestricted: ADMIN_USERS.length > 0,
         networkHint: "testnet",
+        usingDedicatedA2uKey: HAS_DEDICATED_A2U_KEY,
+        warning: HAS_DEDICATED_A2U_KEY
+          ? null
+          : "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found si vous envoyez vers des uids Testnet. Ajoutez PI_A2U_API_KEY = Server API Key de l’app Testnet.",
+        signinTestnetUrl: SIGNIN_TESTNET_URL,
       });
     }
 
@@ -337,15 +416,82 @@ Deno.serve(async (req) => {
     }
 
     if (action === "list_recipients") {
-      const { data, error } = await db
+      const filter = String(payload.filter || "all").toLowerCase();
+      let q = db
         .from("profiles")
-        .select("id, username, pi_username, pi_uid, created_at")
-        .not("pi_uid", "is", null)
-        .neq("pi_uid", "")
+        .select(
+          "id, username, pi_username, pi_uid, pi_uid_testnet, pi_last_auth_network, created_at"
+        )
         .order("created_at", { ascending: false })
-        .limit(40);
-      if (error) throw new Error(error.message);
-      return json({ ok: true, action: "list_recipients", recipients: data || [] });
+        .limit(80);
+      const { data, error } = await q;
+      if (error) {
+        if (/pi_uid_testnet|column/i.test(error.message)) {
+          const legacy = await db
+            .from("profiles")
+            .select("id, username, pi_username, pi_uid, created_at")
+            .not("pi_uid", "is", null)
+            .neq("pi_uid", "")
+            .order("created_at", { ascending: false })
+            .limit(40);
+          if (legacy.error) throw new Error(legacy.error.message);
+          return json({
+            ok: true,
+            action: "list_recipients",
+            schemaReady: false,
+            warning:
+              "Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth/pi-a2u. En attendant, tous les uids listés sont traités comme Mainnet (risque user_not_found).",
+            signinTestnetUrl: SIGNIN_TESTNET_URL,
+            recipients: (legacy.data || []).map((r) => ({
+              ...r,
+              pi_uid_testnet: null,
+              network: "mainnet_only",
+              testnetReady: false,
+              a2uUid: null,
+            })),
+          });
+        }
+        throw new Error(error.message);
+      }
+      let recipients = (data || [])
+        .map((r) => {
+          const testnetUid = String(r.pi_uid_testnet || "").trim();
+          const mainnetUid = String(r.pi_uid || "").trim();
+          if (!testnetUid && !mainnetUid) return null;
+          const testnetReady = !!testnetUid;
+          return {
+            id: r.id,
+            username: r.username,
+            pi_username: r.pi_username,
+            pi_uid: mainnetUid || null,
+            pi_uid_testnet: testnetUid || null,
+            pi_last_auth_network: r.pi_last_auth_network || null,
+            created_at: r.created_at,
+            network: testnetReady ? "testnet" : "mainnet_only",
+            testnetReady,
+            a2uUid: testnetUid || null,
+          };
+        })
+        .filter(Boolean) as Array<Record<string, unknown>>;
+
+      if (filter === "testnet") {
+        recipients = recipients.filter((r) => r.testnetReady);
+      } else if (filter === "mainnet") {
+        recipients = recipients.filter((r) => !r.testnetReady);
+      }
+
+      recipients.sort((a, b) => Number(b.testnetReady) - Number(a.testnetReady));
+
+      return json({
+        ok: true,
+        action: "list_recipients",
+        schemaReady: true,
+        filter,
+        signinTestnetUrl: SIGNIN_TESTNET_URL,
+        testnetCount: recipients.filter((r) => r.testnetReady).length,
+        mainnetOnlyCount: recipients.filter((r) => !r.testnetReady).length,
+        recipients,
+      });
     }
 
     if (action === "incomplete") {
@@ -495,11 +641,26 @@ Deno.serve(async (req) => {
       400
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const payload =
+    let message = err instanceof Error ? err.message : String(err);
+    const detail =
       err && typeof err === "object" && "payload" in err
         ? (err as { payload?: Record<string, unknown> }).payload
         : undefined;
-    return json({ ok: false, error: message, detail: payload || null }, 500);
+    if (/user_not_found/i.test(message)) {
+      message = USER_NOT_FOUND_FR;
+    }
+    if (/pi_uid_testnet|column/i.test(message)) {
+      message =
+        "Schéma incomplet : exécutez supabase/pi-uid-testnet.sql dans le SQL Editor, redéployez pi-auth + pi-a2u.";
+    }
+    return json(
+      {
+        ok: false,
+        error: message,
+        detail: detail || null,
+        signinTestnetUrl: SIGNIN_TESTNET_URL,
+      },
+      500
+    );
   }
 });

@@ -167,6 +167,10 @@ Deno.serve(async (req) => {
     }
 
     const piUser = await verifyPiUser(accessToken);
+    const isSandbox =
+      payload.sandbox === true ||
+      payload.sandbox === "true" ||
+      String(payload.network || "").toLowerCase() === "testnet";
     const email = piEmail(piUser.uid);
     const password = await derivePassword(piUser.uid);
     const db = admin();
@@ -177,12 +181,20 @@ Deno.serve(async (req) => {
       .replace(/^@+/, "");
     const referredMeta = referredBy && referredBy !== "—" ? referredBy : "";
 
-    /* 1) Compte déjà lié à ce Pi uid */
+    /* 1) Compte déjà lié à ce Pi uid (Mainnet pi_uid OU Testnet pi_uid_testnet) */
     let existing = await db
       .from("profiles")
-      .select("id, email, username, pi_uid, pi_username, created_at")
+      .select("id, email, username, pi_uid, pi_uid_testnet, pi_username, created_at")
       .eq("pi_uid", piUser.uid)
       .maybeSingle();
+    if (!existing.data?.id) {
+      const byTestnet = await db
+        .from("profiles")
+        .select("id, email, username, pi_uid, pi_uid_testnet, pi_username, created_at")
+        .eq("pi_uid_testnet", piUser.uid)
+        .maybeSingle();
+      if (byTestnet.data?.id) existing = byTestnet;
+    }
 
     /*
      * 2) Nouvelle app Pi = nouveau uid, même username → récupérer le compte
@@ -306,6 +318,7 @@ Deno.serve(async (req) => {
           pi_username: piUser.username,
           username: existing.data?.username || piUser.username,
           auth_provider: "pi",
+          pi_network: isSandbox ? "testnet" : "mainnet",
         },
       });
       if (upd.error) throw new Error(upd.error.message);
@@ -322,6 +335,7 @@ Deno.serve(async (req) => {
           pi_username: piUser.username,
           username: piUser.username,
           auth_provider: "pi",
+          pi_network: isSandbox ? "testnet" : "mainnet",
           referred_by: referredMeta,
           invite_code: piUser.username,
         },
@@ -360,21 +374,39 @@ Deno.serve(async (req) => {
       await new Promise((r) => setTimeout(r, 250));
     }
 
-    /* Libérer pi_uid sur les autres profils (index unique) avant rattachement */
-    await db
-      .from("profiles")
-      .update({ pi_uid: null })
-      .eq("pi_uid", piUser.uid)
-      .neq("id", authUserId);
-
-    await db
-      .from("profiles")
-      .update({
-        pi_uid: piUser.uid,
-        pi_username: piUser.username,
-        display_name: piUser.username,
-      })
-      .eq("id", authUserId);
+    /* Libérer les uids sur les autres profils avant rattachement */
+    if (isSandbox) {
+      await db
+        .from("profiles")
+        .update({ pi_uid_testnet: null })
+        .eq("pi_uid_testnet", piUser.uid)
+        .neq("id", authUserId);
+      /* Testnet : ne PAS écraser pi_uid Mainnet (sinon A2U/list confond les réseaux) */
+      await db
+        .from("profiles")
+        .update({
+          pi_uid_testnet: piUser.uid,
+          pi_username: piUser.username,
+          pi_last_auth_network: "testnet",
+          display_name: piUser.username,
+        })
+        .eq("id", authUserId);
+    } else {
+      await db
+        .from("profiles")
+        .update({ pi_uid: null })
+        .eq("pi_uid", piUser.uid)
+        .neq("id", authUserId);
+      await db
+        .from("profiles")
+        .update({
+          pi_uid: piUser.uid,
+          pi_username: piUser.username,
+          pi_last_auth_network: "mainnet",
+          display_name: piUser.username,
+        })
+        .eq("id", authUserId);
+    }
 
     /* Récupérer les soldes restés sur d’anciens profils (même pseudo / uid) */
     try {
@@ -419,12 +451,22 @@ Deno.serve(async (req) => {
         id: authUserId,
         pi_uid: piUser.uid,
         username: piUser.username,
+        network: isSandbox ? "testnet" : "mainnet",
       },
     });
   } catch (e) {
-    return json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
-      400
-    );
+    const msg = e instanceof Error ? e.message : String(e);
+    /* Colonne absente → SQL pi-uid-testnet.sql pas encore exécuté */
+    if (/pi_uid_testnet|pi_last_auth_network|column/i.test(msg)) {
+      return json(
+        {
+          ok: false,
+          error:
+            "Schéma incomplet : exécutez supabase/pi-uid-testnet.sql dans le SQL Editor, puis redéployez pi-auth.",
+        },
+        400
+      );
+    }
+    return json({ ok: false, error: msg }, 400);
   }
 });
