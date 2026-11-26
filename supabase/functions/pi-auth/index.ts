@@ -306,24 +306,50 @@ Deno.serve(async (req) => {
     }
 
     let authUserId = existing.data?.id as string | undefined;
-    let loginEmail = (existing.data?.email as string) || email;
+    /* Toujours l’e-mail du profil existant — ne jamais le réécrire vers
+     * pi.{testnetUid}@… (UID Testnet ≠ Mainnet → « Error updating user » / doublon). */
+    let loginEmail = String(existing.data?.email || "").trim() || email;
 
     if (authUserId) {
-      const upd = await db.auth.admin.updateUserById(authUserId, {
+      const userMeta = {
+        pi_uid: piUser.uid,
+        pi_username: piUser.username,
+        username: existing.data?.username || piUser.username,
+        auth_provider: "pi",
+        pi_network: isSandbox ? "testnet" : "mainnet",
+      };
+
+      /* Password + metadata uniquement — pas d’email (évite conflit Auth). */
+      let upd = await db.auth.admin.updateUserById(authUserId, {
         password,
-        /* Garder l’e-mail existant s’il n’est pas synthétique — sinon e-mail Pi */
-        email: loginEmail && !/@auth\.dcs\.app$/i.test(loginEmail) ? loginEmail : email,
-        user_metadata: {
-          pi_uid: piUser.uid,
-          pi_username: piUser.username,
-          username: existing.data?.username || piUser.username,
-          auth_provider: "pi",
-          pi_network: isSandbox ? "testnet" : "mainnet",
-        },
+        user_metadata: userMeta,
       });
-      if (upd.error) throw new Error(upd.error.message);
-      if (!loginEmail || /@auth\.dcs\.app$/i.test(loginEmail)) {
-        loginEmail = email;
+
+      if (upd.error) {
+        /* Soft retry : password seul si metadata rejetée */
+        const retryPwd = await db.auth.admin.updateUserById(authUserId, {
+          password,
+        });
+        if (retryPwd.error) {
+          const raw =
+            retryPwd.error.message ||
+            upd.error.message ||
+            "Error updating user";
+          if (/email|already|registered|exists|duplicate|unique/i.test(raw)) {
+            throw new Error(
+              "Compte existant : conflit e-mail Auth. Allow Testnet n’a pas besoin de changer l’e-mail — redéployez pi-auth (fix PR) puis réessayez."
+            );
+          }
+          throw new Error(
+            "Impossible de rafraîchir le mot de passe du compte existant (" +
+              raw +
+              "). Réessayez Allow Testnet."
+          );
+        }
+        /* Metadata best-effort (ne bloque pas Allow) */
+        await db.auth.admin.updateUserById(authUserId, {
+          user_metadata: userMeta,
+        });
       }
     } else {
       const created = await db.auth.admin.createUser({
