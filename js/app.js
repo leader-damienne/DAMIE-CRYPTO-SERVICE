@@ -406,6 +406,24 @@
     });
   }
 
+  /** Affiche le pseudo de session sous le solde (vérifier amie100002 vs autre profil). */
+  function syncWalletSessionHint() {
+    var el = document.getElementById("wallet-session-hint");
+    if (!el) return;
+    var u = (window.DCS && DCS.user) || {};
+    var name = String(u.piUsername || u.username || u.displayName || "").replace(/^@+/, "");
+    if (u.loggedIn && u.id && name) {
+      el.textContent = "Compte connecté : @" + name;
+      el.style.display = "";
+    } else if (u.loggedIn && u.id) {
+      el.textContent = "Compte connecté (id " + String(u.id).slice(0, 8) + "…)";
+      el.style.display = "";
+    } else {
+      el.textContent = "Non connecté — Allow Testnet pour charger les soldes.";
+      el.style.display = "";
+    }
+  }
+
   function renderWallet() {
     const list = document.getElementById("wallet-assets");
     const piBalEl = document.getElementById("wallet-pi-balance");
@@ -6537,26 +6555,52 @@
         DCS.pi.startEarlyPiAuth();
       }
     } catch (eEarlyBoot) {}
-    /* Timeouts courts : l'UI ne doit pas attendre des réseaux lents (PiNet / CDN) */
+    /* Timeouts courts hors wallet ; wallet attend la session réelle (évite soldes 0 fantômes) */
     var BOOT_WAIT_MS = 3000;
+    var pageEarly = pageName();
+    var needsFullHydrate =
+      pageEarly === "wallet.html" ||
+      pageEarly === "swap.html" ||
+      pageEarly === "transfer.html" ||
+      !!document.getElementById("wallet-assets");
     try {
       if (window.DCS && DCS.backend) {
-        await Promise.race([
-          DCS.backend.init(),
-          new Promise(function (resolve) {
-            setTimeout(resolve, BOOT_WAIT_MS);
-          })
-        ]);
+        if (needsFullHydrate) {
+          await DCS.backend.init();
+        } else {
+          await Promise.race([
+            DCS.backend.init(),
+            new Promise(function (resolve) {
+              setTimeout(resolve, BOOT_WAIT_MS);
+            })
+          ]);
+        }
       }
     } catch (eInit) {}
+    /* logout=1 : signOut APRÈS init (sinon jetons Supabase restent → mauvais user / soldes 0) */
+    try {
+      var qpLogout = new URLSearchParams(location.search || "");
+      if (
+        (qpLogout.get("logout") === "1" || qpLogout.get("force_pi_auth") === "1") &&
+        window.DCS &&
+        DCS.auth &&
+        typeof DCS.auth.logout === "function"
+      ) {
+        await DCS.auth.logout().catch(function () {});
+      }
+    } catch (eLogout2) {}
     try {
       if (window.DCS && DCS.auth) {
-        await Promise.race([
-          DCS.auth.hydrate(),
-          new Promise(function (resolve) {
-            setTimeout(resolve, BOOT_WAIT_MS);
-          })
-        ]);
+        if (needsFullHydrate) {
+          await DCS.auth.hydrate();
+        } else {
+          await Promise.race([
+            DCS.auth.hydrate(),
+            new Promise(function (resolve) {
+              setTimeout(resolve, BOOT_WAIT_MS);
+            })
+          ]);
+        }
       }
     } catch (eHydra) {}
     applyEcosystemCompliance();
@@ -6617,11 +6661,9 @@
       setupMarketSearch();
     }
     if (isWallet) {
-      /* Après Allow → redirect, hydrate peut être incomplet : re-hydrate puis soldes */
+      /* Toujours re-hydrate (même si user.id déjà là) : session peut être un autre profil */
       try {
-        if (!(DCS.user && DCS.user.id) && DCS.auth && DCS.auth.hydrate) {
-          await DCS.auth.hydrate();
-        }
+        if (DCS.auth && DCS.auth.hydrate) await DCS.auth.hydrate();
       } catch (eHydraWallet) {}
       try {
         await DCS.backend.loadWallet();
@@ -6629,6 +6671,7 @@
       } catch (e) {}
       setupWalletBalanceToggle();
       renderWallet();
+      syncWalletSessionHint();
       if (!isEcosystemMode()) setupDeposit();
       setupPiDeposit();
       setupPiWithdraw();
@@ -6643,14 +6686,35 @@
         await DCS.backend.loadNotifications();
       } catch (e2) {}
       renderNotifications();
-      /* 2e passe si session arrivée juste après le 1er load */
+      /* 2e + 3e passe : hydrate tardif / Pi Browser lent */
       try {
-        if (DCS.user && DCS.user.id) {
-          await DCS.backend.loadWallet();
-          renderWallet();
-          renderHistory();
-        }
+        await DCS.backend.loadWallet();
+        renderWallet();
+        syncWalletSessionHint();
+        renderHistory();
       } catch (eReload) {}
+      setTimeout(function () {
+        Promise.resolve()
+          .then(function () {
+            return DCS.auth && DCS.auth.hydrate ? DCS.auth.hydrate() : null;
+          })
+          .then(function () {
+            return DCS.backend.loadWallet();
+          })
+          .then(function () {
+            renderWallet();
+            syncWalletSessionHint();
+            renderHistory();
+          })
+          .catch(function () {});
+      }, 1200);
+      try {
+        window.addEventListener("dcs:wallet-ready", function () {
+          renderWallet();
+          syncWalletSessionHint();
+          renderHistory();
+        });
+      } catch (eListen) {}
     }
     if (isSwap) {
       try {

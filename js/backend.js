@@ -29,6 +29,21 @@
     try {
       localStorage.removeItem("dcs_session");
     } catch (e) {}
+    /* Jetons Supabase Auth (sinon ?logout=1 avant init laisse l’ancienne session) */
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && (/^sb-.*-auth-token/i.test(k) || /supabase\.auth/i.test(k))) {
+          keys.push(k);
+        }
+      }
+      keys.forEach(function (k) {
+        try {
+          localStorage.removeItem(k);
+        } catch (e2) {}
+      });
+    } catch (e3) {}
   }
 
   /** Date de naissance calendaire YYYY-MM-DD — jamais via new Date() (décalage TZ) */
@@ -344,6 +359,21 @@
                 return Promise.all([self.loadWallet(), self.loadHistory()]);
               })
               .then(function () {
+                try {
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("dcs:wallet-ready", {
+                        detail: {
+                          userId: DCS.user && DCS.user.id,
+                          username: DCS.user && (DCS.user.piUsername || DCS.user.username),
+                          pi: (DCS.wallet || []).reduce(function (n, w) {
+                            return w && w.symbol === "PI" ? Number(w.amount) || 0 : n;
+                          }, 0)
+                        }
+                      })
+                    );
+                  }
+                } catch (eEv) {}
                 return true;
               })
               .catch(function () {
