@@ -6263,7 +6263,7 @@
         var loginBtn = document.getElementById("pi-login-btn");
         if (okBanner) okBanner.hidden = false;
         if (loginBtn) {
-          loginBtn.textContent = "Allow Testnet enregistré ✓";
+          loginBtn.textContent = "Connexion enregistrée ✓";
           loginBtn.disabled = true;
         }
         if (form) form.hidden = true;
