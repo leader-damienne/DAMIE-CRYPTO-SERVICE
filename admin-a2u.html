@@ -41,6 +41,45 @@
       color: var(--text);
     }
     .recipient-chip:hover { border-color: var(--gold); }
+    .recipient-chip.is-testnet { border-color: rgba(120, 200, 140, 0.55); }
+    .recipient-chip.is-mainnet { border-color: rgba(232, 160, 160, 0.45); opacity: 0.85; }
+    .chip-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .recipient-chip.is-testnet .chip-badge { color: #9dcca0; }
+    .recipient-chip.is-mainnet .chip-badge { color: #e8a0a0; }
+    .a2u-steps {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1rem;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+    .a2u-steps li {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .a2u-steps strong { color: var(--text); }
+    .a2u-progress {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--gold-bright, var(--gold));
+      margin: 0.25rem 0 0.5rem;
+    }
+    .a2u-banner {
+      margin: 0 0 1rem;
+      padding: 0.75rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      background: rgba(212, 175, 55, 0.08);
+      font-size: 0.84rem;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
@@ -54,6 +93,7 @@
         </div>
       </a>
       <div class="header-actions">
+        <a class="btn btn-outline" href="signin-testnet.html">Auth Testnet</a>
         <a class="btn btn-outline" href="wallet.html">Wallet</a>
       </div>
     </div>
@@ -62,7 +102,27 @@
   <main class="container" style="padding-bottom:3rem">
     <div class="page-hero">
       <h1>Admin <span>A2U</span></h1>
-      <p>Envois App → User (Testnet) pour débloquer le wallet Mainnet (5 wallets uniques).</p>
+      <p>Envois App → User (Testnet) pour débloquer les App Wallets Mainnet (5 wallets uniques).</p>
+    </div>
+
+    <div class="a2u-banner" id="a2u-deploy-hint">
+      <strong>Prérequis serveur :</strong> Edge Function <code>pi-a2u</code> déployée + secrets
+      <code>PI_A2U_API_KEY</code>, <code>PI_APP_WALLET_SEED</code>, <code>DCS_ADMIN_SECRET</code>.
+      Voir le guide <code>docs/a2u-testnet-5-wallets.md</code>.
+    </div>
+
+    <div class="panel" style="margin-bottom:1.25rem">
+      <h3>Parcours (ordre)</h3>
+      <ol class="a2u-steps">
+        <li><strong>1.</strong> Develop Portal → app <em>Testnet</em> paire → App wallet + Server API Key.</li>
+        <li><strong>2.</strong> Secrets Supabase + <code>supabase functions deploy pi-a2u --no-verify-jwt</code>.</li>
+        <li><strong>3.</strong> 5 Pioneers ouvrent <a href="signin-testnet.html">signin-testnet.html</a> (Pi Browser) → Allow. (Évite la perte de <code>?piSandbox=1</code>.)</li>
+        <li><strong>4.</strong> Ici : secret admin → Vérifier → Progress → Envoyer A2U × 5 uids.</li>
+        <li><strong>5.</strong> Retour app Mainnet → créer Outgoing + Incoming Multisig.</li>
+      </ol>
+      <div class="a2u-progress" id="a2u-progress-label">Progression : — / 5</div>
+      <p id="a2u-progress-detail" style="font-size:0.8rem;color:var(--muted);margin:0">Charge la progression après « Vérifier » ou « Rafraîchir progression ».</p>
+      <button type="button" class="btn btn-outline" id="a2u-progress-btn" style="margin-top:0.75rem">Rafraîchir progression</button>
     </div>
 
     <div class="grid-2">
@@ -82,8 +142,9 @@
       <div class="panel">
         <h3>Envoyer 1 A2U</h3>
         <p style="font-size:0.82rem;color:var(--muted);margin-bottom:0.85rem">
-          Le destinataire doit s’être connecté à DCS via Pi (même app Testnet) pour avoir un <strong>pi_uid</strong>.
-          Répète avec <strong>5 comptes / wallets différents</strong>.
+          Le destinataire doit s’être connecté à DCS via Pi en <strong>mode Testnet</strong>
+          (<code>?piSandbox=1</code> pour avoir un <strong>pi_uid</strong>.
+          Répète avec <strong>5 comptes / wallets différents</strong>. Montant min. <code>0.0000001</code>.
         </p>
         <div class="form-group">
           <label for="a2u-username">Username Pi (DCS)</label>
@@ -106,8 +167,21 @@
     </div>
 
     <div class="panel" style="margin-top:1.25rem">
-      <h3>Destinataires récents (pi_uid)</h3>
-      <button type="button" class="btn btn-outline" id="a2u-list-btn" style="margin-bottom:0.75rem">Charger la liste</button>
+      <h3>Destinataires (Testnet vs Mainnet)</h3>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">
+        Badge <strong style="color:#9dcca0">Testnet</strong> = uid utilisable pour A2U.
+        Badge <strong style="color:#e8a0a0">Mainnet seul</strong> = fera <code>user_not_found</code>
+        → envoyer le lien <a href="signin-testnet.html">signin-testnet.html</a>.
+      </p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem">
+        <button type="button" class="btn btn-outline" id="a2u-list-btn">Charger la liste</button>
+        <select id="a2u-filter" class="form-control" style="width:auto;min-width:10rem">
+          <option value="all">Tous</option>
+          <option value="testnet" selected>Testnet prêts</option>
+          <option value="mainnet">Mainnet seul</option>
+        </select>
+      </div>
+      <p id="a2u-list-meta" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem">—</p>
       <div id="a2u-recipients"></div>
     </div>
 

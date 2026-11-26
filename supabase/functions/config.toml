@@ -1,4 +1,11 @@
-# Edge Functions config (optionnel)
+# Edge Functions config — aligné avec les déploiements DCS
+# pi-auth : le client n’envoie que apikey (pas de JWT user) → verify_jwt OFF
+# pi-payment : le client envoie Bearer session Supabase → verify_jwt ON OK
+# pi-a2u : auth via secret admin, pas JWT user → verify_jwt OFF
+
+[functions.pi-auth]
+verify_jwt = false
+
 [functions.pi-payment]
 verify_jwt = true
 

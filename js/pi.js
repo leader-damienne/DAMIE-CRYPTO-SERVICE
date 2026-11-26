@@ -17,6 +17,56 @@
     return cfg().piEcosystemMode !== false;
   }
 
+  /**
+   * Sandbox / Testnet override sans redeploy :
+   *   ?piSandbox=1  → force Testnet (mémorisé en localStorage)
+   *   ?piSandbox=0  → force Mainnet (efface l’override)
+   * Prod par défaut : DCS_CONFIG.piSandbox === false → Mainnet.
+   */
+  function useSandbox() {
+    try {
+      var path = String(location.pathname || "").toLowerCase();
+      if (
+        /signin-testnet\.html$/i.test(path) ||
+        /\/signin-testnet\/?$/i.test(path) ||
+        window.__dcsPiSandboxForced === true
+      ) {
+        try {
+          localStorage.setItem("dcs_pi_sandbox", "1");
+          sessionStorage.setItem("dcs_pi_sandbox", "1");
+        } catch (ePath) {}
+        return true;
+      }
+      var qp = new URLSearchParams(location.search || "");
+      var hash = String(location.hash || "").replace(/^#/, "");
+      var hp = new URLSearchParams(hash.indexOf("=") >= 0 ? hash : "");
+      var flag =
+        qp.get("piSandbox") ||
+        qp.get("sandbox") ||
+        hp.get("piSandbox") ||
+        hp.get("sandbox") ||
+        "";
+      if (flag === "1" || flag === "true") {
+        try {
+          localStorage.setItem("dcs_pi_sandbox", "1");
+          sessionStorage.setItem("dcs_pi_sandbox", "1");
+        } catch (eSet) {}
+        return true;
+      }
+      if (flag === "0" || flag === "false") {
+        try {
+          localStorage.removeItem("dcs_pi_sandbox");
+          sessionStorage.removeItem("dcs_pi_sandbox");
+        } catch (eClr) {}
+        return false;
+      }
+      if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
+      if (sessionStorage.getItem("dcs_pi_sandbox") === "1") return true;
+    } catch (eQp) {}
+    /* Prod : piSandbox false → Mainnet ; true → Sandbox Develop */
+    return cfg().piSandbox === true;
+  }
+
   function getAccessToken() {
     try {
       if (DCS.backend && DCS.backend.client) {
@@ -104,7 +154,7 @@
     if (initPromise) return initPromise;
     initPromise = ensurePiSdk()
       .then(function (Pi) {
-        var sandbox = cfg().piSandbox !== false;
+        var sandbox = useSandbox();
         return Promise.resolve(Pi.init({ version: "2.0", sandbox: sandbox })).then(function () {
           return Pi;
         });
@@ -213,6 +263,9 @@
         accessToken: accessToken,
         uid: auth.user && auth.user.uid,
         username: auth.user && auth.user.username,
+        /* Indique à pi-auth de stocker pi_uid_testnet sans écraser pi_uid Mainnet */
+        sandbox: useSandbox(),
+        network: useSandbox() ? "testnet" : "mainnet",
         referred_by: (function () {
           try {
             var r = localStorage.getItem("dcs_ref") || "";
@@ -465,6 +518,7 @@
     depositWithPi: depositWithPi,
     isAvailable: isPiBrowser,
     ecosystemMode: ecosystemMode,
+    useSandbox: useSandbox,
     callBackend: callPiBackend,
     startEarlyPiAuth: startEarlyPiAuth,
     DEPOSIT_PRODUCT: DEPOSIT_PRODUCT

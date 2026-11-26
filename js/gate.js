@@ -28,6 +28,70 @@
     }
   } catch (e) {}
 
+  /* Persister piSandbox dès l’entrée (avant tout redirect) */
+  function captureSandboxFlag() {
+    try {
+      var qp = new URLSearchParams(location.search || "");
+      var hash = String(location.hash || "").replace(/^#/, "");
+      var hp = new URLSearchParams(hash.indexOf("=") >= 0 ? hash : "");
+      var path = String(location.pathname || "").toLowerCase();
+      var flag =
+        qp.get("piSandbox") ||
+        qp.get("sandbox") ||
+        hp.get("piSandbox") ||
+        hp.get("sandbox") ||
+        "";
+      if (
+        /signin-testnet\.html$/i.test(path) ||
+        /\/signin-testnet\/?$/i.test(path)
+      ) {
+        flag = "1";
+      }
+      if (flag === "1" || flag === "true") {
+        localStorage.setItem("dcs_pi_sandbox", "1");
+        sessionStorage.setItem("dcs_pi_sandbox", "1");
+        return true;
+      }
+      if (flag === "0" || flag === "false") {
+        localStorage.removeItem("dcs_pi_sandbox");
+        sessionStorage.removeItem("dcs_pi_sandbox");
+        return false;
+      }
+    } catch (eCap) {}
+    return null;
+  }
+  captureSandboxFlag();
+
+  function sandboxActive() {
+    try {
+      if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
+      if (sessionStorage.getItem("dcs_pi_sandbox") === "1") return true;
+    } catch (e) {}
+    return false;
+  }
+
+  /** Construit une URL signin en gardant piSandbox / verify / stay / etc. */
+  function buildSigninUrl(nextPage) {
+    var qs = new URLSearchParams();
+    if (nextPage) qs.set("next", nextPage);
+    try {
+      var cur = new URLSearchParams(location.search || "");
+      ["piSandbox", "sandbox", "verify", "stay", "force_pi_auth", "ref", "u"].forEach(
+        function (k) {
+          var v = cur.get(k);
+          if (v != null && v !== "" && !qs.has(k)) qs.set(k, v);
+        }
+      );
+    } catch (eQ) {}
+    if (sandboxActive() && !qs.has("piSandbox")) qs.set("piSandbox", "1");
+    var base = sandboxActive() ? "signin-testnet.html" : "signin.html";
+    var s = qs.toString();
+    return s ? base + "?" + s : base;
+  }
+  try {
+    window.__dcsBuildSigninUrl = buildSigninUrl;
+  } catch (eW) {}
+
   /* Pi Browser : bloquer seulement les sorties hors site pendant Verify.
      Ne PAS neutraliser window.open partout — le SDK Pi (Allow / paiement) en a besoin. */
   try {
@@ -94,6 +158,7 @@
   var PUBLIC = {
     "signup.html": 1,
     "signin.html": 1,
+    "signin-testnet.html": 1,
     "join.html": 1,
     "contact.html": 1,
     "privacy.html": 1,
@@ -139,5 +204,5 @@
   try {
     localStorage.removeItem("dcs_session");
   } catch (e3) {}
-  location.replace("signin.html?next=" + encodeURIComponent(path));
+  location.replace(buildSigninUrl(path));
 })();

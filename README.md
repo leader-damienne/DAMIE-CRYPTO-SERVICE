@@ -4,10 +4,11 @@ Plateforme web — wallet PI COIN, swap, transferts, marketplace, academy et par
 
 ## Lien
 
-**Production** : `https://damie-crypto-service.netlify.app`  
+**Production** : `https://appdcs.com/` (miroir : `https://damie-crypto-service.netlify.app`)  
+PiNet : `https://damiecryptoservi2345.pinet.com/`  
 Dépôt : https://github.com/leader-damienne/DAMIE-CRYPTO-SERVICE  
 
-*(Migration future vers `damiecrypto.com` : uniquement après achat du domaine + DNS Netlify OK — ne pas pousser d’URL morte.)*
+Claim domaine `.pi` : voir le guide Project `docs/claim-domaine-pi.md` (deadline réserve 19 déc. 2026).
 
 ## Mode production
 

@@ -1,0 +1,13 @@
+# Cloudflare Pages — headers (Netlify lit aussi via netlify.toml)
+
+/validation-key.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-store
+
+/pi-validation-key.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-store
+
+/.well-known/pi.toml
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=300
