@@ -121,8 +121,8 @@ Avant le deploy auth : exécuter **`supabase/pi-uid-testnet.sql`** (colonnes `pi
 ### UI admin
 
 1. 5 Pioneers ouvrent **`https://appdcs.com/signin-testnet.html`** (Pi Browser) → **Allow** → `pi_uid_testnet` renseigné  
-   (page dédiée : Pi Browser droppe souvent `?piSandbox=1` ; `?piSandbox=0` efface l’override Mainnet)
-2. Ouvre `https://appdcs.com/admin-a2u.html` (connecté DCS)
+   (testeurs : cette page seulement — **pas** `admin-a2u.html`)
+2. Damienne seule ouvre `https://appdcs.com/admin-a2u.html` (connectée DCS)
 3. Secret admin → **Vérifier la config** (API key + seed OK) → **Rafraîchir progression**
 4. **Charger la liste** → choisir un destinataire → **Envoyer A2U** (montant min. `0.0000001`)
 5. Répéter pour **5 users / wallets différents** (progression **5 / 5**)

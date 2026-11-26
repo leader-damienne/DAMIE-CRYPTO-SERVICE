@@ -5793,12 +5793,19 @@
     const next = params.get("next") || "";
     if (next) {
       const n = normalizePage(next);
+      /* Ne jamais envoyer les testeurs vers l’admin A2U */
+      if (n === "admin-a2u.html" && sandboxModeActive()) {
+        return "signin-testnet.html?ok=1";
+      }
       if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) {
         return sandboxModeActive() ? n + (n.indexOf("?") >= 0 ? "&" : "?") + "piSandbox=1" : n;
       }
     }
-    /* Après Allow Testnet → admin A2U plutôt que l’accueil Mainnet */
-    if (sandboxModeActive()) return "admin-a2u.html";
+    /*
+     * Après Allow Testnet : page succès Allow (pas admin-a2u).
+     * L’admin est réservé à Damienne ; les testeurs restent sur signin-testnet.
+     */
+    if (sandboxModeActive()) return "signin-testnet.html?ok=1";
     return "index.html";
   }
 
@@ -5938,6 +5945,11 @@
   async function maybeAutoPiLogin(errEl) {
     if (!isEcosystemMode()) return { ok: false, skipped: true };
     if (window.__dcsPiAutoAuthStarted) return { ok: false, skipped: true };
+    try {
+      var qpOk = new URLSearchParams(location.search || "");
+      /* Succès Allow Testnet : ne pas relancer ni rediriger vers admin */
+      if (qpOk.get("ok") === "1") return { ok: true, already: true, done: true };
+    } catch (eOk) {}
     /*
      * Session Mainnet déjà ouverte + mode Testnet demandé → forcer un nouvel Allow
      * pour écrire pi_uid_testnet (sinon A2U reste en user_not_found).
@@ -6151,6 +6163,20 @@
   function setupSignin() {
     const form = document.getElementById("signin-form");
     const err = document.getElementById("signin-error");
+    try {
+      var qpSign = new URLSearchParams(location.search || "");
+      if (qpSign.get("ok") === "1") {
+        var okBanner = document.getElementById("testnet-ok-banner");
+        var loginBtn = document.getElementById("pi-login-btn");
+        if (okBanner) okBanner.hidden = false;
+        if (loginBtn) {
+          loginBtn.textContent = "Allow Testnet enregistré ✓";
+          loginBtn.disabled = true;
+        }
+        if (form) form.hidden = true;
+        return;
+      }
+    } catch (eOkUi) {}
     if (isLoggedIn() && !sandboxModeActive()) {
       if (isEcosystemMode()) return;
       window.location.replace(authNextUrl());
