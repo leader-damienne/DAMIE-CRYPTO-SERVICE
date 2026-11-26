@@ -315,8 +315,12 @@
                       .then(function () {
                         return Promise.all([self.loadWallet(), self.loadHistory()]);
                       })
-                      .catch(function () {});
-                    resolve(true);
+                      .then(function () {
+                        resolve(true);
+                      })
+                      .catch(function () {
+                        resolve(true);
+                      });
                   });
                 }, 600);
               });
@@ -333,14 +337,18 @@
                 self.persistProfile().catch(function () {});
               }
             } catch (eAvRest) {}
-            /* Ne pas bloquer l'ouverture : soldes / MFA en arrière-plan */
-            self
+            /* Attendre les soldes avant return — sinon wallet.html affiche 0 après Allow */
+            return self
               .syncSecurityFlags(session.user)
               .then(function () {
                 return Promise.all([self.loadWallet(), self.loadHistory()]);
               })
-              .catch(function () {});
-            return true;
+              .then(function () {
+                return true;
+              })
+              .catch(function () {
+                return true;
+              });
           });
         });
       });

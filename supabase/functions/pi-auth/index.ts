@@ -81,10 +81,14 @@ async function consolidateWalletsToTarget(
     pushIds(byUser.data);
     const byPiUser = await db.from("profiles").select("id").ilike("pi_username", name).limit(30);
     pushIds(byPiUser.data);
+    const byDisplay = await db.from("profiles").select("id").ilike("display_name", name).limit(30);
+    pushIds(byDisplay.data);
   }
   if (piUid) {
     const byUid = await db.from("profiles").select("id").eq("pi_uid", piUid).limit(30);
     pushIds(byUid.data);
+    const byTn = await db.from("profiles").select("id").eq("pi_uid_testnet", piUid).limit(30);
+    pushIds(byTn.data);
   }
 
   for (let i = 0; i < sourceIds.length; i++) {
@@ -289,7 +293,12 @@ Deno.serve(async (req) => {
             .maybeSingle();
           currentPi = Number(w0 && w0.amount != null ? w0.amount : 0);
         }
-        if (!existing.data?.id || (currentPi <= 0 && bestPiAmt > 0)) {
+        /* Toujours préférer le profil le plus riche (évite session sur compte Testnet vide). */
+        if (
+          !existing.data?.id ||
+          bestPiAmt > currentPi ||
+          (currentPi <= 0 && bestId !== existing.data.id)
+        ) {
           existing = {
             data: {
               id: bestId,
