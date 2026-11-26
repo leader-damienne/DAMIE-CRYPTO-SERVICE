@@ -3,7 +3,7 @@
   "use strict";
 
   var SECRET_KEY = "dcs_a2u_admin_secret";
-  var SIGNIN_TESTNET = "https://appdcs.com/signin.html?piSandbox=1";
+  var SIGNIN_TESTNET = "https://appdcs.com/signin-testnet.html";
 
   function cfg() {
     return window.DCS_CONFIG || {};

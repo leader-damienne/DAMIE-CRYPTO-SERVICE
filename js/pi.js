@@ -25,23 +25,46 @@
    */
   function useSandbox() {
     try {
+      var path = String(location.pathname || "").toLowerCase();
+      if (
+        /signin-testnet\.html$/i.test(path) ||
+        /\/signin-testnet\/?$/i.test(path) ||
+        window.__dcsPiSandboxForced === true
+      ) {
+        try {
+          localStorage.setItem("dcs_pi_sandbox", "1");
+          sessionStorage.setItem("dcs_pi_sandbox", "1");
+        } catch (ePath) {}
+        return true;
+      }
       var qp = new URLSearchParams(location.search || "");
-      var flag = qp.get("piSandbox") || qp.get("sandbox");
+      var hash = String(location.hash || "").replace(/^#/, "");
+      var hp = new URLSearchParams(hash.indexOf("=") >= 0 ? hash : "");
+      var flag =
+        qp.get("piSandbox") ||
+        qp.get("sandbox") ||
+        hp.get("piSandbox") ||
+        hp.get("sandbox") ||
+        "";
       if (flag === "1" || flag === "true") {
         try {
           localStorage.setItem("dcs_pi_sandbox", "1");
+          sessionStorage.setItem("dcs_pi_sandbox", "1");
         } catch (eSet) {}
         return true;
       }
       if (flag === "0" || flag === "false") {
         try {
           localStorage.removeItem("dcs_pi_sandbox");
+          sessionStorage.removeItem("dcs_pi_sandbox");
         } catch (eClr) {}
         return false;
       }
       if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
+      if (sessionStorage.getItem("dcs_pi_sandbox") === "1") return true;
     } catch (eQp) {}
-    return cfg().piSandbox !== false;
+    /* Prod : piSandbox false → Mainnet ; true → Sandbox Develop */
+    return cfg().piSandbox === true;
   }
 
   function getAccessToken() {

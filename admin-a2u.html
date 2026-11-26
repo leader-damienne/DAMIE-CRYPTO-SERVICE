@@ -93,7 +93,7 @@
         </div>
       </a>
       <div class="header-actions">
-        <a class="btn btn-outline" href="signin.html?piSandbox=1">Auth Testnet</a>
+        <a class="btn btn-outline" href="signin-testnet.html">Auth Testnet</a>
         <a class="btn btn-outline" href="wallet.html">Wallet</a>
       </div>
     </div>
@@ -116,7 +116,7 @@
       <ol class="a2u-steps">
         <li><strong>1.</strong> Develop Portal → app <em>Testnet</em> paire → App wallet + Server API Key.</li>
         <li><strong>2.</strong> Secrets Supabase + <code>supabase functions deploy pi-a2u --no-verify-jwt</code>.</li>
-        <li><strong>3.</strong> 5 Pioneers ouvrent <a href="signin.html?piSandbox=1">signin.html?piSandbox=1</a> dans Pi Browser → Allow.</li>
+        <li><strong>3.</strong> 5 Pioneers ouvrent <a href="signin-testnet.html">signin-testnet.html</a> (Pi Browser) → Allow. (Évite la perte de <code>?piSandbox=1</code>.)</li>
         <li><strong>4.</strong> Ici : secret admin → Vérifier → Progress → Envoyer A2U × 5 uids.</li>
         <li><strong>5.</strong> Retour app Mainnet → créer Outgoing + Incoming Multisig.</li>
       </ol>
@@ -171,7 +171,7 @@
       <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">
         Badge <strong style="color:#9dcca0">Testnet</strong> = uid utilisable pour A2U.
         Badge <strong style="color:#e8a0a0">Mainnet seul</strong> = fera <code>user_not_found</code>
-        → envoyer le lien <a href="signin.html?piSandbox=1">signin.html?piSandbox=1</a>.
+        → envoyer le lien <a href="signin-testnet.html">signin-testnet.html</a>.
       </p>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem">
         <button type="button" class="btn btn-outline" id="a2u-list-btn">Charger la liste</button>

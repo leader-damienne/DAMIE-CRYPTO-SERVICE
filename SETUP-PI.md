@@ -120,8 +120,8 @@ Avant le deploy auth : exécuter **`supabase/pi-uid-testnet.sql`** (colonnes `pi
 
 ### UI admin
 
-1. 5 Pioneers ouvrent `https://appdcs.com/signin.html?piSandbox=1` (Pi Browser) → **Allow** → `profiles.pi_uid` renseigné  
-   (`?piSandbox=1` force le SDK Testnet sans redeploy ; `?piSandbox=0` revient en Mainnet)
+1. 5 Pioneers ouvrent **`https://appdcs.com/signin-testnet.html`** (Pi Browser) → **Allow** → `pi_uid_testnet` renseigné  
+   (page dédiée : Pi Browser droppe souvent `?piSandbox=1` ; `?piSandbox=0` efface l’override Mainnet)
 2. Ouvre `https://appdcs.com/admin-a2u.html` (connecté DCS)
 3. Secret admin → **Vérifier la config** (API key + seed OK) → **Rafraîchir progression**
 4. **Charger la liste** → choisir un destinataire → **Envoyer A2U** (montant min. `0.0000001`)

@@ -26,7 +26,7 @@ const ADMIN_USERS = String(Deno.env.get("DCS_ADMIN_USERNAMES") || "")
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
-const SIGNIN_TESTNET_URL = "https://appdcs.com/signin.html?piSandbox=1";
+const SIGNIN_TESTNET_URL = "https://appdcs.com/signin-testnet.html";
 const USER_NOT_FOUND_FR =
   "user_not_found : ce pi_uid n’existe pas sur l’app Testnet (souvent un uid Mainnet). " +
   "Le destinataire doit ouvrir " +

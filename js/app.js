@@ -5637,7 +5637,7 @@
         if (session) session.textContent = "Déconnecté";
         logoutBtn.disabled = true;
         logoutBtn.textContent = "Déconnecté";
-        window.location.href = "signin.html";
+        window.location.href = buildSigninHref("");
       });
     }
   }
@@ -5647,7 +5647,40 @@
   }
 
   /* Pages accessibles sans compte */
-  const PUBLIC_PAGES = ["signup.html", "signin.html", "join.html", "contact.html", "privacy.html", "terms.html"];
+  const PUBLIC_PAGES = [
+    "signup.html",
+    "signin.html",
+    "signin-testnet.html",
+    "join.html",
+    "contact.html",
+    "privacy.html",
+    "terms.html"
+  ];
+
+  function sandboxModeActive() {
+    try {
+      if (window.DCS && DCS.pi && typeof DCS.pi.useSandbox === "function") {
+        return !!DCS.pi.useSandbox();
+      }
+    } catch (e) {}
+    try {
+      if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
+      if (window.DCS_CONFIG && DCS_CONFIG.piSandbox === true) return true;
+    } catch (e2) {}
+    return false;
+  }
+
+  function buildSigninHref(nextPage) {
+    if (typeof window.__dcsBuildSigninUrl === "function") {
+      return window.__dcsBuildSigninUrl(nextPage || "");
+    }
+    var qs = new URLSearchParams();
+    if (nextPage) qs.set("next", nextPage);
+    if (sandboxModeActive()) qs.set("piSandbox", "1");
+    var base = sandboxModeActive() ? "signin-testnet.html" : "signin.html";
+    var s = qs.toString();
+    return s ? base + "?" + s : base;
+  }
 
   function normalizePage(name) {
     let p = String(name || "")
@@ -5718,11 +5751,18 @@
 
     /* CTAs hero / modules : orienter les invités vers la connexion Pi */
     if (!logged) {
-      const authPage = isEcosystemMode() ? "signin.html" : "signup.html";
+      const authPage = isEcosystemMode()
+        ? sandboxModeActive()
+          ? "signin-testnet.html"
+          : "signin.html"
+        : "signup.html";
       document.querySelectorAll(".hero-ctas a.btn-gold, a.module-link").forEach((a) => {
         const href = a.getAttribute("href") || "";
         if (/wallet|swap|transfer|marketplace|parrainage|profil|academy|learning|community/i.test(href)) {
-          a.setAttribute("href", authPage + "?next=" + encodeURIComponent(normalizePage(href.split("#")[0] || "index.html")));
+          a.setAttribute(
+            "href",
+            buildSigninHref(normalizePage(href.split("#")[0] || "index.html"))
+          );
         }
       });
       document.querySelectorAll("#main-nav a").forEach((a) => {
@@ -5731,7 +5771,7 @@
         const href = normalizePage(raw);
         if (isPublicPage(href) || href === "index.html") return;
         if (/\.html$/i.test(href)) {
-          a.setAttribute("href", authPage + "?next=" + encodeURIComponent(href));
+          a.setAttribute("href", buildSigninHref(href));
         }
       });
     }
@@ -5744,7 +5784,7 @@
     /* Ne pas rediriger hors de l’URL ouverte par App Studio / Pi Browser */
     if (isEcosystemMode()) return false;
     const next = encodeURIComponent(p);
-    window.location.replace("signin.html?next=" + next);
+    window.location.replace(buildSigninHref(p));
     return false;
   }
 
@@ -5753,8 +5793,12 @@
     const next = params.get("next") || "";
     if (next) {
       const n = normalizePage(next);
-      if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) return n;
+      if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) {
+        return sandboxModeActive() ? n + (n.indexOf("?") >= 0 ? "&" : "?") + "piSandbox=1" : n;
+      }
     }
+    /* Après Allow Testnet → admin A2U plutôt que l’accueil Mainnet */
+    if (sandboxModeActive()) return "admin-a2u.html";
     return "index.html";
   }
 
@@ -5798,7 +5842,12 @@
     } catch (eSs) {}
     var next = authNextUrl();
     var here = normalizePage(pageName());
-    if (here === "signin.html" || here === "signup.html" || here === "join.html") {
+    if (
+      here === "signin.html" ||
+      here === "signin-testnet.html" ||
+      here === "signup.html" ||
+      here === "join.html"
+    ) {
       window.location.replace(next);
       return;
     }
@@ -5889,7 +5938,11 @@
   async function maybeAutoPiLogin(errEl) {
     if (!isEcosystemMode()) return { ok: false, skipped: true };
     if (window.__dcsPiAutoAuthStarted) return { ok: false, skipped: true };
-    if (isLoggedIn()) return { ok: true, already: true };
+    /*
+     * Session Mainnet déjà ouverte + mode Testnet demandé → forcer un nouvel Allow
+     * pour écrire pi_uid_testnet (sinon A2U reste en user_not_found).
+     */
+    if (isLoggedIn() && !sandboxModeActive()) return { ok: true, already: true };
     if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
       return { ok: false, skipped: true };
     }
@@ -6098,7 +6151,7 @@
   function setupSignin() {
     const form = document.getElementById("signin-form");
     const err = document.getElementById("signin-error");
-    if (isLoggedIn()) {
+    if (isLoggedIn() && !sandboxModeActive()) {
       if (isEcosystemMode()) return;
       window.location.replace(authNextUrl());
       return;
@@ -6357,7 +6410,13 @@
           await DCS.auth.logout().catch(function () {});
         }
         if (qp.get("logout") === "1") {
-          history.replaceState({}, "", location.pathname || "index.html");
+          /* Préserver piSandbox si présent (ne pas dropper le mode Testnet) */
+          var keep = new URLSearchParams();
+          if (qp.get("piSandbox")) keep.set("piSandbox", qp.get("piSandbox"));
+          if (qp.get("sandbox")) keep.set("sandbox", qp.get("sandbox"));
+          var pathOnly = location.pathname || "index.html";
+          var qKeep = keep.toString();
+          history.replaceState({}, "", qKeep ? pathOnly + "?" + qKeep : pathOnly);
         }
       }
     } catch (eForce) {}
@@ -6435,6 +6494,7 @@
     const isSignup = page === "signup.html" || !!document.getElementById("signup-form");
     const isSignin =
       page === "signin.html" ||
+      page === "signin-testnet.html" ||
       (!!document.getElementById("pi-login-btn") && !document.getElementById("signup-form"));
 
     if (isSignup) setupSignup();

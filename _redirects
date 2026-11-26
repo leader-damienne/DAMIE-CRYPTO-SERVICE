@@ -1,7 +1,8 @@
 # Cloudflare Pages — redirects (équivalent netlify.toml)
 
-# Auth / pages courtes
+# Auth / pages courtes (query string conservée par défaut CF/Netlify)
 /signin   /signin.html   200
+/signin-testnet   /signin-testnet.html   200
 /signup   /signup.html   200
 /join     /join.html     200
 /contact  /contact.html  200

@@ -12,6 +12,14 @@
   from = "/signin"
   to = "/signin.html"
   status = 200
+  force = false
+  # query ?piSandbox=1 conservée (rewrite 200)
+
+[[redirects]]
+  from = "/signin-testnet"
+  to = "/signin-testnet.html"
+  status = 200
+  force = false
 
 [[redirects]]
   from = "/signup"

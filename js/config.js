@@ -11,8 +11,37 @@ window.DCS_CONFIG = {
    */
   piNetBaseUrl: "https://damiecryptoservi2345.pinet.com/",
   /* false = Mainnet production ; true = Sandbox Develop only.
-   * Override temporaire A2U Testnet (sans redeploy) : ?piSandbox=1 (voir js/pi.js). */
+   * Override A2U Testnet (sans redeploy) :
+   *   - page dédiée https://appdcs.com/signin-testnet.html (recommandé)
+   *   - ou ?piSandbox=1 / #piSandbox=1 (persisté en localStorage par sandbox-boot.js)
+   */
   piSandbox: false,
   /* true = auth Pi + dépôt Pi SDK ; mode listing Ecosystem */
   piEcosystemMode: true
 };
+
+/* Appliquer override localStorage immédiatement (query souvent droppée par Pi Browser) */
+(function () {
+  try {
+    var path = String(location.pathname || "").toLowerCase();
+    if (
+      /signin-testnet\.html$/i.test(path) ||
+      /\/signin-testnet\/?$/i.test(path) ||
+      localStorage.getItem("dcs_pi_sandbox") === "1" ||
+      sessionStorage.getItem("dcs_pi_sandbox") === "1" ||
+      window.__dcsPiSandboxForced === true
+    ) {
+      window.DCS_CONFIG.piSandbox = true;
+    }
+    var qp = new URLSearchParams(location.search || "");
+    var flag = qp.get("piSandbox") || qp.get("sandbox");
+    if (flag === "1" || flag === "true") {
+      localStorage.setItem("dcs_pi_sandbox", "1");
+      window.DCS_CONFIG.piSandbox = true;
+    } else if (flag === "0" || flag === "false") {
+      localStorage.removeItem("dcs_pi_sandbox");
+      sessionStorage.removeItem("dcs_pi_sandbox");
+      window.DCS_CONFIG.piSandbox = false;
+    }
+  } catch (e) {}
+})();
