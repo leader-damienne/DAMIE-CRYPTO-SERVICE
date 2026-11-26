@@ -272,6 +272,7 @@ Deno.serve(async (req) => {
         username: string | null;
         pi_uid: string | null;
         pi_username: string | null;
+        display_name?: string | null;
         created_at: string | null;
       }> = [];
 
@@ -282,6 +283,7 @@ Deno.serve(async (req) => {
           username: string | null;
           pi_uid: string | null;
           pi_username: string | null;
+          display_name?: string | null;
           created_at: string | null;
         }> | null
       ) => {
