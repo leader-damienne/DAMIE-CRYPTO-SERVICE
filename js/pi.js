@@ -512,8 +512,7 @@
 
   /**
    * A2U — Retrait PI DCS → wallet Pi (tous les users).
-   * Réseau = session actuelle (Testnet si sandbox, sinon Mainnet).
-   * Sur Testnet, bonus : compte pour le seuil Develop 5 wallets.
+   * Toujours Testnet (app DCS = Test-Pi / PiApps) — jamais seed Mainnet.
    */
   function withdrawWithPi(amount) {
     var MIN_PI = 0.0000001;
@@ -531,7 +530,6 @@
       return Promise.resolve({ ok: false, error: "Backend DCS non prêt." });
     }
 
-    var sandbox = useSandbox();
     return DCS.backend.client.auth.getSession().then(function (sessRes) {
       var token =
         sessRes &&
@@ -552,8 +550,8 @@
           action: "withdraw_self",
           amount: amt,
           memo: "DCS retrait PI",
-          network: sandbox ? "testnet" : "mainnet",
-          sandbox: sandbox
+          network: "testnet",
+          sandbox: true
         })
       }).then(function (res) {
         return res.json().then(function (data) {
@@ -571,7 +569,7 @@
             amount: data.amount,
             paymentId: data.paymentId,
             txid: data.txid,
-            network: data.withdrawNetwork || data.network,
+            network: "testnet",
             countsTowardFiveWallets: !!data.countsTowardFiveWallets,
             note: data.note || ""
           };

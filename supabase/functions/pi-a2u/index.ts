@@ -355,9 +355,8 @@ Deno.serve(async (req) => {
     const payload = await req.json();
     const action = String(payload.action || "send");
 
-    /* Retrait PI universel (tous les users) → wallet Pi = A2U.
-     * Testnet : compte aussi pour le seuil 5 wallets. Mainnet : produit wallet normal.
-     * Pas de secret admin. */
+    /* Retrait PI universel → toujours A2U Testnet (app DCS = Testnet / Test-Pi).
+     * Jamais PI_APP_WALLET_SEED_MAINNET. Pas de secret admin. */
     if (action === "withdraw_self") {
       const amount = Number(payload.amount);
       if (!(amount > 0)) {
@@ -367,33 +366,19 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Minimum : 0,0000001 PI." }, 400);
       }
 
-      const netHint = String(payload.network || "").toLowerCase();
-      const sandboxFlag =
-        payload.sandbox === true ||
-        payload.sandbox === "true" ||
-        netHint === "testnet";
-      /* Payload explicite gagne ; sinon dernier réseau d’auth du profil. */
-      const lastNet = String(
-        (profile as ProfileRow).pi_last_auth_network || ""
-      ).toLowerCase();
-      const wantTestnet =
-        netHint === "mainnet"
-          ? false
-          : sandboxFlag || (netHint !== "mainnet" && lastNet === "testnet");
-
+      const wantTestnet = true;
       const testnetUid = String((profile as ProfileRow).pi_uid_testnet || "").trim();
-      const mainnetUid = String((profile as ProfileRow).pi_uid || "").trim();
-      const recipientUid = wantTestnet ? testnetUid : mainnetUid;
-      const countsTowardFiveWallets = wantTestnet;
+      const recipientUid = testnetUid;
+      const countsTowardFiveWallets = true;
 
-      if (wantTestnet && !testnetUid) {
+      if (!testnetUid) {
         return json(
           {
             ok: false,
             error:
-              "Profil sans uid Testnet. Connectez-vous via " +
+              "Profil sans uid Testnet. Ouvrez " +
               SIGNIN_TESTNET_URL +
-              " (Allow), ou retirez en Mainnet depuis l’app normale.",
+              " (ou l’app PiApps en Testnet) → Continuer avec Pi → Allow, puis réessayez le retrait.",
             signinTestnetUrl: SIGNIN_TESTNET_URL,
             network: "testnet",
             countsTowardFiveWallets: false,
@@ -401,35 +386,18 @@ Deno.serve(async (req) => {
           400
         );
       }
-      if (!wantTestnet && !mainnetUid) {
-        return json(
-          {
-            ok: false,
-            error:
-              "Profil sans uid Mainnet. Connectez-vous avec Pi (Allow) sur l’app, puis réessayez.",
-            network: "mainnet",
-            countsTowardFiveWallets: false,
-          },
-          400
-        );
-      }
 
-      const withdrawApiKey = wantTestnet
-        ? String(Deno.env.get("PI_A2U_API_KEY") || "").trim() || PI_API_KEY
-        : PI_MAINNET_API_KEY;
-      const withdrawSeed = wantTestnet ? WALLET_SEED : WALLET_SEED_MAINNET;
-      const seedLabel = wantTestnet
-        ? "PI_APP_WALLET_SEED"
-        : "PI_APP_WALLET_SEED_MAINNET";
+      const withdrawApiKey =
+        String(Deno.env.get("PI_A2U_API_KEY") || "").trim() || PI_API_KEY;
+      const withdrawSeed = WALLET_SEED;
+      const seedLabel = "PI_APP_WALLET_SEED";
 
       if (!withdrawApiKey) {
         return json(
           {
             ok: false,
-            error: wantTestnet
-              ? "PI_A2U_API_KEY (Testnet) manquant côté serveur."
-              : "PI_API_KEY (Mainnet) manquant côté serveur.",
-            network: wantTestnet ? "testnet" : "mainnet",
+            error: "PI_A2U_API_KEY (Testnet) manquant côté serveur.",
+            network: "testnet",
             countsTowardFiveWallets: false,
           },
           400
@@ -439,10 +407,9 @@ Deno.serve(async (req) => {
         return json(
           {
             ok: false,
-            error: wantTestnet
-              ? "PI_APP_WALLET_SEED (Testnet) manquant."
-              : "PI_APP_WALLET_SEED_MAINNET manquant. Après création du wallet app Mainnet (Develop), ajoutez sa seed S… en secret Supabase.",
-            network: wantTestnet ? "testnet" : "mainnet",
+            error:
+              "PI_APP_WALLET_SEED (Testnet) manquant. Seed S… du wallet app Testnet (Develop → App Wallet).",
+            network: "testnet",
             countsTowardFiveWallets: false,
           },
           400
@@ -488,7 +455,7 @@ Deno.serve(async (req) => {
               kind: "withdraw_pi",
               app: "DCS",
               purpose: "user_withdraw",
-              network: wantTestnet ? "testnet" : "mainnet",
+              network: "testnet",
               counts_toward_five_wallets: countsTowardFiveWallets,
               to_username: username || null,
             },
@@ -514,7 +481,7 @@ Deno.serve(async (req) => {
             direction: "app_to_user",
             recipient_uid: recipientUid,
             stage: "created",
-            network: wantTestnet ? "testnet" : "mainnet",
+            network: "testnet",
             countsTowardFiveWallets,
           },
         },
@@ -556,7 +523,7 @@ Deno.serve(async (req) => {
               recipient_uid: recipientUid,
               debitError: debitErr.message,
               payment: completed,
-              network: wantTestnet ? "testnet" : "mainnet",
+              network: "testnet",
               countsTowardFiveWallets,
             },
           },
@@ -573,7 +540,7 @@ Deno.serve(async (req) => {
             paymentId,
             txid,
             paymentCompleted: true,
-            network: wantTestnet ? "testnet" : "mainnet",
+            network: "testnet",
             countsTowardFiveWallets,
           },
           500
@@ -595,7 +562,7 @@ Deno.serve(async (req) => {
             direction: "app_to_user",
             recipient_uid: recipientUid,
             payment: completed,
-            network: wantTestnet ? "testnet" : "mainnet",
+            network: "testnet",
             countsTowardFiveWallets,
           },
         },
@@ -611,12 +578,11 @@ Deno.serve(async (req) => {
         recipientUid,
         recipientUsername: username || null,
         network: created.network,
-        withdrawNetwork: wantTestnet ? "testnet" : "mainnet",
+        withdrawNetwork: "testnet",
         debit,
         countsTowardFiveWallets,
-        note: wantTestnet
-          ? "Retrait Testnet envoyé. (Bonus : compte pour le seuil Develop 5 wallets.)"
-          : "Retrait Mainnet envoyé vers votre wallet Pi.",
+        note:
+          "Retrait Test-Pi envoyé vers votre wallet Pi (Testnet).",
       });
     }
 

@@ -114,21 +114,20 @@
         <div class="panel" id="wallet-withdraw">
           <h3>Retrait PI → wallet Pi</h3>
           <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem">
-            <strong>PI uniquement</strong> — pour tous les membres DCS.
-            Envoi vers <em>votre</em> wallet Pi (App → User). Disponible en Mainnet et Testnet
-            selon votre session. Ce n’est pas un dépôt.
+            <strong>PI / Test-Pi uniquement</strong> — pour tous les membres DCS.
+            Envoi vers <em>votre</em> wallet Pi (App → User, réseau Testnet). Ce n’est pas un dépôt.
           </p>
           <div class="panel" style="padding:0.9rem;margin-bottom:1rem;background:rgba(20,20,20,0.45)">
             <div class="form-group" style="margin-bottom:0.65rem">
               <label for="pi-withdraw-amount">Montant (PI)</label>
               <input id="pi-withdraw-amount" class="form-control" type="number" min="0.0000001" step="any" value="0.0000001" placeholder="0.0000001" />
               <p style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">
-                Minimum : 0,0000001 PI · débite votre solde DCS · réseau = session Pi en cours
+                Minimum : 0,0000001 PI · débite votre solde DCS · toujours Testnet
               </p>
             </div>
             <button type="button" class="btn btn-gold" id="pi-withdraw-btn" style="width:100%">Retirer vers mon wallet Pi</button>
             <p id="pi-withdraw-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">
-              Connectez-vous avec Pi, gardez un solde PI, puis retirez. Mainnet et Testnet sont supportés.
+              Connectez-vous avec Pi (Allow Testnet / PiApps), gardez un solde PI, puis retirez.
             </p>
           </div>
         </div>
