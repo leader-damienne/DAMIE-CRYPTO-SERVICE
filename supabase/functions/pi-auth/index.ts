@@ -56,6 +56,34 @@ function piEmail(piUid: string) {
   return `pi.${safe || "user"}@auth.dcs.app`;
 }
 
+/** Normalise pseudo Pi/DCS (amie10000 ≈ amie100002 ≈ Damie10000). */
+function nameStem(raw: string) {
+  return String(raw || "")
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/\d+$/, "");
+}
+
+function namesLikelySame(a: string, b: string) {
+  const na = String(a || "")
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9]/g, "");
+  const nb = String(b || "")
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/[^a-z0-9]/g, "");
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length >= 5 && nb.length >= 5 && (na.startsWith(nb) || nb.startsWith(na))) {
+    return true;
+  }
+  const sa = nameStem(na);
+  const sb = nameStem(nb);
+  return !!(sa && sb && sa.length >= 4 && sa === sb);
+}
+
 /** Fusionne les soldes des profils doublons (même username / pi_uid) vers le compte actif. */
 async function consolidateWalletsToTarget(
   db: ReturnType<typeof admin>,
@@ -83,6 +111,37 @@ async function consolidateWalletsToTarget(
     pushIds(byPiUser.data);
     const byDisplay = await db.from("profiles").select("id").ilike("display_name", name).limit(30);
     pushIds(byDisplay.data);
+    /* Fuzzy : amie10000 ↔ amie100002 (ilike exact rate le suffixe) */
+    const stem = nameStem(name);
+    if (stem.length >= 4) {
+      const fuzzyCols = "id, username, pi_username";
+      const fuzzyUser = await db
+        .from("profiles")
+        .select(fuzzyCols)
+        .ilike("username", stem + "%")
+        .limit(40);
+      (fuzzyUser.data || []).forEach((row: { id: string; username?: string; pi_username?: string }) => {
+        if (
+          namesLikelySame(name, String(row.username || "")) ||
+          namesLikelySame(name, String(row.pi_username || ""))
+        ) {
+          pushIds([{ id: row.id }]);
+        }
+      });
+      const fuzzyPi = await db
+        .from("profiles")
+        .select(fuzzyCols)
+        .ilike("pi_username", stem + "%")
+        .limit(40);
+      (fuzzyPi.data || []).forEach((row: { id: string; username?: string; pi_username?: string }) => {
+        if (
+          namesLikelySame(name, String(row.username || "")) ||
+          namesLikelySame(name, String(row.pi_username || ""))
+        ) {
+          pushIds([{ id: row.id }]);
+        }
+      });
+    }
   }
   if (piUid) {
     const byUid = await db.from("profiles").select("id").eq("pi_uid", piUid).limit(30);
@@ -213,6 +272,7 @@ Deno.serve(async (req) => {
         username: string | null;
         pi_uid: string | null;
         pi_username: string | null;
+        display_name?: string | null;
         created_at: string | null;
       }> = [];
 
@@ -223,6 +283,7 @@ Deno.serve(async (req) => {
           username: string | null;
           pi_uid: string | null;
           pi_username: string | null;
+          display_name?: string | null;
           created_at: string | null;
         }> | null
       ) => {
@@ -233,26 +294,44 @@ Deno.serve(async (req) => {
         });
       };
 
-      const byUser = await db
-        .from("profiles")
-        .select("id, email, username, pi_uid, pi_username, created_at")
-        .ilike("username", name)
-        .limit(20);
+      const cols = "id, email, username, pi_uid, pi_username, display_name, created_at";
+      const byUser = await db.from("profiles").select(cols).ilike("username", name).limit(20);
       pushRows(byUser.data);
-
       const byPiUser = await db
         .from("profiles")
-        .select("id, email, username, pi_uid, pi_username, created_at")
+        .select(cols)
         .ilike("pi_username", name)
         .limit(20);
       pushRows(byPiUser.data);
-
       const byDisplay = await db
         .from("profiles")
-        .select("id, email, username, pi_uid, pi_username, created_at")
+        .select(cols)
         .ilike("display_name", name)
         .limit(20);
       pushRows(byDisplay.data);
+
+      /* Fuzzy : amie10000 / amie100002 / Damie10000 */
+      const stem = nameStem(name);
+      if (stem.length >= 4) {
+        const byStemUser = await db
+          .from("profiles")
+          .select(cols)
+          .ilike("username", stem + "%")
+          .limit(30);
+        pushRows(byStemUser.data);
+        const byStemPi = await db
+          .from("profiles")
+          .select(cols)
+          .ilike("pi_username", stem + "%")
+          .limit(30);
+        pushRows(byStemPi.data);
+        const byStemDisp = await db
+          .from("profiles")
+          .select(cols)
+          .ilike("display_name", stem + "%")
+          .limit(30);
+        pushRows(byStemDisp.data);
+      }
 
       let bestId = "";
       let bestEmail: string | null = null;
@@ -261,7 +340,22 @@ Deno.serve(async (req) => {
       let bestCreated = "";
 
       for (let i = 0; i < candidates.length; i++) {
-        const row = candidates[i];
+        const row = candidates[i] as {
+          id: string;
+          email: string | null;
+          username: string | null;
+          pi_uid: string | null;
+          pi_username: string | null;
+          display_name?: string | null;
+          created_at: string | null;
+        };
+        if (
+          !namesLikelySame(name, String(row.username || "")) &&
+          !namesLikelySame(name, String(row.pi_username || "")) &&
+          !namesLikelySame(name, String(row.display_name || ""))
+        ) {
+          continue;
+        }
         const { data: w } = await db
           .from("wallets")
           .select("amount")
