@@ -1,4 +1,5 @@
--- Damienne : diagnostiquer + fusionner soldes (amie10000 / amie100002 / Damie10000)
+-- Damienne (ciblé) : amie10000 / amie100002 / Damie10000
+-- Pour TOUS les users : préférer supabase/merge-duplicate-wallets-batch.sql
 -- SQL Editor → Run section 1 d’abord, puis section 2 si besoin.
 
 -- ========== 1) DIAGNOSTIC ==========

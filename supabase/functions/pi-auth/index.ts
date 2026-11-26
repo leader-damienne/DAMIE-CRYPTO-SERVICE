@@ -56,7 +56,7 @@ function piEmail(piUid: string) {
   return `pi.${safe || "user"}@auth.dcs.app`;
 }
 
-/** Normalise pseudo Pi/DCS (amie10000 ≈ amie100002 ≈ Damie10000). */
+/** Normalise pseudo Pi/DCS (amie10000 ≈ amie100002). */
 function nameStem(raw: string) {
   return String(raw || "")
     .toLowerCase()
@@ -84,19 +84,37 @@ function namesLikelySame(a: string, b: string) {
   return !!(sa && sb && sa.length >= 4 && sa === sb);
 }
 
-/** Fusionne les soldes des profils doublons (même username / pi_uid) vers le compte actif. */
-async function consolidateWalletsToTarget(
+type ProfileNameRow = {
+  id: string;
+  username?: string | null;
+  pi_username?: string | null;
+  display_name?: string | null;
+};
+
+function rowNameMatches(piName: string, row: ProfileNameRow) {
+  return (
+    namesLikelySame(piName, String(row.username || "")) ||
+    namesLikelySame(piName, String(row.pi_username || "")) ||
+    namesLikelySame(piName, String(row.display_name || ""))
+  );
+}
+
+/**
+ * Tous les profils doublons d’un Allow Pi (tous utilisateurs) :
+ * même stem de pseudo / même pi_uid / même pi_uid_testnet.
+ */
+async function findDuplicateProfileIds(
   db: ReturnType<typeof admin>,
-  targetId: string,
   username: string,
-  piUid: string
+  piUid: string,
+  excludeId: string
 ) {
-  if (!targetId) return;
   const name = String(username || "").trim();
-  const seen: Record<string, true> = { [targetId]: true };
+  const seen: Record<string, true> = {};
+  if (excludeId) seen[excludeId] = true;
   const sourceIds: string[] = [];
 
-  const pushIds = (rows: Array<{ id: string }> | null) => {
+  const pushIds = (rows: Array<{ id: string }> | null | undefined) => {
     (rows || []).forEach((row) => {
       if (!row?.id || seen[row.id]) return;
       seen[row.id] = true;
@@ -104,51 +122,54 @@ async function consolidateWalletsToTarget(
     });
   };
 
+  const acceptFuzzy = (rows: ProfileNameRow[] | null | undefined) => {
+    (rows || []).forEach((row) => {
+      if (!row?.id || seen[row.id]) return;
+      if (name && rowNameMatches(name, row)) pushIds([{ id: row.id }]);
+    });
+  };
+
   if (name) {
-    const byUser = await db.from("profiles").select("id").ilike("username", name).limit(30);
-    pushIds(byUser.data);
-    const byPiUser = await db.from("profiles").select("id").ilike("pi_username", name).limit(30);
-    pushIds(byPiUser.data);
-    const byDisplay = await db.from("profiles").select("id").ilike("display_name", name).limit(30);
-    pushIds(byDisplay.data);
-    /* Fuzzy : amie10000 ↔ amie100002 (ilike exact rate le suffixe) */
+    pushIds((await db.from("profiles").select("id").ilike("username", name).limit(40)).data);
+    pushIds((await db.from("profiles").select("id").ilike("pi_username", name).limit(40)).data);
+    pushIds((await db.from("profiles").select("id").ilike("display_name", name).limit(40)).data);
+
     const stem = nameStem(name);
+    const fuzzyCols = "id, username, pi_username, display_name";
     if (stem.length >= 4) {
-      const fuzzyCols = "id, username, pi_username";
-      const fuzzyUser = await db
-        .from("profiles")
-        .select(fuzzyCols)
-        .ilike("username", stem + "%")
-        .limit(40);
-      (fuzzyUser.data || []).forEach((row: { id: string; username?: string; pi_username?: string }) => {
-        if (
-          namesLikelySame(name, String(row.username || "")) ||
-          namesLikelySame(name, String(row.pi_username || ""))
-        ) {
-          pushIds([{ id: row.id }]);
-        }
-      });
-      const fuzzyPi = await db
-        .from("profiles")
-        .select(fuzzyCols)
-        .ilike("pi_username", stem + "%")
-        .limit(40);
-      (fuzzyPi.data || []).forEach((row: { id: string; username?: string; pi_username?: string }) => {
-        if (
-          namesLikelySame(name, String(row.username || "")) ||
-          namesLikelySame(name, String(row.pi_username || ""))
-        ) {
-          pushIds([{ id: row.id }]);
-        }
-      });
+      acceptFuzzy(
+        (await db.from("profiles").select(fuzzyCols).ilike("username", stem + "%").limit(50)).data
+      );
+      acceptFuzzy(
+        (await db.from("profiles").select(fuzzyCols).ilike("pi_username", stem + "%").limit(50)).data
+      );
+      acceptFuzzy(
+        (await db.from("profiles").select(fuzzyCols).ilike("display_name", stem + "%").limit(50))
+          .data
+      );
     }
   }
+
   if (piUid) {
-    const byUid = await db.from("profiles").select("id").eq("pi_uid", piUid).limit(30);
-    pushIds(byUid.data);
-    const byTn = await db.from("profiles").select("id").eq("pi_uid_testnet", piUid).limit(30);
-    pushIds(byTn.data);
+    pushIds((await db.from("profiles").select("id").eq("pi_uid", piUid).limit(40)).data);
+    pushIds((await db.from("profiles").select("id").eq("pi_uid_testnet", piUid).limit(40)).data);
   }
+
+  return sourceIds;
+}
+
+/**
+ * À chaque Allow : fusionne les soldes des doublons vers le profil de session actif.
+ * S’applique à tous les utilisateurs (pas seulement un compte).
+ */
+async function consolidateWalletsToTarget(
+  db: ReturnType<typeof admin>,
+  targetId: string,
+  username: string,
+  piUid: string
+) {
+  if (!targetId) return;
+  const sourceIds = await findDuplicateProfileIds(db, username, piUid, targetId);
 
   for (let i = 0; i < sourceIds.length; i++) {
     const sourceId = sourceIds[i];
@@ -245,25 +266,31 @@ Deno.serve(async (req) => {
     const referredMeta = referredBy && referredBy !== "—" ? referredBy : "";
 
     /* 1) Compte déjà lié à ce Pi uid (Mainnet pi_uid OU Testnet pi_uid_testnet) */
+    let linkedByUid = false;
     let existing = await db
       .from("profiles")
       .select("id, email, username, pi_uid, pi_uid_testnet, pi_username, created_at")
       .eq("pi_uid", piUser.uid)
       .maybeSingle();
+    if (existing.data?.id) linkedByUid = true;
     if (!existing.data?.id) {
       const byTestnet = await db
         .from("profiles")
         .select("id, email, username, pi_uid, pi_uid_testnet, pi_username, created_at")
         .eq("pi_uid_testnet", piUser.uid)
         .maybeSingle();
-      if (byTestnet.data?.id) existing = byTestnet;
+      if (byTestnet.data?.id) {
+        existing = byTestnet;
+        linkedByUid = true;
+      }
     }
 
     /*
-     * 2) Nouvelle app Pi = nouveau uid, même username → récupérer le compte
-     *    qui a les soldes (évite wallet à 0 sur un profil tout neuf).
+     * 2) Pas encore de lien uid : réutiliser un profil au même stem de pseudo
+     *    (évite un 3e compte vide). Si déjà lié par uid → on garde ce profil
+     *    de session ; les soldes des doublons seront fusionnés dedans après.
      */
-    if (piUser.username) {
+    if (!linkedByUid && piUser.username) {
       const name = piUser.username;
       const seen: Record<string, true> = {};
       const candidates: Array<{
@@ -295,42 +322,21 @@ Deno.serve(async (req) => {
       };
 
       const cols = "id, email, username, pi_uid, pi_username, display_name, created_at";
-      const byUser = await db.from("profiles").select(cols).ilike("username", name).limit(20);
-      pushRows(byUser.data);
-      const byPiUser = await db
-        .from("profiles")
-        .select(cols)
-        .ilike("pi_username", name)
-        .limit(20);
-      pushRows(byPiUser.data);
-      const byDisplay = await db
-        .from("profiles")
-        .select(cols)
-        .ilike("display_name", name)
-        .limit(20);
-      pushRows(byDisplay.data);
+      pushRows((await db.from("profiles").select(cols).ilike("username", name).limit(20)).data);
+      pushRows((await db.from("profiles").select(cols).ilike("pi_username", name).limit(20)).data);
+      pushRows((await db.from("profiles").select(cols).ilike("display_name", name).limit(20)).data);
 
-      /* Fuzzy : amie10000 / amie100002 / Damie10000 */
       const stem = nameStem(name);
       if (stem.length >= 4) {
-        const byStemUser = await db
-          .from("profiles")
-          .select(cols)
-          .ilike("username", stem + "%")
-          .limit(30);
-        pushRows(byStemUser.data);
-        const byStemPi = await db
-          .from("profiles")
-          .select(cols)
-          .ilike("pi_username", stem + "%")
-          .limit(30);
-        pushRows(byStemPi.data);
-        const byStemDisp = await db
-          .from("profiles")
-          .select(cols)
-          .ilike("display_name", stem + "%")
-          .limit(30);
-        pushRows(byStemDisp.data);
+        pushRows(
+          (await db.from("profiles").select(cols).ilike("username", stem + "%").limit(30)).data
+        );
+        pushRows(
+          (await db.from("profiles").select(cols).ilike("pi_username", stem + "%").limit(30)).data
+        );
+        pushRows(
+          (await db.from("profiles").select(cols).ilike("display_name", stem + "%").limit(30)).data
+        );
       }
 
       let bestId = "";
@@ -340,22 +346,8 @@ Deno.serve(async (req) => {
       let bestCreated = "";
 
       for (let i = 0; i < candidates.length; i++) {
-        const row = candidates[i] as {
-          id: string;
-          email: string | null;
-          username: string | null;
-          pi_uid: string | null;
-          pi_username: string | null;
-          display_name?: string | null;
-          created_at: string | null;
-        };
-        if (
-          !namesLikelySame(name, String(row.username || "")) &&
-          !namesLikelySame(name, String(row.pi_username || "")) &&
-          !namesLikelySame(name, String(row.display_name || ""))
-        ) {
-          continue;
-        }
+        const row = candidates[i];
+        if (!rowNameMatches(name, row)) continue;
         const { data: w } = await db
           .from("wallets")
           .select("amount")
@@ -377,34 +369,17 @@ Deno.serve(async (req) => {
       }
 
       if (bestId) {
-        let currentPi = 0;
-        if (existing.data?.id) {
-          const { data: w0 } = await db
-            .from("wallets")
-            .select("amount")
-            .eq("user_id", existing.data.id)
-            .eq("symbol", "PI")
-            .maybeSingle();
-          currentPi = Number(w0 && w0.amount != null ? w0.amount : 0);
-        }
-        /* Toujours préférer le profil le plus riche (évite session sur compte Testnet vide). */
-        if (
-          !existing.data?.id ||
-          bestPiAmt > currentPi ||
-          (currentPi <= 0 && bestId !== existing.data.id)
-        ) {
-          existing = {
-            data: {
-              id: bestId,
-              email: bestEmail,
-              username: bestUsername,
-              pi_uid: piUser.uid,
-              pi_username: name,
-              created_at: bestCreated,
-            },
-            error: null,
-          } as typeof existing;
-        }
+        existing = {
+          data: {
+            id: bestId,
+            email: bestEmail,
+            username: bestUsername,
+            pi_uid: piUser.uid,
+            pi_username: name,
+            created_at: bestCreated,
+          },
+          error: null,
+        } as typeof existing;
       }
     }
 
@@ -558,7 +533,10 @@ Deno.serve(async (req) => {
       if (updMain.error) throw new Error(updMain.error.message);
     }
 
-    /* Récupérer les soldes restés sur d’anciens profils (même pseudo / uid) */
+    /*
+     * Chaque Allow (tous users) : ramener les soldes des profils doublons
+     * (stem pseudo / pi_uid / pi_uid_testnet) vers LE profil de session actif.
+     */
     try {
       await consolidateWalletsToTarget(db, authUserId, piUser.username, piUser.uid);
     } catch (_mergeErr) {
