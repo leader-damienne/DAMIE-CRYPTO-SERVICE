@@ -10,12 +10,12 @@ window.DCS_CONFIG = {
    * Dans Developer Portal → Production URL : une de ces URLs (idéalement appdcs.com).
    */
   piNetBaseUrl: "https://damiecryptoservi2345.pinet.com/",
-  /* false = Mainnet production ; true = Sandbox Develop only.
-   * Override A2U Testnet (sans redeploy) :
-   *   - page dédiée https://appdcs.com/signin-testnet.html (recommandé)
-   *   - ou ?piSandbox=1 / #piSandbox=1 (persisté en localStorage par sandbox-boot.js)
+  /* true = Testnet / Test-Pi (app PiApps actuelle). false = Mainnet.
+   * Override :
+   *   - ?piSandbox=0 force Mainnet
+   *   - ?piSandbox=1 / signin-testnet.html force Testnet
    */
-  piSandbox: false,
+  piSandbox: true,
   /* true = auth Pi + dépôt Pi SDK ; mode listing Ecosystem */
   piEcosystemMode: true
 };

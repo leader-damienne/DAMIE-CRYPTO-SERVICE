@@ -703,20 +703,14 @@
         alert("Montant minimum de retrait : 0,0000001 PI.");
         return;
       }
-      const sandbox =
-        DCS.pi && typeof DCS.pi.useSandbox === "function" && DCS.pi.useSandbox();
-      const netLabel = sandbox ? "Testnet" : "Mainnet";
       if (
         !confirm(
           "Retirer " +
             amount +
-            " PI vers votre wallet Pi (" +
-            netLabel +
-            ") ?\n\n" +
+            " Test-Pi vers votre wallet Pi ?\n\n" +
             "• Débite votre solde DCS\n" +
-            "• Envoi vers votre wallet Pi\n" +
-            "• Réseau : " +
-            netLabel
+            "• Envoi vers votre wallet Pi (Testnet)\n" +
+            "• Prérequis : Allow Pi (Testnet) + solde PI"
         )
       ) {
         return;
@@ -724,7 +718,7 @@
       const prevLabel = btn.textContent;
       btn.disabled = true;
       btn.textContent = "Retrait en cours…";
-      setStatus("Retrait " + netLabel + " en cours…");
+      setStatus("Retrait Testnet en cours…");
       let res;
       try {
         res = await DCS.pi.withdrawWithPi(amount);
