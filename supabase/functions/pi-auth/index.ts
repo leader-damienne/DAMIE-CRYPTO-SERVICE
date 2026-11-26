@@ -56,13 +56,41 @@ function piEmail(piUid: string) {
   return `pi.${safe || "user"}@auth.dcs.app`;
 }
 
-/** Normalise pseudo Pi/DCS (amie10000 ≈ amie100002). */
+/** Normalise pseudo Pi/DCS (amie10000 ≈ amie100002 ≈ Damie10000). */
 function nameStem(raw: string) {
   return String(raw || "")
     .toLowerCase()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9]/g, "")
     .replace(/\d+$/, "");
+}
+
+function digitsTail(raw: string) {
+  const m = String(raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .match(/(\d{3,})$/);
+  return m ? m[1] : "";
+}
+
+function digitsRelated(a: string, b: string) {
+  const da = digitsTail(a);
+  const db = digitsTail(b);
+  if (!da || !db) return false;
+  return da === db || da.startsWith(db) || db.startsWith(da);
+}
+
+/** stems proches : égal, ou damie≈amie (suffixe, écart ≤ 2 lettres). */
+function stemsRelated(sa: string, sb: string) {
+  if (!sa || !sb || sa.length < 4 || sb.length < 4) return false;
+  if (sa === sb) return true;
+  if (
+    (sa.endsWith(sb) || sb.endsWith(sa)) &&
+    Math.abs(sa.length - sb.length) <= 2
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function namesLikelySame(a: string, b: string) {
@@ -81,7 +109,10 @@ function namesLikelySame(a: string, b: string) {
   }
   const sa = nameStem(na);
   const sb = nameStem(nb);
-  return !!(sa && sb && sa.length >= 4 && sa === sb);
+  if (sa && sb && sa.length >= 4 && sa === sb) return true;
+  /* Damie10000 ↔ amie10000 / amie100002 : stem suffixe + mêmes chiffres */
+  if (stemsRelated(sa, sb) && digitsRelated(na, nb)) return true;
+  return false;
 }
 
 type ProfileNameRow = {
@@ -137,15 +168,16 @@ async function findDuplicateProfileIds(
     const stem = nameStem(name);
     const fuzzyCols = "id, username, pi_username, display_name";
     if (stem.length >= 4) {
+      /* %amie% trouve aussi Damie10000 (préfixe D) */
+      const pat = "%" + stem + "%";
       acceptFuzzy(
-        (await db.from("profiles").select(fuzzyCols).ilike("username", stem + "%").limit(50)).data
+        (await db.from("profiles").select(fuzzyCols).ilike("username", pat).limit(50)).data
       );
       acceptFuzzy(
-        (await db.from("profiles").select(fuzzyCols).ilike("pi_username", stem + "%").limit(50)).data
+        (await db.from("profiles").select(fuzzyCols).ilike("pi_username", pat).limit(50)).data
       );
       acceptFuzzy(
-        (await db.from("profiles").select(fuzzyCols).ilike("display_name", stem + "%").limit(50))
-          .data
+        (await db.from("profiles").select(fuzzyCols).ilike("display_name", pat).limit(50)).data
       );
     }
   }
@@ -328,15 +360,10 @@ Deno.serve(async (req) => {
 
       const stem = nameStem(name);
       if (stem.length >= 4) {
-        pushRows(
-          (await db.from("profiles").select(cols).ilike("username", stem + "%").limit(30)).data
-        );
-        pushRows(
-          (await db.from("profiles").select(cols).ilike("pi_username", stem + "%").limit(30)).data
-        );
-        pushRows(
-          (await db.from("profiles").select(cols).ilike("display_name", stem + "%").limit(30)).data
-        );
+        const pat = "%" + stem + "%";
+        pushRows((await db.from("profiles").select(cols).ilike("username", pat).limit(30)).data);
+        pushRows((await db.from("profiles").select(cols).ilike("pi_username", pat).limit(30)).data);
+        pushRows((await db.from("profiles").select(cols).ilike("display_name", pat).limit(30)).data);
       }
 
       let bestId = "";
