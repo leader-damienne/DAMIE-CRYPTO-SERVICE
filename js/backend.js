@@ -83,11 +83,12 @@
 
   function mapProfile(row) {
     if (!row) return null;
+    var uname = row.username || row.pi_username || row.display_name || "";
     return {
       id: row.id,
-      username: row.username,
+      username: uname,
       email: row.email,
-      displayName: row.display_name || row.pi_username || row.username,
+      displayName: row.display_name || row.pi_username || row.username || uname,
       firstName: row.first_name || "",
       lastName: row.last_name || "",
       birthDate: normalizeBirthDate(row.birth_date),
