@@ -568,14 +568,12 @@
           "Pi SDK introuvable. Ouvrez wallet.html dans le Pi Browser (pas Chrome).",
           true
         );
-        alert(
-          "Ouvrez DCS dans le Pi Browser pour déposer.\n\nURL : https://damie-crypto-service.netlify.app/wallet.html"
-        );
+        alert("Ouvrez DCS via PiApps dans le Pi Browser pour déposer.");
         return;
       }
       if (!(DCS.user && DCS.user.id && DCS.user.loggedIn)) {
-        setStatus("Connectez-vous avec Pi avant de déposer.", true);
-        alert("Connectez-vous avec Pi (Allow), puis réessayez Déposer.");
+        setStatus("Connectez-vous avec Pi (Allow) avant de déposer.", true);
+        alert("Allow Pi une fois via PiApps, puis réessayez Déposer.");
         return;
       }
       const amount = parseFloat(amountEl && amountEl.value) || 0;
@@ -599,7 +597,7 @@
               resolve({
                 ok: false,
                 error:
-                  "Délai dépassé (2 min). Si aucune fenêtre Pi : rechargez wallet.html dans le Pi Browser, Allow, puis Déposer."
+                  "Délai dépassé (2 min). Rechargez DCS via PiApps, Allow une fois, puis Déposer."
               });
             }, 120000);
           })
@@ -648,10 +646,10 @@
         try {
           await DCS.pi.authenticate(["username", "payments"]);
           setStatus(
-            "Si le message « Pending Payment » a disparu, réessayez Déposer. Sinon : PI_API_KEY Mainnet + redéployer pi-payment."
+            "Si « Pending Payment » a disparu, réessayez Déposer. Sinon : Débloquer à nouveau."
           );
           alert(
-            "Déblocage tenté.\n\n1) Si Allow s’est ouvert, c’est bon — réessayez Déposer.\n2) Sinon mettez la Server API Key Mainnet dans Supabase (PI_API_KEY) et redéployez pi-payment."
+            "Déblocage tenté.\n\nSi Allow s’est ouvert, réessayez Déposer via PiApps.\nSinon utilisez encore « Débloquer dépôt »."
           );
         } catch (err) {
           const msg = (err && err.message) || String(err);

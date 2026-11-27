@@ -153,13 +153,28 @@ Deno.serve(async (req) => {
         ((payment as { user_uid?: string }).user_uid as string) ||
         ((payment as { from_uid?: string }).from_uid as string) ||
         "";
+      /* Testnet stocke l’uid dans pi_uid_testnet (≠ pi_uid Mainnet). */
       const { data: profile } = await db
         .from("profiles")
-        .select("pi_uid")
+        .select("pi_uid, pi_uid_testnet")
         .eq("id", user.id)
         .maybeSingle();
-      if (profile?.pi_uid && piUid && String(profile.pi_uid) !== String(piUid)) {
-        return json({ ok: false, error: "Paiement Pi ≠ compte DCS." }, 403);
+      const mainUid = profile?.pi_uid ? String(profile.pi_uid) : "";
+      const testUid = profile?.pi_uid_testnet ? String(profile.pi_uid_testnet) : "";
+      if (
+        piUid &&
+        (mainUid || testUid) &&
+        String(piUid) !== mainUid &&
+        String(piUid) !== testUid
+      ) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Paiement Pi ≠ compte DCS (uid Testnet/Mainnet). Reconnectez-vous via PiApps puis réessayez le dépôt.",
+          },
+          403
+        );
       }
 
       await piFetch(`/payments/${paymentId}/complete`, "POST", { txid });
@@ -237,7 +252,7 @@ Deno.serve(async (req) => {
           ok: false,
           error:
             piError ||
-            "Impossible d’annuler le paiement Pi. Vérifiez PI_API_KEY Mainnet.",
+            "Impossible d’annuler le paiement Pi. Vérifiez PI_API_KEY (Server API Key de l’app PiApps).",
         }, 500);
       }
 

@@ -383,6 +383,7 @@
       amount: amt
     };
 
+    /* init sandbox (config PiApps) puis auth payments — pas de query URL */
     return initPi()
       .then(function () {
         return authenticate(["username", "payments"]);
@@ -392,7 +393,7 @@
         if (!Pi || typeof Pi.createPayment !== "function") {
           return {
             ok: false,
-            error: "Pi.createPayment indisponible. Ouvrez DCS dans le Pi Browser."
+            error: "Pi.createPayment indisponible. Ouvrez DCS dans le Pi Browser (PiApps)."
           };
         }
         return new Promise(function (resolve) {
@@ -430,7 +431,7 @@
                           ok: false,
                           error:
                             (res && res.error) ||
-                            "Approve échoué. Vérifiez PI_API_KEY Mainnet dans Supabase, puis réessayez."
+                            "Approve échoué. Vérifiez PI_API_KEY (clé Server de l’app PiApps) dans Supabase."
                         });
                       });
                     }
@@ -459,11 +460,16 @@
                 })
                   .then(function (res) {
                     if (!res || !res.ok) {
-                      finish({
-                        ok: false,
-                        error: (res && res.error) || "Complete échoué."
+                      var errMsg = (res && res.error) || "Complete échoué.";
+                      /* Pending Payment : tenter cancel pour ne pas bloquer le prochain dépôt */
+                      return callPiBackend("cancel", {
+                        paymentId: paymentId,
+                        amount: amt,
+                        memo: memo,
+                        kind: DEPOSIT_PRODUCT.kind
+                      }).then(function () {
+                        finish({ ok: false, error: errMsg });
                       });
-                      return;
                     }
                     finish({
                       ok: true,
