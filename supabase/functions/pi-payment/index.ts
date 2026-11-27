@@ -5,7 +5,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const PI_API_BASE = Deno.env.get("PI_API_BASE") || "https://api.minepi.com";
+/*
+ * PiApps = sandbox/Testnet : préférer la clé Server Testnet (même que A2U).
+ * PI_API_KEY Mainnet seule → approve/cancel U2A sandbox échouent → « pending payment ».
+ */
 const PI_API_KEY =
+  Deno.env.get("PI_A2U_API_KEY") ||
+  Deno.env.get("PI_API_KEY_TESTNET") ||
   Deno.env.get("PI_API_KEY") ||
   Deno.env.get("PI_NETWORK_API_KEY") ||
   "";
@@ -29,7 +35,7 @@ function json(body: Record<string, unknown>, status = 200) {
 async function piFetch(path: string, method = "GET", body?: Record<string, unknown>) {
   if (!PI_API_KEY) {
     throw new Error(
-      "PI_API_KEY manquant. Dans Supabase → Edge Functions → Secrets, ajoutez la Server API Key (App Studio / Develop) sous PI_API_KEY ou PI_NETWORK_API_KEY."
+      "Clé Pi manquante. Ajoutez PI_A2U_API_KEY (Server API Key Testnet / sandbox de l’app PiApps) dans Supabase → Secrets."
     );
   }
   const res = await fetch(`${PI_API_BASE}/v2${path}`, {

@@ -737,14 +737,30 @@
       setStatus("Retrait Testnet en cours…");
       let res;
       try {
-        res = await DCS.pi.withdrawWithPi(amount);
+        res = await Promise.race([
+          DCS.pi.withdrawWithPi(amount),
+          new Promise(function (resolve) {
+            setTimeout(function () {
+              resolve({
+                ok: false,
+                error:
+                  "Délai dépassé. Si Pi dit « User … was not found » : secret PI_A2U_API_KEY (clé Testnet) manquant côté serveur."
+              });
+            }, 90000);
+          })
+        ]);
       } catch (err) {
         res = { ok: false, error: (err && err.message) || String(err) };
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevLabel || "Retirer vers mon wallet Pi";
       }
-      btn.disabled = false;
-      btn.textContent = prevLabel || "Retirer vers mon wallet Pi";
       if (!res || !res.ok) {
-        const errMsg = (res && res.error) || "Échec du retrait Pi.";
+        let errMsg = (res && res.error) || "Échec du retrait Pi.";
+        if (/was not found|user_not_found/i.test(errMsg)) {
+          errMsg =
+            "Uid Testnet refusé par Pi : PI_A2U_API_KEY (Server API Key sandbox) manquante ou incorrecte. Corrigez le secret Supabase, redéployez pi-a2u, rouvrez DCS via PiApps.";
+        }
         setStatus(errMsg, true);
         alert(errMsg);
         return;
