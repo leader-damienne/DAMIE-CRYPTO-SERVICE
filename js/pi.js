@@ -18,10 +18,9 @@
   }
 
   /**
-   * Sandbox / Testnet override sans redeploy :
-   *   ?piSandbox=1  → force Testnet (mémorisé en localStorage)
-   *   ?piSandbox=0  → force Mainnet (efface l’override)
-   * Prod par défaut : DCS_CONFIG.piSandbox === false → Mainnet.
+   * Testnet / sandbox pour Pi.init :
+   * - Entrée PiApps normale : DCS_CONFIG.piSandbox === true (pas besoin de ?piSandbox=1)
+   * - Override optionnel App Studio : ?piSandbox=0|1, signin-testnet.html
    */
   function useSandbox() {
     try {
@@ -63,8 +62,15 @@
       if (localStorage.getItem("dcs_pi_sandbox") === "1") return true;
       if (sessionStorage.getItem("dcs_pi_sandbox") === "1") return true;
     } catch (eQp) {}
-    /* Prod : piSandbox false → Mainnet ; true → Sandbox Develop */
-    return cfg().piSandbox === true;
+    /* PiApps / prod : config true = Testnet sans query URL */
+    if (cfg().piSandbox === true) {
+      try {
+        localStorage.setItem("dcs_pi_sandbox", "1");
+        sessionStorage.setItem("dcs_pi_sandbox", "1");
+      } catch (ePersist) {}
+      return true;
+    }
+    return false;
   }
 
   function getAccessToken() {

@@ -70,20 +70,18 @@
     return false;
   }
 
-  /** Construit une URL signin en gardant piSandbox / verify / stay / etc. */
+  /** Construit une URL signin. Sandbox = DCS_CONFIG / localStorage — pas de ?piSandbox forcé. */
   function buildSigninUrl(nextPage) {
     var qs = new URLSearchParams();
     if (nextPage) qs.set("next", nextPage);
     try {
       var cur = new URLSearchParams(location.search || "");
-      ["piSandbox", "sandbox", "verify", "stay", "force_pi_auth", "ref", "u"].forEach(
-        function (k) {
-          var v = cur.get(k);
-          if (v != null && v !== "" && !qs.has(k)) qs.set(k, v);
-        }
-      );
+      /* Conserver verify/stay/ref si présents ; ne PAS injecter piSandbox=1 */
+      ["verify", "stay", "force_pi_auth", "ref", "u"].forEach(function (k) {
+        var v = cur.get(k);
+        if (v != null && v !== "" && !qs.has(k)) qs.set(k, v);
+      });
     } catch (eQ) {}
-    if (sandboxActive() && !qs.has("piSandbox")) qs.set("piSandbox", "1");
     var base = sandboxActive() ? "signin-testnet.html" : "signin.html";
     var s = qs.toString();
     return s ? base + "?" + s : base;

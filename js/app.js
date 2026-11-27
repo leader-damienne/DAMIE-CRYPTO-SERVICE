@@ -5788,7 +5788,7 @@
     }
     var qs = new URLSearchParams();
     if (nextPage) qs.set("next", nextPage);
-    if (sandboxModeActive()) qs.set("piSandbox", "1");
+    /* Pas de ?piSandbox=1 : DCS_CONFIG.piSandbox active le Testnet tout seul (PiApps). */
     var base = sandboxModeActive() ? "signin-testnet.html" : "signin.html";
     var s = qs.toString();
     return s ? base + "?" + s : base;
@@ -5906,15 +5906,11 @@
     if (next) {
       const n = normalizePage(next);
       /* Ne jamais envoyer vers l’admin A2U après Allow public */
-      if (n === "admin-a2u.html") {
-        return sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html";
-      }
-      if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) {
-        return sandboxModeActive() ? n + (n.indexOf("?") >= 0 ? "&" : "?") + "piSandbox=1" : n;
-      }
+      if (n === "admin-a2u.html") return "wallet.html";
+      if (/^[a-z0-9._-]+\.html$/i.test(n) && !isPublicPage(n)) return n;
     }
-    /* Après Allow Pi → wallet (plus de page « fermez cette page ») */
-    return sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html";
+    /* Après Allow Pi → wallet sans query (sandbox = config / Pi Browser) */
+    return "wallet.html";
   }
 
   function showPiLoginError(errEl, msg) {
@@ -5946,7 +5942,7 @@
     try {
       updateAuthNav();
     } catch (eNav) {}
-    /* Anti-boucle : un seul reload après Allow (ne pas re-Allow sur wallet?piSandbox=1) */
+    /* Anti-boucle : un seul passage après Allow (pas de 2e auth sur wallet) */
     try {
       sessionStorage.setItem("dcs_pi_auth_ok", "1");
       if (sessionStorage.getItem("dcs_pi_just_entered") === "1") {
@@ -6077,9 +6073,8 @@
       /* Succès Allow Testnet : ne pas relancer ni rediriger vers admin */
       if (qpOk.get("ok") === "1") return { ok: true, already: true, done: true };
       /*
-       * BUG (double Allow) : après 1er Allow + redirect wallet?piSandbox=1,
-       * isLoggedIn && sandbox ne skippait PAS → 2e Pi.authenticate.
-       * Ne forcer un Allow que si ?force_pi_auth=1 (App Studio / lien explicite).
+       * Double Allow : après 1er Allow + redirect wallet, ne JAMAIS relancer
+       * Pi.authenticate si déjà connecté. force_pi_auth=1 = App Studio seulement.
        */
       if (qpOk.get("force_pi_auth") === "1") {
         /* Un seul Allow forcé — retirer le param pour ne pas reboucler au reload */
@@ -6308,9 +6303,7 @@
       var qpSign = new URLSearchParams(location.search || "");
       if (qpSign.get("ok") === "1") {
         /* Ancien deep-link succès → wallet */
-        window.location.replace(
-          sandboxModeActive() ? "wallet.html?piSandbox=1" : "wallet.html"
-        );
+        window.location.replace("wallet.html");
         return;
       }
     } catch (eOkUi) {}
