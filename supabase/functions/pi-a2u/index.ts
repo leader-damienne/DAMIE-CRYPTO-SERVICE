@@ -12,15 +12,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import * as StellarSdk from "npm:@stellar/stellar-sdk@13.3.0";
 
 const PI_API_BASE = Deno.env.get("PI_API_BASE") || "https://api.minepi.com";
-const HAS_DEDICATED_A2U_KEY = !!String(Deno.env.get("PI_A2U_API_KEY") || "").trim();
-/* Admin A2U Testnet : toujours préférer PI_A2U_API_KEY. */
-const PI_API_KEY =
-  Deno.env.get("PI_A2U_API_KEY") ||
-  Deno.env.get("PI_API_KEY") ||
-  Deno.env.get("PI_NETWORK_API_KEY") ||
-  "";
-const PI_MAINNET_API_KEY =
-  Deno.env.get("PI_API_KEY") || Deno.env.get("PI_NETWORK_API_KEY") || "";
+/* Clé Server API Testnet/Sandbox — OBLIGATOIRE pour A2U + retrait (jamais fallback Mainnet). */
+const PI_A2U_KEY = String(Deno.env.get("PI_A2U_API_KEY") || "").trim();
+const HAS_DEDICATED_A2U_KEY = !!PI_A2U_KEY;
+/* Alias historique : opérations Testnet = PI_A2U_KEY uniquement (jamais Mainnet) */
+const PI_API_KEY = PI_A2U_KEY;
 const WALLET_SEED = Deno.env.get("PI_APP_WALLET_SEED") || "";
 const WALLET_SEED_MAINNET =
   Deno.env.get("PI_APP_WALLET_SEED_MAINNET") ||
@@ -36,10 +32,10 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const SIGNIN_TESTNET_URL = "https://appdcs.com/signin-testnet.html";
 const USER_NOT_FOUND_FR =
-  "user_not_found : ce pi_uid n’existe pas sur l’app Testnet (souvent un uid Mainnet). " +
-  "Le destinataire doit ouvrir " +
-  SIGNIN_TESTNET_URL +
-  " dans le Pi Browser → Continuer avec Pi → Allow, puis réessayez avec l’uid Testnet (badge vert dans la liste).";
+  "Uid Testnet introuvable sur l’API Pi (clé Server Testnet manquante ou incorrecte). " +
+  "Dans Supabase → Edge Functions → Secrets : PI_A2U_API_KEY = Server API Key de l’app PiApps (sandbox/Testnet), " +
+  "puis : supabase functions deploy pi-a2u --no-verify-jwt. " +
+  "Ensuite rouvrez DCS via PiApps → Allow une fois → réessayez.";
 
 const HORIZON_TESTNET = "https://api.testnet.minepi.com";
 const HORIZON_MAINNET = "https://api.mainnet.minepi.com";
@@ -387,8 +383,8 @@ Deno.serve(async (req) => {
         );
       }
 
-      const withdrawApiKey =
-        String(Deno.env.get("PI_A2U_API_KEY") || "").trim() || PI_API_KEY;
+      /* Jamais PI_API_KEY Mainnet ici → sinon « User with uid … was not found » */
+      const withdrawApiKey = PI_A2U_KEY;
       const withdrawSeed = WALLET_SEED;
       const seedLabel = "PI_APP_WALLET_SEED";
 
@@ -396,9 +392,11 @@ Deno.serve(async (req) => {
         return json(
           {
             ok: false,
-            error: "PI_A2U_API_KEY (Testnet) manquant côté serveur.",
+            error:
+              "PI_A2U_API_KEY manquant. Sans la Server API Key Testnet, Pi répond « User … was not found » pour les uid Testnet. Ajoutez le secret puis redéployez pi-a2u.",
             network: "testnet",
             countsTowardFiveWallets: false,
+            needSecret: "PI_A2U_API_KEY",
           },
           400
         );
@@ -631,9 +629,9 @@ Deno.serve(async (req) => {
         warning: !schemaReady
           ? "Schéma incomplet (pi_uid_testnet). Exécutez supabase/pi-uid-testnet.sql puis redéployez pi-auth + pi-a2u. Les Allow Testnet ne peuvent pas apparaître dans la liste."
           : !HAS_DEDICATED_A2U_KEY
-            ? "PI_A2U_API_KEY absent : fallback sur PI_API_KEY (souvent Mainnet) → user_not_found. Ajoutez PI_A2U_API_KEY = Server API Key Testnet."
+            ? "PI_A2U_API_KEY absent → retrait/A2U Testnet impossibles (« User … was not found »). Ajoutez la Server API Key sandbox de l’app PiApps."
             : testnetProfiles === 0
-              ? "Aucun pi_uid_testnet en base. Les testeurs doivent Allow sur signin-testnet.html APRÈS deploy de pi-auth à jour."
+              ? "Aucun pi_uid_testnet en base. Les testeurs doivent Allow via PiApps (Testnet) après deploy pi-auth."
               : null,
         signinTestnetUrl: SIGNIN_TESTNET_URL,
       });
@@ -973,7 +971,7 @@ Deno.serve(async (req) => {
       err && typeof err === "object" && "payload" in err
         ? (err as { payload?: Record<string, unknown> }).payload
         : undefined;
-    if (/user_not_found/i.test(message)) {
+    if (/user_not_found|was not found/i.test(message)) {
       message = USER_NOT_FOUND_FR;
     }
     if (/pi_uid_testnet|column/i.test(message)) {
