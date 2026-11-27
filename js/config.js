@@ -10,38 +10,41 @@ window.DCS_CONFIG = {
    * Dans Developer Portal → Production URL : une de ces URLs (idéalement appdcs.com).
    */
   piNetBaseUrl: "https://damiecryptoservi2345.pinet.com/",
-  /* true = Testnet / Test-Pi (app PiApps actuelle). false = Mainnet.
-   * Override :
-   *   - ?piSandbox=0 force Mainnet
-   *   - ?piSandbox=1 / signin-testnet.html force Testnet
+  /* true = Testnet / Test-Pi (entrée PiApps normale, sans ?piSandbox=1).
+   * Override App Studio seulement : ?piSandbox=0|1 ou signin-testnet.html
    */
   piSandbox: true,
   /* true = auth Pi + dépôt Pi SDK ; mode listing Ecosystem */
   piEcosystemMode: true
 };
 
-/* Appliquer override localStorage immédiatement (query souvent droppée par Pi Browser) */
+/* Sandbox dès le boot : config prod + Pi Browser, sans URL spéciale */
 (function () {
   try {
     var path = String(location.pathname || "").toLowerCase();
+    var qp = new URLSearchParams(location.search || "");
+    var flag = qp.get("piSandbox") || qp.get("sandbox");
+    if (flag === "0" || flag === "false") {
+      localStorage.removeItem("dcs_pi_sandbox");
+      sessionStorage.removeItem("dcs_pi_sandbox");
+      window.DCS_CONFIG.piSandbox = false;
+      return;
+    }
     if (
+      flag === "1" ||
+      flag === "true" ||
       /signin-testnet\.html$/i.test(path) ||
       /\/signin-testnet\/?$/i.test(path) ||
       localStorage.getItem("dcs_pi_sandbox") === "1" ||
       sessionStorage.getItem("dcs_pi_sandbox") === "1" ||
-      window.__dcsPiSandboxForced === true
+      window.__dcsPiSandboxForced === true ||
+      window.DCS_CONFIG.piSandbox === true
     ) {
       window.DCS_CONFIG.piSandbox = true;
-    }
-    var qp = new URLSearchParams(location.search || "");
-    var flag = qp.get("piSandbox") || qp.get("sandbox");
-    if (flag === "1" || flag === "true") {
-      localStorage.setItem("dcs_pi_sandbox", "1");
-      window.DCS_CONFIG.piSandbox = true;
-    } else if (flag === "0" || flag === "false") {
-      localStorage.removeItem("dcs_pi_sandbox");
-      sessionStorage.removeItem("dcs_pi_sandbox");
-      window.DCS_CONFIG.piSandbox = false;
+      try {
+        localStorage.setItem("dcs_pi_sandbox", "1");
+        sessionStorage.setItem("dcs_pi_sandbox", "1");
+      } catch (eSet) {}
     }
   } catch (e) {}
 })();
