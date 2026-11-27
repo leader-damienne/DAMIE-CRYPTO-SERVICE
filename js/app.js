@@ -5754,7 +5754,8 @@
   }
 
   function isLoggedIn() {
-    return !!(window.DCS && DCS.user && DCS.user.loggedIn && DCS.user.username);
+    /* id suffit : username vide ne doit pas relancer Allow / bloquer le wallet */
+    return !!(window.DCS && DCS.user && DCS.user.loggedIn && DCS.user.id);
   }
 
   /* Pages accessibles sans compte */
@@ -5945,14 +5946,15 @@
     try {
       updateAuthNav();
     } catch (eNav) {}
-    /* Anti-boucle : un seul reload après Allow */
+    /* Anti-boucle : un seul reload après Allow (ne pas re-Allow sur wallet?piSandbox=1) */
     try {
+      sessionStorage.setItem("dcs_pi_auth_ok", "1");
       if (sessionStorage.getItem("dcs_pi_just_entered") === "1") {
         sessionStorage.removeItem("dcs_pi_just_entered");
+        /* Déjà rechargé une fois : rester et laisser boot charger les soldes */
         return;
       }
       sessionStorage.setItem("dcs_pi_just_entered", "1");
-      sessionStorage.setItem("dcs_pi_auth_ok", "1");
     } catch (eSs) {}
     var next = authNextUrl();
     var here = normalizePage(pageName());
@@ -5969,7 +5971,25 @@
       window.location.replace(next);
       return;
     }
-    window.location.reload();
+    /* Déjà sur wallet : pas de reload (évite 2e Allow + flash soldes 0) */
+    try {
+      sessionStorage.removeItem("dcs_pi_just_entered");
+    } catch (eClr2) {}
+    Promise.resolve()
+      .then(function () {
+        return DCS.auth && DCS.auth.hydrate ? DCS.auth.hydrate() : null;
+      })
+      .then(function () {
+        return DCS.backend && DCS.backend.loadWallet ? DCS.backend.loadWallet() : null;
+      })
+      .then(function () {
+        try {
+          if (typeof renderWallet === "function") renderWallet();
+          if (typeof syncWalletSessionHint === "function") syncWalletSessionHint();
+          updateAuthNav();
+        } catch (eUi) {}
+      })
+      .catch(function () {});
   }
 
   async function runPiLoginFlow(errEl, btn) {
@@ -6056,12 +6076,26 @@
       var qpOk = new URLSearchParams(location.search || "");
       /* Succès Allow Testnet : ne pas relancer ni rediriger vers admin */
       if (qpOk.get("ok") === "1") return { ok: true, already: true, done: true };
+      /*
+       * BUG (double Allow) : après 1er Allow + redirect wallet?piSandbox=1,
+       * isLoggedIn && sandbox ne skippait PAS → 2e Pi.authenticate.
+       * Ne forcer un Allow que si ?force_pi_auth=1 (App Studio / lien explicite).
+       */
+      if (qpOk.get("force_pi_auth") === "1") {
+        /* Un seul Allow forcé — retirer le param pour ne pas reboucler au reload */
+        try {
+          qpOk.delete("force_pi_auth");
+          var qsForce = qpOk.toString();
+          history.replaceState(
+            {},
+            "",
+            (location.pathname || "") + (qsForce ? "?" + qsForce : "") + (location.hash || "")
+          );
+        } catch (eStrip) {}
+      } else if (isLoggedIn()) {
+        return { ok: true, already: true };
+      }
     } catch (eOk) {}
-    /*
-     * Session Mainnet déjà ouverte + mode Testnet demandé → forcer un nouvel Allow
-     * pour écrire pi_uid_testnet (sinon A2U reste en user_not_found).
-     */
-    if (isLoggedIn() && !sandboxModeActive()) return { ok: true, already: true };
     if (!window.Pi && !/PiBrowser|PiNetwork|pinetwork/i.test(navigator.userAgent || "")) {
       return { ok: false, skipped: true };
     }
@@ -6524,22 +6558,25 @@
   async function boot() {
     detectPiBrowser();
     blockNewTabsInPi();
-    /* ?force_pi_auth=1 ou ?logout=1 : forcer nouvelle autorisation Pi (App Studio) */
+    /* ?logout=1 / force_pi_auth=1 : reset flags ; logout réel APRÈS init (jetons sb-*) */
+    var wantLogout = false;
+    var wantForcePi = false;
     try {
       var qp = new URLSearchParams(location.search || "");
-      if (qp.get("logout") === "1" || qp.get("force_pi_auth") === "1") {
+      wantLogout = qp.get("logout") === "1";
+      wantForcePi = qp.get("force_pi_auth") === "1";
+      if (wantLogout || wantForcePi) {
         window.__dcsPiAutoAuthStarted = false;
         window.__dcsEarlyPiAuthStarted = false;
         window.__dcsEarlyPiAuthInFlight = null;
         window.__dcsPiAuthResult = null;
         try {
-          sessionStorage.clear();
+          sessionStorage.removeItem("dcs_pi_just_entered");
+          sessionStorage.removeItem("dcs_pi_auth_ok");
+          sessionStorage.removeItem("dcs_pi_auto_auth");
         } catch (eSs) {}
-        if (window.DCS && DCS.auth && typeof DCS.auth.logout === "function") {
-          await DCS.auth.logout().catch(function () {});
-        }
-        if (qp.get("logout") === "1") {
-          /* Préserver piSandbox si présent (ne pas dropper le mode Testnet) */
+        if (wantLogout) {
+          /* Préserver piSandbox ; retirer logout de l’URL pour éviter re-logout en boucle */
           var keep = new URLSearchParams();
           if (qp.get("piSandbox")) keep.set("piSandbox", qp.get("piSandbox"));
           if (qp.get("sandbox")) keep.set("sandbox", qp.get("sandbox"));
@@ -6549,13 +6586,13 @@
         }
       }
     } catch (eForce) {}
-    /* Auth Pi immédiatement — avant hydrate (App Studio Verify) */
+    /* Auth Pi immédiatement — avant hydrate (App Studio Verify) — init seulement, pas Allow */
     try {
       if (window.DCS && DCS.pi && typeof DCS.pi.startEarlyPiAuth === "function") {
         DCS.pi.startEarlyPiAuth();
       }
     } catch (eEarlyBoot) {}
-    /* Timeouts courts hors wallet ; wallet attend la session réelle (évite soldes 0 fantômes) */
+    /* Timeouts courts hors wallet ; wallet attend la session réelle */
     var BOOT_WAIT_MS = 3000;
     var pageEarly = pageName();
     var needsFullHydrate =
@@ -6577,18 +6614,13 @@
         }
       }
     } catch (eInit) {}
-    /* logout=1 : signOut APRÈS init (sinon jetons Supabase restent → mauvais user / soldes 0) */
-    try {
-      var qpLogout = new URLSearchParams(location.search || "");
-      if (
-        (qpLogout.get("logout") === "1" || qpLogout.get("force_pi_auth") === "1") &&
-        window.DCS &&
-        DCS.auth &&
-        typeof DCS.auth.logout === "function"
-      ) {
-        await DCS.auth.logout().catch(function () {});
-      }
-    } catch (eLogout2) {}
+    if (wantLogout || wantForcePi) {
+      try {
+        if (window.DCS && DCS.auth && typeof DCS.auth.logout === "function") {
+          await DCS.auth.logout().catch(function () {});
+        }
+      } catch (eLogout2) {}
+    }
     try {
       if (window.DCS && DCS.auth) {
         if (needsFullHydrate) {
@@ -6609,13 +6641,12 @@
     populateCountrySelects();
     updateAuthNav();
     const page = pageName();
-    if (isLoggedIn()) {
-      try {
-        sessionStorage.removeItem("dcs_pi_just_entered");
-      } catch (eClr) {}
-    }
+    /*
+     * Ne PAS effacer dcs_pi_just_entered ici : enterAppAfterPiAuth + maybeAutoPiLogin
+     * s’en servent pour bloquer le 2e Allow après redirect.
+     */
 
-    /* Auth Pi avant requireAuth — attendre Allow puis ouvrir l’app */
+    /* Auth Pi avant requireAuth — un seul Allow max */
     if (isEcosystemMode()) {
       const piErrEarly =
         document.getElementById("signin-error") ||
@@ -6661,7 +6692,7 @@
       setupMarketSearch();
     }
     if (isWallet) {
-      /* Toujours re-hydrate (même si user.id déjà là) : session peut être un autre profil */
+      /* Une seule passe solide : hydrate → soldes → render (pas de re-Allow / pas de thrash) */
       try {
         if (DCS.auth && DCS.auth.hydrate) await DCS.auth.hydrate();
       } catch (eHydraWallet) {}
@@ -6676,7 +6707,6 @@
       setupPiDeposit();
       setupPiWithdraw();
       if (!isEcosystemMode()) setupDepositRequest();
-      /* Re-assurer le bouton Pi visible après compliance */
       const wd = document.getElementById("wallet-deposit");
       const pb = document.getElementById("pi-deposit-btn");
       if (wd) wd.style.display = "";
@@ -6686,34 +6716,23 @@
         await DCS.backend.loadNotifications();
       } catch (e2) {}
       renderNotifications();
-      /* 2e + 3e passe : hydrate tardif / Pi Browser lent */
+      /* Si hydrate boot était incomplet : 1 reload soldes sans nouvel authenticate */
       try {
-        await DCS.backend.loadWallet();
-        renderWallet();
-        syncWalletSessionHint();
-        renderHistory();
+        if (DCS.user && DCS.user.id) {
+          await DCS.backend.loadWallet();
+          renderWallet();
+          syncWalletSessionHint();
+        }
       } catch (eReload) {}
-      setTimeout(function () {
-        Promise.resolve()
-          .then(function () {
-            return DCS.auth && DCS.auth.hydrate ? DCS.auth.hydrate() : null;
-          })
-          .then(function () {
-            return DCS.backend.loadWallet();
-          })
-          .then(function () {
+      try {
+        if (!window.__dcsWalletReadyBound) {
+          window.__dcsWalletReadyBound = true;
+          window.addEventListener("dcs:wallet-ready", function () {
             renderWallet();
             syncWalletSessionHint();
             renderHistory();
-          })
-          .catch(function () {});
-      }, 1200);
-      try {
-        window.addEventListener("dcs:wallet-ready", function () {
-          renderWallet();
-          syncWalletSessionHint();
-          renderHistory();
-        });
+          });
+        }
       } catch (eListen) {}
     }
     if (isSwap) {
